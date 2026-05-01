@@ -1,14 +1,17 @@
 import { useState } from "react";
 import { Button, ScrollView, StyleSheet, Text, View } from "react-native";
-import { scan } from "react-native-receipt-scanner";
-import type { ScanReceiptResult } from "react-native-receipt-scanner";
+import { scan, type ScanReceiptResult } from "react-native-receipt-scanner";
 
 export default function App() {
   const [result, setResult] = useState<ScanReceiptResult | null>(null);
 
   async function handleScan() {
-    const scanResult = await scan({ source: "camera", ocr: true });
-    setResult(scanResult);
+    try {
+      const scanResult = await scan({ source: "camera", ocr: true });
+      setResult(scanResult);
+    } catch (e) {
+      console.error("scan failed", e);
+    }
   }
 
   return (
