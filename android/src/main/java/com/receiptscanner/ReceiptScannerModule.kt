@@ -139,7 +139,7 @@ class ReceiptScannerModule(
     }
   }
 
-  override fun onNewIntent(intent: Intent?) = Unit
+  override fun onNewIntent(intent: Intent) = Unit
 
   override fun invalidate() {
     super.invalidate()
