@@ -1,4 +1,6 @@
-This is a new [**React Native**](https://reactnative.dev) project, bootstrapped using [`@react-native-community/cli`](https://github.com/react-native-community/cli).
+# ReceiptScanner Example
+
+This is the example app for [`react-native-receipt-scanner`](https://github.com/react-native-receipt-scanner), bootstrapped using [`@react-native-community/cli`](https://github.com/react-native-community/cli).
 
 # Getting Started
 
@@ -70,8 +72,8 @@ Open `App.tsx` in your text editor of choice and make some changes. When you sav
 
 When you want to forcefully reload, for example to reset the state of your app, you can perform a full reload:
 
-- **Android**: Press the <kbd>R</kbd> key twice or select **"Reload"** from the **Dev Menu**, accessed via <kbd>Ctrl</kbd> + <kbd>M</kbd> (Windows/Linux) or <kbd>Cmd ⌘</kbd> + <kbd>M</kbd> (macOS).
-- **iOS**: Press <kbd>R</kbd> in iOS Simulator.
+- **Android**: Press the `R` key twice or select **"Reload"** from the **Dev Menu**, accessed via `Ctrl` + `M` (Windows/Linux) or `Cmd ⌘` + `M` (macOS).
+- **iOS**: Press `R` in iOS Simulator.
 
 ## Congratulations! :tada:
 
