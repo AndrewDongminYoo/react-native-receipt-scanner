@@ -22,14 +22,18 @@ static id RNNullToNil(id value) {
     NSString *src = RNNullToNil(dict[@"source"]);
     opts.source = [src isEqualToString:@"gallery"] ? @"gallery" : @"camera";
 
-    opts.maxPages = MAX(1, (NSInteger)((RNNullToNil(dict[@"maxPages"]) ?: @1).integerValue));
+    NSNumber *maxPagesNum = RNNullToNil(dict[@"maxPages"]) ?: @1;
+    opts.maxPages = MAX(1, maxPagesNum.integerValue);
 
-    double q = (RNNullToNil(dict[@"quality"]) ?: @0.82).doubleValue;
-    opts.quality = MAX(0.0, MIN(1.0, q));
+    NSNumber *qualityNum = RNNullToNil(dict[@"quality"]) ?: @0.82;
+    opts.quality = MAX(0.0, MIN(1.0, qualityNum.doubleValue));
 
-    opts.includeExif    = (RNNullToNil(dict[@"includeExif"])     ?: @YES).boolValue;
-    opts.includeGpsExif = (RNNullToNil(dict[@"includeGpsExif"])  ?: @NO).boolValue;
-    opts.ocr            = (RNNullToNil(dict[@"ocr"])             ?: @YES).boolValue;
+    NSNumber *includeExifNum    = RNNullToNil(dict[@"includeExif"])     ?: @YES;
+    NSNumber *includeGpsExifNum = RNNullToNil(dict[@"includeGpsExif"])  ?: @NO;
+    NSNumber *ocrNum            = RNNullToNil(dict[@"ocr"])             ?: @YES;
+    opts.includeExif    = includeExifNum.boolValue;
+    opts.includeGpsExif = includeGpsExifNum.boolValue;
+    opts.ocr            = ocrNum.boolValue;
 
     return opts;
 }
