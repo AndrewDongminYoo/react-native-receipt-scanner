@@ -24,6 +24,7 @@ metacharacter
 mlkit
 normalisation
 objc
+Podfile
 podspec
 receiptscanner
 recognised
