@@ -2,6 +2,7 @@ package com.receiptscanner
 
 import android.app.Activity
 import android.content.Intent
+import android.net.Uri
 import com.facebook.react.bridge.ActivityEventListener
 import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactApplicationContext
@@ -17,6 +18,7 @@ class ReceiptScannerModule(
 ) : NativeReceiptScannerSpec(reactContext),
   ActivityEventListener {
   private val executor = Executors.newSingleThreadExecutor()
+  private val imageProcessor = ImageProcessor(reactContext)
   private var pendingPromise: Promise? = null
   private var pendingOptions: ScanOptions? = null
 
@@ -41,9 +43,8 @@ class ReceiptScannerModule(
 
     val scanOptions = ScanOptions.from(options)
 
-    // Clean up files from the previous session on a background thread
     executor.execute {
-      ImageProcessor(reactApplicationContext).deletePreviousSessionFiles()
+      imageProcessor.deletePreviousSessionFiles()
     }
 
     pendingPromise = promise
@@ -98,7 +99,6 @@ class ReceiptScannerModule(
 
     executor.execute {
       try {
-        val imageProcessor = ImageProcessor(reactApplicationContext)
         val ocrProcessor = if (scanOptions.ocr) OcrProcessor(reactApplicationContext) else null
 
         val imageResults =
@@ -114,7 +114,7 @@ class ReceiptScannerModule(
             val ocrText =
               if (ocrProcessor != null) {
                 try {
-                  ocrProcessor.recognize(android.net.Uri.fromFile(processed.file))
+                  ocrProcessor.recognize(Uri.fromFile(processed.file))
                 } catch (e: Exception) {
                   null
                 }

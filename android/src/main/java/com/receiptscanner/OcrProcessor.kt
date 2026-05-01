@@ -10,7 +10,7 @@ import com.google.mlkit.vision.text.korean.KoreanTextRecognizerOptions
 class OcrProcessor(
   private val context: Context,
 ) {
-  val recognizer =
+  private val recognizer =
     TextRecognition.getClient(
       KoreanTextRecognizerOptions.Builder().build(),
     )

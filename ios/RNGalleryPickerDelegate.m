@@ -55,14 +55,7 @@ didFinishPicking:(NSArray<PHPickerResult *> *)results {
         self.pendingCount = results.count;
 
         for (PHPickerResult *result in results) {
-            NSString *typeIdentifier;
-            if (@available(iOS 14, *)) {
-                typeIdentifier = UTTypeImage.identifier;
-            } else {
-                typeIdentifier = @"public.image";
-            }
-
-            [result.itemProvider loadDataRepresentationForTypeIdentifier:typeIdentifier
+            [result.itemProvider loadDataRepresentationForTypeIdentifier:UTTypeImage.identifier
                                                        completionHandler:^(NSData *data, NSError *err) {
                 if (!data || err) {
                     [self didFinishOneItem:nil];

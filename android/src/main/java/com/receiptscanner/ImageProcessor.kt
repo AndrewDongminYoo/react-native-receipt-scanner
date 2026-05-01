@@ -35,17 +35,12 @@ class ImageProcessor(
   ): ProcessedImage {
     val sourcePath = requireNotNull(sourceUri.path) { "URI has no path: $sourceUri" }
 
-    // Read dimensions without loading the full bitmap into memory
-    val boundsOpts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-    BitmapFactory.decodeFile(sourcePath, boundsOpts)
-    val width = boundsOpts.outWidth
-    val height = boundsOpts.outHeight
-
-    // Decode the bitmap and recompress at target quality
     val bitmap =
       requireNotNull(BitmapFactory.decodeFile(sourcePath)) {
         "Failed to decode image: $sourcePath"
       }
+    val width = bitmap.width
+    val height = bitmap.height
     val outFile = File(context.cacheDir, "receipt_${System.currentTimeMillis()}.jpg")
     FileOutputStream(outFile).use { out ->
       bitmap.compress(

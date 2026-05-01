@@ -220,7 +220,9 @@ NS_ASSUME_NONNULL_END
         return;
     }
 
-    CIContext *ctx  = [CIContext context];
+    static CIContext *ctx;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{ ctx = [CIContext context]; });
     CGImageRef cropped = [ctx createCGImage:output fromRect:output.extent];
 
     // Ownership transfers to the completion handler; caller is responsible for CGImageRelease.
