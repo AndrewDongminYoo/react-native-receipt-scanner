@@ -24,6 +24,13 @@ export default defineConfig([
     },
   },
   {
-    ignores: ["node_modules/", "lib/"],
+    ignores: [".yarn/", "eslint.config.mjs", "node_modules/", "lib/"],
+  },
+  {
+    files: ["**/*.mjs"],
+    languageOptions: {
+      ecmaVersion: "latest",
+      sourceType: "module",
+    },
   },
 ]);
