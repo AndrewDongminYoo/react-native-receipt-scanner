@@ -28,11 +28,15 @@
                   didFinishWithScan:(VNDocumentCameraScan *)scan {
     [controller dismissViewControllerAnimated:YES completion:nil];
 
+    __weak typeof(self) weakSelf = self;
     dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+        __strong typeof(weakSelf) strongSelf = weakSelf;
+        if (!strongSelf) return;
+
         [RNImageProcessor deletePreviousSessionFiles];
 
         NSMutableArray<NSDictionary *> *images = [NSMutableArray new];
-        NSInteger limit = MIN((NSInteger)scan.pageCount, self.options.maxPages);
+        NSInteger limit = MIN((NSInteger)scan.pageCount, strongSelf.options.maxPages);
 
         for (NSInteger i = 0; i < limit; i++) {
             UIImage *page       = [scan imageOfPageAtIndex:i];
@@ -43,7 +47,7 @@
             // Camera images have no original EXIF source; pass NULL for sourceRef
             RNProcessedImage *processed =
                 [RNImageProcessor processImage:cgImage
-                                       quality:self.options.quality
+                                       quality:strongSelf.options.quality
                                      sourceRef:NULL
                                   includeExif:NO
                                includeGpsExif:NO
@@ -51,7 +55,7 @@
             if (!processed) continue;
 
             NSString *ocrText = nil;
-            if (self.options.ocr) {
+            if (strongSelf.options.ocr) {
                 NSError *ocrErr = nil;
                 ocrText = [RNOcrProcessor recognizeTextInImage:normalized error:&ocrErr];
             }
@@ -68,7 +72,13 @@
             [images addObject:[img copy]];
         }
 
-        self.resolve(@{@"status": @"success", @"images": images});
+        dispatch_async(dispatch_get_main_queue(), ^{
+            if (images.count == 0 && limit > 0) {
+                strongSelf.reject(@"PROCESSING_FAILED", @"All scanned pages failed to process", nil);
+            } else {
+                strongSelf.resolve(@{@"status": @"success", @"images": images});
+            }
+        });
     });
 }
 

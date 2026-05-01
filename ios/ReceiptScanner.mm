@@ -40,7 +40,7 @@
     dispatch_async(dispatch_get_main_queue(), ^{
         UIViewController *rootVC = RCTPresentedViewController();
         if (!rootVC) {
-            reject(@"NO_ACTIVITY", @"No presented view controller found", nil);
+            wrappedReject(@"NO_ACTIVITY", @"No presented view controller found", nil);
             return;
         }
 

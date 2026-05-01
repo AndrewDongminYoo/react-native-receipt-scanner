@@ -74,8 +74,12 @@
         return nil;
     }
 
+    NSError *attrsErr = nil;
     NSDictionary *attrs = [[NSFileManager defaultManager]
-        attributesOfItemAtPath:outputURL.path error:nil];
+        attributesOfItemAtPath:outputURL.path error:&attrsErr];
+    if (!attrs) {
+        NSLog(@"RNImageProcessor: failed to read file attributes for %@: %@", outputURL.lastPathComponent, attrsErr);
+    }
 
     RNProcessedImage *result = [RNProcessedImage new];
     result.fileURL  = outputURL;

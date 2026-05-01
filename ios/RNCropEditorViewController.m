@@ -189,8 +189,10 @@ NS_ASSUME_NONNULL_END
 }
 
 - (void)handleCancel {
+    __weak typeof(self) weakSelf = self;
     [self dismissViewControllerAnimated:YES completion:^{
-        if (self.completion) self.completion(nil);
+        __strong typeof(weakSelf) strongSelf = weakSelf;
+        if (strongSelf.completion) strongSelf.completion(nil);
     }];
 }
 
@@ -209,12 +211,23 @@ NS_ASSUME_NONNULL_END
     [filter setValue:[CIVector vectorWithX:bl.x Y:bl.y] forKey:@"inputBottomLeft"];
 
     CIImage *output = filter.outputImage;
+    if (!output) {
+        __weak typeof(self) weakSelf = self;
+        [self dismissViewControllerAnimated:YES completion:^{
+            __strong typeof(weakSelf) strongSelf = weakSelf;
+            if (strongSelf.completion) strongSelf.completion(nil);
+        }];
+        return;
+    }
+
     CIContext *ctx  = [CIContext context];
     CGImageRef cropped = [ctx createCGImage:output fromRect:output.extent];
 
     // Ownership transfers to the completion handler; caller is responsible for CGImageRelease.
+    __weak typeof(self) weakSelf = self;
     [self dismissViewControllerAnimated:YES completion:^{
-        if (self.completion) self.completion(cropped);
+        __strong typeof(weakSelf) strongSelf = weakSelf;
+        if (strongSelf.completion) strongSelf.completion(cropped);
         else if (cropped) CGImageRelease(cropped);
     }];
 }

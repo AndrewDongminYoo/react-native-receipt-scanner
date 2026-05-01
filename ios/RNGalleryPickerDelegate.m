@@ -123,7 +123,6 @@ didFinishPicking:(NSArray<PHPickerResult *> *)results {
                 [self didFinishOneItem:nil];
                 return;
             }
-            CGImageRetain(cropped); // take ownership; released in all paths below
             dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
                 NSError *err = nil;
                 RNProcessedImage *processed =
