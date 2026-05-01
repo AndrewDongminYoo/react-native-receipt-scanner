@@ -1,0 +1,16 @@
+# Custom Dictionary Words
+cmdline
+cocoapods
+codegen
+codegen'd
+Dongmin
+gradlew
+lobanov
+objc
+podspec
+receiptscanner
+RNCORE
+sdkmanager
+Srcs
+turborepo
+Youngkeul
