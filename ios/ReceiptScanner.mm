@@ -25,7 +25,7 @@
 
     RNScanOptions *scanOptions = [RNScanOptions optionsFromDictionary:options];
 
-    __weak typeof(self) weakSelf = self;
+    __weak __typeof__(self) weakSelf = self;
     RNResolveBlock wrappedResolve = ^(id result) {
         weakSelf.cameraDelegate  = nil;
         weakSelf.galleryDelegate = nil;
