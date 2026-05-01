@@ -1,10 +1,12 @@
 #import "ReceiptScanner.h"
 
 @implementation ReceiptScanner
-- (NSNumber *)multiply:(double)a b:(double)b {
-    NSNumber *result = @(a * b);
 
-    return result;
+- (void)scan:(NSDictionary *)options
+     resolve:(RCTPromiseResolveBlock)resolve
+      reject:(RCTPromiseRejectBlock)reject
+{
+    resolve(nil);
 }
 
 - (std::shared_ptr<facebook::react::TurboModule>)getTurboModule:
@@ -15,7 +17,7 @@
 
 + (NSString *)moduleName
 {
-  return @"ReceiptScanner";
+    return @"ReceiptScanner";
 }
 
 @end

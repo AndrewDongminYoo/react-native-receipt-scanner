@@ -1,1 +1,2 @@
-export { multiply } from "./multiply";
+export { scan } from "./scan";
+export type { ScanReceiptOptions, ScanReceiptResult, ReceiptImage, ReceiptExif } from "./types";
