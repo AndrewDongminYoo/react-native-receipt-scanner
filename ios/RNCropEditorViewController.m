@@ -212,9 +212,10 @@ NS_ASSUME_NONNULL_END
     CIContext *ctx  = [CIContext context];
     CGImageRef cropped = [ctx createCGImage:output fromRect:output.extent];
 
+    // Ownership transfers to the completion handler; caller is responsible for CGImageRelease.
     [self dismissViewControllerAnimated:YES completion:^{
         if (self.completion) self.completion(cropped);
-        if (cropped) CGImageRelease(cropped);
+        else if (cropped) CGImageRelease(cropped);
     }];
 }
 

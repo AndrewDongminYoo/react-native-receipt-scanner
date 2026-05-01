@@ -123,6 +123,7 @@ didFinishPicking:(NSArray<PHPickerResult *> *)results {
                 [self didFinishOneItem:nil];
                 return;
             }
+            CGImageRetain(cropped); // take ownership; released in all paths below
             dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
                 NSError *err = nil;
                 RNProcessedImage *processed =
@@ -134,6 +135,7 @@ didFinishPicking:(NSArray<PHPickerResult *> *)results {
                                             error:&err];
                 if (sourceRef) CFRelease(sourceRef);
                 if (!processed) {
+                    CGImageRelease(cropped);
                     [self didFinishOneItem:nil];
                     return;
                 }
@@ -143,6 +145,7 @@ didFinishPicking:(NSArray<PHPickerResult *> *)results {
                     NSError *ocrErr = nil;
                     ocrText = [RNOcrProcessor recognizeTextInImage:croppedUIImage error:&ocrErr];
                 }
+                CGImageRelease(cropped);
                 NSMutableDictionary *img = [@{
                     @"uri":      [@"file://" stringByAppendingString:processed.fileURL.path],
                     @"width":    @(processed.width),
