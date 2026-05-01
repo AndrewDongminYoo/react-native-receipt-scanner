@@ -27,7 +27,7 @@ Built exclusively for the [React Native New Architecture](https://reactnative.de
 
 **Interactive perspective-crop in gallery mode.** When `source: "gallery"` is used on iOS, VNDetectRectangles automatically locates the document corners. A drag-handle overlay (`RNCropEditorViewController`) lets the user correct the crop before the image is processed. The result is a perspective-corrected JPEG — not a raw photo.
 
-**TurboModule on both platforms.** The module calls go through JSI on iOS and the codegen-generated `NativeReceiptScannerSpec` on Android. There is no asynchronous bridge serialisation for the call path.
+**TurboModule on both platforms.** The module calls go through JSI on iOS and the codegen-generated `NativeReceiptScannerSpec` on Android. There is no asynchronous bridge serialization for the call path.
 
 **`file://` URIs only.** Images are written to the app cache directory and returned as `file://` paths. Base64 is never used — it doubles memory usage and is slower to transfer across the bridge.
 

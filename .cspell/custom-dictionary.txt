@@ -1,6 +1,7 @@
 # Custom Dictionary Words
 agentic
 androidx
+AOSP
 APPL
 appname
 CDPATH
@@ -33,8 +34,11 @@ objc
 Podfile
 podspec
 postclean
+Pressable
 receiptscanner
 recognised
+rescan
+Rescan
 RNCORE
 Scanbot
 sdkmanager
@@ -42,4 +46,5 @@ shellness
 Srcs
 stabilised
 standardises
+Sublabel
 turborepo

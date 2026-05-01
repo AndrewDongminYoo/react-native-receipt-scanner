@@ -19,7 +19,7 @@
 - **android:** integrate ML Kit Document Scanner (`GmsDocumentScannerOptions`) for camera and gallery import ([1001caf](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/commit/1001caf))
 - **android:** add `OcrProcessor` — ML Kit Korean Text Recognition (Hangul + Latin characters) ([38bf937](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/commit/38bf937))
 - **android:** add `ImageProcessor` — JPEG recompression, `ExifInterface` extraction, session cache cleanup ([7aa71e2](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/commit/7aa71e2))
-- **android:** add `ResultBuilder` — serialises processing results to `WritableMap` / `WritableArray` ([a32a6c9](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/commit/a32a6c9))
+- **android:** add `ResultBuilder` — serializes processing results to `WritableMap` / `WritableArray` ([a32a6c9](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/commit/a32a6c9))
 - **android:** add `ScanOptions` data class — `ReadableMap` parsing with typed defaults ([c367ddf](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/commit/c367ddf))
 
 #### JS / Cross-platform
