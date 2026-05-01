@@ -41,12 +41,12 @@
 Replace the entire contents of `src/__tests__/index.test.tsx` with:
 
 ```tsx
-import { DEFAULT_SCAN_OPTIONS } from '../types';
+import { DEFAULT_SCAN_OPTIONS } from "../types";
 
-describe('DEFAULT_SCAN_OPTIONS', () => {
-  it('has expected default values', () => {
+describe("DEFAULT_SCAN_OPTIONS", () => {
+  it("has expected default values", () => {
     expect(DEFAULT_SCAN_OPTIONS).toEqual({
-      source: 'camera',
+      source: "camera",
       maxPages: 1,
       quality: 0.82,
       includeExif: true,
@@ -69,7 +69,7 @@ Expected output: `FAIL` — `Cannot find module '../types'`
 
 ```ts
 export type ScanReceiptOptions = {
-  source?: 'camera' | 'gallery';
+  source?: "camera" | "gallery";
   maxPages?: number;
   quality?: number;
   includeExif?: boolean;
@@ -93,19 +93,19 @@ export type ReceiptImage = {
   width: number;
   height: number;
   fileName: string;
-  mimeType: 'image/jpeg';
+  mimeType: "image/jpeg";
   fileSize: number;
   ocrText?: string;
   exif?: ReceiptExif;
 };
 
 export type ScanReceiptResult = {
-  status: 'success' | 'cancelled';
+  status: "success" | "cancelled";
   images: ReceiptImage[];
 };
 
 export const DEFAULT_SCAN_OPTIONS: Required<ScanReceiptOptions> = {
-  source: 'camera',
+  source: "camera",
   maxPages: 1,
   quality: 0.82,
   includeExif: true,
@@ -140,13 +140,13 @@ git commit -m "feat: add ScanReceiptOptions, ScanReceiptResult, ReceiptImage, Re
 - [ ] **Step 1: Replace `src/NativeReceiptScanner.ts`**
 
 ```ts
-import { TurboModuleRegistry, type TurboModule } from 'react-native';
+import { TurboModuleRegistry, type TurboModule } from "react-native";
 
 export interface Spec extends TurboModule {
   scan(options: Object): Promise<Object>;
 }
 
-export default TurboModuleRegistry.getEnforcing<Spec>('ReceiptScanner');
+export default TurboModuleRegistry.getEnforcing<Spec>("ReceiptScanner");
 ```
 
 - [ ] **Step 2: Commit**
@@ -169,24 +169,22 @@ git commit -m "feat: update TurboModule spec — replace multiply with scan"
 - [ ] **Step 1: Write failing tests — replace `src/__tests__/index.test.tsx` entirely**
 
 ```tsx
-import { DEFAULT_SCAN_OPTIONS } from '../types';
-import { scan } from '../scan.native';
-import NativeReceiptScanner from '../NativeReceiptScanner';
+import { DEFAULT_SCAN_OPTIONS } from "../types";
+import { scan } from "../scan.native";
+import NativeReceiptScanner from "../NativeReceiptScanner";
 
-jest.mock('../NativeReceiptScanner', () => ({
+jest.mock("../NativeReceiptScanner", () => ({
   default: {
     scan: jest.fn(),
   },
 }));
 
-const mockNative = NativeReceiptScanner as jest.Mocked<
-  typeof NativeReceiptScanner
->;
+const mockNative = NativeReceiptScanner as jest.Mocked<typeof NativeReceiptScanner>;
 
-describe('DEFAULT_SCAN_OPTIONS', () => {
-  it('has expected default values', () => {
+describe("DEFAULT_SCAN_OPTIONS", () => {
+  it("has expected default values", () => {
     expect(DEFAULT_SCAN_OPTIONS).toEqual({
-      source: 'camera',
+      source: "camera",
       maxPages: 1,
       quality: 0.82,
       includeExif: true,
@@ -196,21 +194,21 @@ describe('DEFAULT_SCAN_OPTIONS', () => {
   });
 });
 
-describe('scan (native)', () => {
+describe("scan (native)", () => {
   beforeEach(() => {
     jest.clearAllMocks();
   });
 
-  it('resolves with native module result', async () => {
+  it("resolves with native module result", async () => {
     const mockResult = {
-      status: 'success',
+      status: "success",
       images: [
         {
-          uri: 'file:///tmp/receipt.jpg',
+          uri: "file:///tmp/receipt.jpg",
           width: 1080,
           height: 1920,
-          fileName: 'receipt.jpg',
-          mimeType: 'image/jpeg',
+          fileName: "receipt.jpg",
+          mimeType: "image/jpeg",
           fileSize: 123456,
         },
       ],
@@ -219,18 +217,18 @@ describe('scan (native)', () => {
 
     const result = await scan();
 
-    expect(result.status).toBe('success');
+    expect(result.status).toBe("success");
     expect(result.images).toHaveLength(1);
-    expect(result.images[0]!.uri).toBe('file:///tmp/receipt.jpg');
+    expect(result.images[0]!.uri).toBe("file:///tmp/receipt.jpg");
   });
 
-  it('applies default options when none provided', async () => {
-    mockNative.scan.mockResolvedValueOnce({ status: 'cancelled', images: [] });
+  it("applies default options when none provided", async () => {
+    mockNative.scan.mockResolvedValueOnce({ status: "cancelled", images: [] });
 
     await scan();
 
     expect(mockNative.scan).toHaveBeenCalledWith({
-      source: 'camera',
+      source: "camera",
       maxPages: 1,
       quality: 0.82,
       includeExif: true,
@@ -239,13 +237,13 @@ describe('scan (native)', () => {
     });
   });
 
-  it('merges provided options with defaults', async () => {
-    mockNative.scan.mockResolvedValueOnce({ status: 'cancelled', images: [] });
+  it("merges provided options with defaults", async () => {
+    mockNative.scan.mockResolvedValueOnce({ status: "cancelled", images: [] });
 
     await scan({ quality: 0.5, ocr: false });
 
     expect(mockNative.scan).toHaveBeenCalledWith({
-      source: 'camera',
+      source: "camera",
       maxPages: 1,
       quality: 0.5,
       includeExif: true,
@@ -267,25 +265,21 @@ Expected output: `FAIL` — `Cannot find module '../scan.native'`
 - [ ] **Step 3: Create `src/scan.tsx` (web stub)**
 
 ```tsx
-import type { ScanReceiptOptions, ScanReceiptResult } from './types';
+import type { ScanReceiptOptions, ScanReceiptResult } from "./types";
 
-export async function scan(
-  _options?: ScanReceiptOptions
-): Promise<ScanReceiptResult> {
-  return { status: 'cancelled', images: [] };
+export async function scan(_options?: ScanReceiptOptions): Promise<ScanReceiptResult> {
+  return { status: "cancelled", images: [] };
 }
 ```
 
 - [ ] **Step 4: Create `src/scan.native.tsx` (native)**
 
 ```tsx
-import NativeReceiptScanner from './NativeReceiptScanner';
-import { DEFAULT_SCAN_OPTIONS } from './types';
-import type { ScanReceiptOptions, ScanReceiptResult } from './types';
+import NativeReceiptScanner from "./NativeReceiptScanner";
+import { DEFAULT_SCAN_OPTIONS } from "./types";
+import type { ScanReceiptOptions, ScanReceiptResult } from "./types";
 
-export async function scan(
-  options?: ScanReceiptOptions
-): Promise<ScanReceiptResult> {
+export async function scan(options?: ScanReceiptOptions): Promise<ScanReceiptResult> {
   const merged = { ...DEFAULT_SCAN_OPTIONS, ...options };
   return NativeReceiptScanner.scan(merged) as Promise<ScanReceiptResult>;
 }
@@ -319,13 +313,8 @@ git commit -m "feat: implement scan() — web stub and native with default optio
 - [ ] **Step 1: Replace `src/index.tsx`**
 
 ```tsx
-export { scan } from './scan';
-export type {
-  ScanReceiptOptions,
-  ScanReceiptResult,
-  ReceiptImage,
-  ReceiptExif,
-} from './types';
+export { scan } from "./scan";
+export type { ScanReceiptOptions, ScanReceiptResult, ReceiptImage, ReceiptExif } from "./types";
 ```
 
 - [ ] **Step 2: Delete placeholder files**
@@ -459,16 +448,16 @@ git commit -m "feat: update iOS stub — replace multiply with scan"
 - [ ] **Step 1: Replace `example/src/App.tsx`**
 
 ```tsx
-import { useState } from 'react';
-import { Button, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { scan } from 'react-native-receipt-scanner';
-import type { ScanReceiptResult } from 'react-native-receipt-scanner';
+import { useState } from "react";
+import { Button, ScrollView, StyleSheet, Text, View } from "react-native";
+import { scan } from "react-native-receipt-scanner";
+import type { ScanReceiptResult } from "react-native-receipt-scanner";
 
 export default function App() {
   const [result, setResult] = useState<ScanReceiptResult | null>(null);
 
   async function handleScan() {
-    const scanResult = await scan({ source: 'camera', ocr: true });
+    const scanResult = await scan({ source: "camera", ocr: true });
     setResult(scanResult);
   }
 
@@ -497,13 +486,13 @@ export default function App() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     padding: 16,
   },
   result: {
     marginTop: 16,
-    width: '100%',
+    width: "100%",
   },
 });
 ```

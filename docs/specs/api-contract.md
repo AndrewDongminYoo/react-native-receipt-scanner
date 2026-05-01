@@ -27,7 +27,7 @@ and the system cannot show the rationale dialog).
 
 ```ts
 type ScanReceiptResult = {
-  status: 'success' | 'cancelled';
+  status: "success" | "cancelled";
   images: ReceiptImage[];
 };
 ```
@@ -42,7 +42,7 @@ type ReceiptImage = {
   width: number;
   height: number;
   fileName: string;
-  mimeType: 'image/jpeg';
+  mimeType: "image/jpeg";
   fileSize: number;
   ocrText?: string;
   exif?: ReceiptExif;

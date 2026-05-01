@@ -145,13 +145,6 @@
       }
     }
   },
-  "prettier": {
-    "quoteProps": "consistent",
-    "singleQuote": true,
-    "tabWidth": 2,
-    "trailingComma": "es5",
-    "useTabs": false
-  },
   "create-react-native-library": {
     "type": "turbo-module",
     "languages": "kotlin-objc",

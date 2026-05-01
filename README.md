@@ -13,11 +13,11 @@ npm install react-native-receipt-scanner
 ## Usage
 
 ```ts
-import { scan } from 'react-native-receipt-scanner';
+import { scan } from "react-native-receipt-scanner";
 
-const result = await scan({ source: 'camera', ocr: true });
+const result = await scan({ source: "camera", ocr: true });
 
-if (result.status === 'success') {
+if (result.status === "success") {
   const { uri, width, height, fileSize, ocrText, exif } = result.images[0];
 }
 ```
@@ -37,7 +37,7 @@ if (result.status === 'success') {
 
 ```ts
 type ScanReceiptResult = {
-  status: 'success' | 'cancelled';
+  status: "success" | "cancelled";
   images: ReceiptImage[];
 };
 
@@ -46,7 +46,7 @@ type ReceiptImage = {
   width: number;
   height: number;
   fileName: string;
-  mimeType: 'image/jpeg';
+  mimeType: "image/jpeg";
   fileSize: number;
   ocrText?: string; // present when options.ocr === true
   exif?: ReceiptExif; // present when options.includeExif === true

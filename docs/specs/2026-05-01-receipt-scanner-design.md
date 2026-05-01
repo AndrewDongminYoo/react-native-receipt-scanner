@@ -61,7 +61,7 @@ Azure OCR response interpretation, fraud/duplicate detection, point/reward logic
 function scan(options?: ScanReceiptOptions): Promise<ScanReceiptResult>;
 
 type ScanReceiptOptions = {
-  source?: 'camera' | 'gallery'; // default: 'camera'
+  source?: "camera" | "gallery"; // default: 'camera'
   maxPages?: number; // default: 1
   quality?: number; // default: 0.82  (0.0–1.0)
   includeExif?: boolean; // default: true
@@ -70,7 +70,7 @@ type ScanReceiptOptions = {
 };
 
 type ScanReceiptResult = {
-  status: 'success' | 'cancelled';
+  status: "success" | "cancelled";
   images: ReceiptImage[];
 };
 
@@ -79,7 +79,7 @@ type ReceiptImage = {
   width: number;
   height: number;
   fileName: string;
-  mimeType: 'image/jpeg';
+  mimeType: "image/jpeg";
   fileSize: number;
   ocrText?: string;
   exif?: ReceiptExif;
