@@ -1,4 +1,5 @@
 # Custom Dictionary Words
+agentic
 androidx
 appname
 CDPATH
@@ -8,6 +9,7 @@ codegen
 codegen'd
 Customisation
 dariyd
+documentscanner
 Docutain
 Dongmin
 Dorg
@@ -17,10 +19,12 @@ EXIF
 exifinterface
 gradlew
 homography
+initialise
 JAVACMD
 licence
 lobanov
 metacharacter
+Millis
 mlkit
 normalisation
 objc
