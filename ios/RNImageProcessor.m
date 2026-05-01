@@ -1,4 +1,5 @@
 #import "RNImageProcessor.h"
+#import <UIKit/UIKit.h>
 #import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
 
 @implementation RNProcessedImage

@@ -1,7 +1,8 @@
 #import <Foundation/Foundation.h>
 #import <CoreGraphics/CoreGraphics.h>
 #import <ImageIO/ImageIO.h>
-#import <UIKit/UIKit.h>
+
+@class UIImage;
 
 NS_ASSUME_NONNULL_BEGIN
 
