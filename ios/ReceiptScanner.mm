@@ -5,7 +5,7 @@
 #import <UIKit/UIKit.h>
 #import <VisionKit/VisionKit.h>
 #import <PhotosUI/PhotosUI.h>
-#import <React/RCTPresentedViewController.h>
+#import <React/RCTUtils.h>
 
 @interface ReceiptScanner ()
 @property (nonatomic, strong, nullable) id cameraDelegate;

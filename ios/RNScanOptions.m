@@ -22,14 +22,14 @@ static id RNNullToNil(id value) {
     NSString *src = RNNullToNil(dict[@"source"]);
     opts.source = [src isEqualToString:@"gallery"] ? @"gallery" : @"camera";
 
-    opts.maxPages = MAX(1, (NSInteger)[RNNullToNil(dict[@"maxPages"]) ?: @1 integerValue]);
+    opts.maxPages = MAX(1, (NSInteger)((RNNullToNil(dict[@"maxPages"]) ?: @1).integerValue));
 
-    double q = [[RNNullToNil(dict[@"quality"]) ?: @0.82] doubleValue];
+    double q = (RNNullToNil(dict[@"quality"]) ?: @0.82).doubleValue;
     opts.quality = MAX(0.0, MIN(1.0, q));
 
-    opts.includeExif    = [[RNNullToNil(dict[@"includeExif"])     ?: @YES] boolValue];
-    opts.includeGpsExif = [[RNNullToNil(dict[@"includeGpsExif"])  ?: @NO]  boolValue];
-    opts.ocr            = [[RNNullToNil(dict[@"ocr"])             ?: @YES] boolValue];
+    opts.includeExif    = (RNNullToNil(dict[@"includeExif"])     ?: @YES).boolValue;
+    opts.includeGpsExif = (RNNullToNil(dict[@"includeGpsExif"])  ?: @NO).boolValue;
+    opts.ocr            = (RNNullToNil(dict[@"ocr"])             ?: @YES).boolValue;
 
     return opts;
 }
