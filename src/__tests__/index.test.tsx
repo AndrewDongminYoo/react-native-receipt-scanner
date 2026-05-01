@@ -1,3 +1,4 @@
+import { describe, it, expect } from "@jest/globals";
 import { DEFAULT_SCAN_OPTIONS } from "../types";
 
 describe("DEFAULT_SCAN_OPTIONS", () => {
