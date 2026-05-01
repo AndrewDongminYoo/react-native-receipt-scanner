@@ -40,7 +40,7 @@ For OCR: **`com.google.mlkit:text-recognition-korean`** (covers Korean + Latin i
 ## Consequences
 
 - **Play Services required** — devices without Google Play Services cannot use this library.
-  Acceptable for the Korean market (Youngkeul's target audience).
+  Acceptable for the Korean market.
 - **No OpenCV complexity** — avoids camera permission handling, contour detection, and
   homography transforms from scratch.
 - **Gallery import native** — `setGalleryImportAllowed(true)` handles the gallery picker

@@ -8,7 +8,7 @@ status: approved
 
 ## Context
 
-영끌(Youngkeul) app uploads mart/convenience-store receipts to an Azure OCR backend.
+[ReceiptScraper](https://github.com/AndrewDongminYoo/receipt-scraper) pp uploads mart/convenience-store receipts to an Azure OCR backend.
 The current flow sends raw images directly. Two failure modes prompted this design:
 
 1. **Geometric distortion** — skewed angles, perspective warp, crumpled receipts degrade OCR accuracy.
@@ -25,7 +25,7 @@ Azure's existing pipeline is unchanged.
 ### Layers
 
 ```plaintext
-App (Youngkeul)
+App (ReceiptScraper)
   └─ scan(options) ──────────────────────────────── public API
         │
         ├─ [Android] ML Kit Document Scanner
