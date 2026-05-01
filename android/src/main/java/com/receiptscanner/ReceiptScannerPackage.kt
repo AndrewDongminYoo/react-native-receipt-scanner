@@ -8,28 +8,28 @@ import com.facebook.react.module.model.ReactModuleInfoProvider
 import java.util.HashMap
 
 class ReceiptScannerPackage : BaseReactPackage() {
-    override fun getModule(
-        name: String,
-        reactContext: ReactApplicationContext,
-    ): NativeModule? =
-        if (name == ReceiptScannerModule.NAME) {
-            ReceiptScannerModule(reactContext)
-        } else {
-            null
-        }
+  override fun getModule(
+    name: String,
+    reactContext: ReactApplicationContext,
+  ): NativeModule? =
+    if (name == ReceiptScannerModule.NAME) {
+      ReceiptScannerModule(reactContext)
+    } else {
+      null
+    }
 
-    override fun getReactModuleInfoProvider() =
-        ReactModuleInfoProvider {
-            mapOf(
-                ReceiptScannerModule.NAME to
-                    ReactModuleInfo(
-                        name = ReceiptScannerModule.NAME,
-                        className = ReceiptScannerModule.NAME,
-                        canOverrideExistingModule = false,
-                        needsEagerInit = false,
-                        isCxxModule = false,
-                        isTurboModule = true,
-                    ),
-            )
-        }
+  override fun getReactModuleInfoProvider() =
+    ReactModuleInfoProvider {
+      mapOf(
+        ReceiptScannerModule.NAME to
+          ReactModuleInfo(
+            name = ReceiptScannerModule.NAME,
+            className = ReceiptScannerModule.NAME,
+            canOverrideExistingModule = false,
+            needsEagerInit = false,
+            isCxxModule = false,
+            isTurboModule = true,
+          ),
+      )
+    }
 }

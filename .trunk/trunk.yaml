@@ -18,11 +18,18 @@ runtimes:
     - python@3.14.4
 # This is the section where you manage your linters. (https://docs.trunk.io/check/configuration)
 lint:
+  ignore:
+    - linters: [shellcheck]
+      paths: [example/android/gradlew]
+    - linters: [osv-scanner]
+      paths: [example/ios/Podfile.lock]
+    - linters: [markdownlint]
+      paths: [.github/**/*.md]
   enabled:
     - actionlint@1.7.12
     - checkov@3.2.526
     - dotenv-linter@4.0.0
-    - eslint@10.2.1
+    - eslint@9.39.4
     - git-diff-check
     - ktlint@1.8.0
     - markdownlint@0.48.0
