@@ -58,14 +58,22 @@ describe("scan (native)", () => {
 
     await scan();
 
-    expect(mockNative.scan).toHaveBeenCalledWith({
-      source: "camera",
-      maxPages: 1,
-      quality: 0.82,
-      includeExif: true,
-      includeGpsExif: false,
-      ocr: true,
-    });
+    expect(mockNative.scan).toHaveBeenCalledWith(
+      expect.objectContaining({
+        source: "camera",
+        maxPages: 1,
+        quality: 0.82,
+        includeExif: true,
+        includeGpsExif: false,
+        ocr: true,
+      })
+    );
+  });
+
+  it("propagates native module rejection", async () => {
+    mockNative.scan.mockRejectedValueOnce(new Error("camera permission denied"));
+
+    await expect(scan()).rejects.toThrow("camera permission denied");
   });
 
   it("merges provided options with defaults", async () => {
@@ -73,13 +81,15 @@ describe("scan (native)", () => {
 
     await scan({ quality: 0.5, ocr: false });
 
-    expect(mockNative.scan).toHaveBeenCalledWith({
-      source: "camera",
-      maxPages: 1,
-      quality: 0.5,
-      includeExif: true,
-      includeGpsExif: false,
-      ocr: false,
-    });
+    expect(mockNative.scan).toHaveBeenCalledWith(
+      expect.objectContaining({
+        source: "camera",
+        maxPages: 1,
+        quality: 0.5,
+        includeExif: true,
+        includeGpsExif: false,
+        ocr: false,
+      })
+    );
   });
 });

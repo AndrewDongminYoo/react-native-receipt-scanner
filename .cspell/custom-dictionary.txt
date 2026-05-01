@@ -33,6 +33,7 @@ Scanbot
 sdkmanager
 shellness
 Srcs
+stabilised
 standardises
 turborepo
 Youngkeul
