@@ -13,9 +13,11 @@
                                includeExif:(BOOL)includeExif
                             includeGpsExif:(BOOL)includeGpsExif
                                      error:(NSError **)error {
+    NSString *uuid = [[[NSUUID UUID] UUIDString] substringToIndex:8];
     NSURL *outputURL = [[self cacheDirURL]
-        URLByAppendingPathComponent:[NSString stringWithFormat:@"receipt_%lld.jpg",
-                                     (long long)([[NSDate date] timeIntervalSince1970] * 1000)]];
+        URLByAppendingPathComponent:[NSString stringWithFormat:@"receipt_%lld_%@.jpg",
+                                     (long long)([[NSDate date] timeIntervalSince1970] * 1000),
+                                     uuid]];
 
     NSString *uti;
     if (@available(iOS 14, *)) {
@@ -40,8 +42,9 @@
     NSMutableDictionary *props = [NSMutableDictionary new];
     props[(NSString *)kCGImageDestinationLossyCompressionQuality] = @(quality);
 
+    NSDictionary *sourceProps = nil;
     if (includeExif && sourceRef) {
-        NSDictionary *sourceProps = (__bridge_transfer NSDictionary *)
+        sourceProps = (__bridge_transfer NSDictionary *)
             CGImageSourceCopyPropertiesAtIndex(sourceRef, 0, NULL);
 
         if (sourceProps[(NSString *)kCGImagePropertyExifDictionary]) {
@@ -80,17 +83,14 @@
     result.height   = (NSInteger)CGImageGetHeight(cgImage);
     result.fileSize = [attrs[NSFileSize] integerValue];
 
-    if (includeExif && sourceRef) {
-        result.exifData = [self buildExifDict:sourceRef includeGps:includeGpsExif];
+    if (includeExif && sourceProps) {
+        result.exifData = [self buildExifDict:sourceProps includeGps:includeGpsExif];
     }
 
     return result;
 }
 
-+ (NSDictionary *)buildExifDict:(CGImageSourceRef)sourceRef includeGps:(BOOL)includeGps {
-    NSDictionary *sourceProps = (__bridge_transfer NSDictionary *)
-        CGImageSourceCopyPropertiesAtIndex(sourceRef, 0, NULL);
-
++ (nullable NSDictionary *)buildExifDict:(NSDictionary *)sourceProps includeGps:(BOOL)includeGps {
     NSMutableDictionary *exif = [NSMutableDictionary new];
 
     NSDictionary *exifDict = sourceProps[(NSString *)kCGImagePropertyExifDictionary];
