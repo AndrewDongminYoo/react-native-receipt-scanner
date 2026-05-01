@@ -2,8 +2,9 @@
 #import "RNImageProcessor.h"
 #import "RNOcrProcessor.h"
 #import <UIKit/UIKit.h>
+#import <VisionKit/VisionKit.h>
 
-@interface RNDocumentCameraDelegate ()
+@interface RNDocumentCameraDelegate () <VNDocumentCameraViewControllerDelegate>
 @property (nonatomic, strong) RNScanOptions  *options;
 @property (nonatomic, copy)   RNResolveBlock  resolve;
 @property (nonatomic, copy)   RNRejectBlock   reject;
