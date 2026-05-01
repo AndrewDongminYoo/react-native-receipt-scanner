@@ -1,6 +1,7 @@
 # Custom Dictionary Words
 agentic
 androidx
+APPL
 appname
 CDPATH
 cmdline
@@ -19,6 +20,7 @@ EXIF
 exifinterface
 gradlew
 homography
+infile
 initialise
 JAVACMD
 licence
@@ -30,6 +32,7 @@ normalisation
 objc
 Podfile
 podspec
+postclean
 receiptscanner
 recognised
 RNCORE
