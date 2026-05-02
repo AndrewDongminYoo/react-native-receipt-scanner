@@ -110,7 +110,8 @@ NS_ASSUME_NONNULL_END
     buttonBar.backgroundColor = [UIColor colorWithWhite:0.12 alpha:1.0];
 
     UIButton *cancelBtn = [UIButton buttonWithType:UIButtonTypeSystem];
-    [cancelBtn setTitle:@"취소" forState:UIControlStateNormal];
+    [cancelBtn setTitle:NSLocalizedStringWithDefaultValue(@"RNReceiptScanner_cancelButton",
+        nil, [NSBundle mainBundle], @"Cancel", @"") forState:UIControlStateNormal];
     [cancelBtn setTitleColor:UIColor.systemBlueColor forState:UIControlStateNormal];
     cancelBtn.titleLabel.font = [UIFont systemFontOfSize:17];
     cancelBtn.translatesAutoresizingMaskIntoConstraints = NO;
@@ -118,7 +119,8 @@ NS_ASSUME_NONNULL_END
         forControlEvents:UIControlEventTouchUpInside];
 
     UIButton *confirmBtn = [UIButton buttonWithType:UIButtonTypeSystem];
-    [confirmBtn setTitle:@"사진 사용" forState:UIControlStateNormal];
+    [confirmBtn setTitle:NSLocalizedStringWithDefaultValue(@"RNReceiptScanner_confirmButton",
+        nil, [NSBundle mainBundle], @"Use Photo", @"") forState:UIControlStateNormal];
     [confirmBtn setTitleColor:UIColor.systemBlueColor forState:UIControlStateNormal];
     confirmBtn.titleLabel.font = [UIFont boldSystemFontOfSize:17];
     confirmBtn.translatesAutoresizingMaskIntoConstraints = NO;

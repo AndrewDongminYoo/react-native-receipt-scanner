@@ -23,6 +23,24 @@ and the system cannot show the rationale dialog).
 | `includeGpsExif` | `boolean`               | `false`    | Include GPS coordinates in EXIF. **Leave false** — GPS is a privacy risk and irrelevant to OCR quality. |
 | `ocr`            | `boolean`               | `true`     | Run on-device OCR and return `ocrText`.                                                                 |
 
+## Localization
+
+The iOS gallery crop editor (`source: "gallery"`) displays two buttons whose labels can be translated via `Localizable.strings` in the host app's Xcode project. Add the following keys to each locale's strings file:
+
+```plaintext
+/* ios/en.lproj/Localizable.strings */
+"RNReceiptScanner_cancelButton"  = "Cancel";
+"RNReceiptScanner_confirmButton" = "Use Photo";
+
+/* ios/ko.lproj/Localizable.strings */
+"RNReceiptScanner_cancelButton"  = "취소";
+"RNReceiptScanner_confirmButton" = "사진 사용";
+```
+
+The library uses `NSLocalizedStringWithDefaultValue` against `[NSBundle mainBundle]`, so the host app's strings file is picked up automatically when the device language matches. If a key is absent, the English defaults (`"Cancel"` / `"Use Photo"`) are used.
+
+This has no effect on the camera scanner or on Android.
+
 ## `ScanReceiptResult`
 
 ```ts

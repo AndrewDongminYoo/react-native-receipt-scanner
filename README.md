@@ -130,6 +130,26 @@ On iOS, the user selects a photo and is presented with an interactive crop edito
 const result = await scan({ source: "gallery" });
 ```
 
+### Localizing the crop editor buttons (iOS)
+
+The crop editor shows two buttons: a cancel button (left) and a confirm button (right). Their labels default to `"Cancel"` and `"Use Photo"`.
+
+To translate them, add the following keys to each locale's `Localizable.strings` in your Xcode project:
+
+```plaintext
+/* ios/en.lproj/Localizable.strings */
+"RNReceiptScanner_cancelButton"  = "Cancel";
+"RNReceiptScanner_confirmButton" = "Use Photo";
+
+/* ios/ko.lproj/Localizable.strings */
+"RNReceiptScanner_cancelButton"  = "취소";
+"RNReceiptScanner_confirmButton" = "사진 사용";
+```
+
+The library reads `[NSBundle mainBundle]`, so strings placed in your app's bundle are picked up automatically when the device language matches. If a key is absent, the English default is used.
+
+> **Note:** This applies only to the iOS gallery crop editor (`source: "gallery"`). The camera scanner and Android are not affected.
+
 ### Multi-page scan
 
 ```ts
