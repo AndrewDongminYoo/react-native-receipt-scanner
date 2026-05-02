@@ -1,5 +1,35 @@
 # Changelog
 
+## [0.2.0](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/compare/v0.1.0...v0.2.0) (2026-05-02)
+
+### Added
+
+#### iOS
+
+- **ios:** crop editor button labels are now localizable via the host app's `Localizable.strings` — add `RNReceiptScanner_cancelButton` and `RNReceiptScanner_confirmButton` keys to each `.lproj` bundle to override the English defaults (`"Cancel"` / `"Use Photo"`)
+
+### Fixed
+
+#### iOS
+
+- **ios:** scanned images now always output in upright (`UIImageOrientationUp`) orientation regardless of source EXIF rotation ([9db8e31](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/commit/9db8e31))
+- **ios:** corrected image orientation handling in CoreImage and Vision processing pipeline — `CIImage` was previously processed without applying the EXIF-embedded orientation transform, causing perspective-correction coordinates to mismatch on non-up images ([a0b52ce](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/commit/a0b52ce))
+- **ios:** resolved unreliable crop editor button interaction — replaced `UIToolbar` / `UIBarButtonItem` with a plain `UIView` / `UIButton` bar that fires `TouchUpInside` directly, avoiding silent target-action routing failures in some RN modal presentation paths ([aee2426](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/commit/aee2426))
+
+### Changed
+
+#### iOS
+
+- **ios:** improved crop editor responsiveness — the button bar is now added last in the view hierarchy so `hitTest:withEvent:` checks it before drag handles, preventing handle circles near the bottom of the image from absorbing toolbar button taps ([9415819](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/commit/9415819))
+
+### Internal
+
+- example app: added full-featured UI demonstrating camera and gallery scan flows ([480ad6d](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/commit/480ad6d))
+- example app: enabled React Native New Architecture (TurboModule) on iOS ([72e8b64](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/commit/72e8b64))
+- docs: added ADR-004 documenting iOS crop editor real-device fixes ([8230ce8](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/commit/8230ce8))
+
+---
+
 ## [0.1.0](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/compare/347aaf4...v0.1.0) (2026-05-01)
 
 ### Features
