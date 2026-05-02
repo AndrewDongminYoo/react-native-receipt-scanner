@@ -6,6 +6,19 @@
 #import <Vision/Vision.h>
 #import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
 
+static CGImagePropertyOrientation CIOrientationFromUIOrientation(UIImageOrientation o) {
+    switch (o) {
+        case UIImageOrientationUp:            return kCGImagePropertyOrientationUp;
+        case UIImageOrientationDown:          return kCGImagePropertyOrientationDown;
+        case UIImageOrientationLeft:          return kCGImagePropertyOrientationLeft;
+        case UIImageOrientationRight:         return kCGImagePropertyOrientationRight;
+        case UIImageOrientationUpMirrored:    return kCGImagePropertyOrientationUpMirrored;
+        case UIImageOrientationDownMirrored:  return kCGImagePropertyOrientationDownMirrored;
+        case UIImageOrientationLeftMirrored:  return kCGImagePropertyOrientationLeftMirrored;
+        case UIImageOrientationRightMirrored: return kCGImagePropertyOrientationRightMirrored;
+    }
+}
+
 // RNCropEditorViewController has no header — redeclare its interface here
 @interface RNCropEditorViewController : UIViewController
 - (instancetype)initWithImage:(UIImage *)image
@@ -76,14 +89,20 @@ didFinishPicking:(NSArray<PHPickerResult *> *)results {
 }
 
 - (void)detectRectangleAndCrop:(UIImage *)image sourceRef:(CGImageSourceRef)sourceRef {
-    CIImage *ciImage = [[CIImage alloc] initWithImage:image];
-
     VNDetectRectanglesRequest *request = [[VNDetectRectanglesRequest alloc] init];
     request.minimumConfidence = 0.7;
     request.maximumObservations = 1;
 
+    // Pass the CGImage + explicit orientation so Vision processes pixels in the
+    // same oriented space as image.size. initWithCIImage: ignores the orientation
+    // transform embedded by [CIImage initWithImage:], returning landscape coords
+    // for portrait UIImages — which would mismatch _corners in the crop editor.
+    CGImagePropertyOrientation exifOrientation =
+        CIOrientationFromUIOrientation(image.imageOrientation);
     VNImageRequestHandler *handler =
-        [[VNImageRequestHandler alloc] initWithCIImage:ciImage options:@{}];
+        [[VNImageRequestHandler alloc] initWithCGImage:image.CGImage
+                                           orientation:exifOrientation
+                                               options:@{}];
     [handler performRequests:@[request] error:nil];
 
     CGFloat W = image.size.width;
