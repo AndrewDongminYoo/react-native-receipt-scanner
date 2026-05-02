@@ -29,6 +29,7 @@ instancetype
 JAVACMD
 licence
 lobanov
+lproj
 metacharacter
 Millis
 mlkit

@@ -42,6 +42,10 @@
     NSMutableDictionary *props = [NSMutableDictionary new];
     props[(NSString *)kCGImageDestinationLossyCompressionQuality] = @(quality);
 
+    // CGImageRef carries no orientation metadata — the pixels ARE the final representation.
+    // Always write orientation 1 (Up/normal) so viewers don't rotate an already-correct image.
+    props[(NSString *)kCGImagePropertyOrientation] = @(kCGImagePropertyOrientationUp);
+
     NSDictionary *sourceProps = nil;
     if (includeExif && sourceRef) {
         sourceProps = (__bridge_transfer NSDictionary *)
@@ -52,8 +56,10 @@
                 sourceProps[(NSString *)kCGImagePropertyExifDictionary];
         }
         if (sourceProps[(NSString *)kCGImagePropertyTIFFDictionary]) {
-            props[(NSString *)kCGImagePropertyTIFFDictionary] =
-                sourceProps[(NSString *)kCGImagePropertyTIFFDictionary];
+            // Strip TIFF orientation — output pixels are already correctly oriented.
+            NSMutableDictionary *tiff = [sourceProps[(NSString *)kCGImagePropertyTIFFDictionary] mutableCopy];
+            tiff[(NSString *)kCGImagePropertyTIFFOrientation] = @(kCGImagePropertyOrientationUp);
+            props[(NSString *)kCGImagePropertyTIFFDictionary] = [tiff copy];
         }
         if (includeGpsExif && sourceProps[(NSString *)kCGImagePropertyGPSDictionary]) {
             props[(NSString *)kCGImagePropertyGPSDictionary] =
@@ -101,8 +107,8 @@
     NSDictionary *tiffDict = sourceProps[(NSString *)kCGImagePropertyTIFFDictionary];
     NSDictionary *gpsDict  = sourceProps[(NSString *)kCGImagePropertyGPSDictionary];
 
-    NSNumber *orientation = sourceProps[(NSString *)kCGImagePropertyOrientation];
-    if (orientation) exif[@"orientation"] = orientation;
+    // Output pixels are always orientation-normalized; report 1 (Up) to JS callers.
+    exif[@"orientation"] = @(kCGImagePropertyOrientationUp);
 
     NSString *dateTimeOriginal = exifDict[(NSString *)kCGImagePropertyExifDateTimeOriginal];
     if (dateTimeOriginal) exif[@"dateTimeOriginal"] = dateTimeOriginal;
