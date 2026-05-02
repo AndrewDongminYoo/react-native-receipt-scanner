@@ -70,6 +70,25 @@ NS_ASSUME_NONNULL_END
     _overlayLayer.lineWidth   = 2.0;
     [self.view.layer addSublayer:_overlayLayer];
 
+    // Handles are added BEFORE the toolbar so that hitTest:withEvent: (which iterates
+    // subviews in reverse) checks the toolbar first. This prevents handle circles that
+    // fall near the bottom of the image from absorbing taps on toolbar buttons.
+    _handles = [NSMutableArray new];
+    for (NSInteger i = 0; i < 4; i++) {
+        UIView *handle = [[UIView alloc] initWithFrame:CGRectMake(0, 0, kHandleRadius*2, kHandleRadius*2)];
+        handle.backgroundColor = UIColor.whiteColor;
+        handle.layer.cornerRadius = kHandleRadius;
+        handle.layer.borderColor  = UIColor.systemBlueColor.CGColor;
+        handle.layer.borderWidth  = 2.0;
+        handle.tag = i;
+        UIPanGestureRecognizer *pan = [[UIPanGestureRecognizer alloc]
+            initWithTarget:self action:@selector(handlePan:)];
+        [handle addGestureRecognizer:pan];
+        [self.view addSubview:handle];
+        [_handles addObject:handle];
+    }
+
+    // Toolbar is added LAST so it has the highest hit-test priority among siblings.
     UIToolbar *toolbar = [UIToolbar new];
     toolbar.translatesAutoresizingMaskIntoConstraints = NO;
     [self.view addSubview:toolbar];
@@ -94,21 +113,6 @@ NS_ASSUME_NONNULL_END
         [toolbar.bottomAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.bottomAnchor],
         [_imageView.bottomAnchor constraintEqualToAnchor:toolbar.topAnchor],
     ]];
-
-    _handles = [NSMutableArray new];
-    for (NSInteger i = 0; i < 4; i++) {
-        UIView *handle = [[UIView alloc] initWithFrame:CGRectMake(0, 0, kHandleRadius*2, kHandleRadius*2)];
-        handle.backgroundColor = UIColor.whiteColor;
-        handle.layer.cornerRadius = kHandleRadius;
-        handle.layer.borderColor  = UIColor.systemBlueColor.CGColor;
-        handle.layer.borderWidth  = 2.0;
-        handle.tag = i;
-        UIPanGestureRecognizer *pan = [[UIPanGestureRecognizer alloc]
-            initWithTarget:self action:@selector(handlePan:)];
-        [handle addGestureRecognizer:pan];
-        [self.view addSubview:handle];
-        [_handles addObject:handle];
-    }
 }
 
 - (void)viewDidLayoutSubviews {
@@ -212,25 +216,29 @@ NS_ASSUME_NONNULL_END
 
     CIImage *output = filter.outputImage;
     if (!output) {
-        __weak typeof(self) weakSelf = self;
         [self dismissViewControllerAnimated:YES completion:^{
-            __strong typeof(weakSelf) strongSelf = weakSelf;
-            if (strongSelf.completion) strongSelf.completion(nil);
+            if (self.completion) self.completion(nil);
         }];
         return;
     }
 
-    static CIContext *ctx;
-    static dispatch_once_t once;
-    dispatch_once(&once, ^{ ctx = [CIContext context]; });
-    CGImageRef cropped = [ctx createCGImage:output fromRect:output.extent];
+    // Capture completion before dismissal so the VC can be released by UIKit
+    // without waiting for the background render to finish.
+    void (^completion)(CGImageRef) = self.completion;
+    self.completion = nil;
 
-    // Ownership transfers to the completion handler; caller is responsible for CGImageRelease.
-    __weak typeof(self) weakSelf = self;
+    // Dismiss immediately so the tap feels responsive. CIContext rendering
+    // (createCGImage:fromRect:) is expensive on full-resolution photos and must
+    // not run on the main thread.
     [self dismissViewControllerAnimated:YES completion:^{
-        __strong typeof(weakSelf) strongSelf = weakSelf;
-        if (strongSelf.completion) strongSelf.completion(cropped);
-        else if (cropped) CGImageRelease(cropped);
+        dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+            static CIContext *ctx;
+            static dispatch_once_t once;
+            dispatch_once(&once, ^{ ctx = [CIContext context]; });
+            CGImageRef cropped = [ctx createCGImage:output fromRect:output.extent];
+            if (completion) completion(cropped);
+            else if (cropped) CGImageRelease(cropped);
+        });
     }];
 }
 

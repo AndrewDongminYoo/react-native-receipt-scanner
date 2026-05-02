@@ -4,6 +4,7 @@ androidx
 AOSP
 APPL
 appname
+Autoresizing
 CDPATH
 cmdline
 cocoapods
@@ -23,12 +24,15 @@ gradlew
 homography
 infile
 initialise
+instancetype
 JAVACMD
 licence
 lobanov
 metacharacter
 Millis
 mlkit
+nonatomic
+NONNULL
 normalisation
 objc
 Podfile
@@ -47,4 +51,8 @@ Srcs
 stabilised
 standardises
 Sublabel
+Sublayer
+Subview
+subviews
+Subviews
 turborepo
