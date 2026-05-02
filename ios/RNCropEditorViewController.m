@@ -88,30 +88,55 @@ NS_ASSUME_NONNULL_END
         [_handles addObject:handle];
     }
 
-    // Toolbar is added LAST so it has the highest hit-test priority among siblings.
-    UIToolbar *toolbar = [UIToolbar new];
-    toolbar.translatesAutoresizingMaskIntoConstraints = NO;
-    [self.view addSubview:toolbar];
+    // Plain UIView + UIButton bar — added LAST for highest hit-test priority.
+    // UIToolbar + UIBarButtonItem was replaced here because UIBarButtonItem target-action
+    // routing can silently fail when the presented VC's safe area insets are mis-reported
+    // (a known issue in some RN presentation paths). UIButton fires TouchUpInside directly.
+    UIView *buttonBar = [UIView new];
+    buttonBar.translatesAutoresizingMaskIntoConstraints = NO;
+    buttonBar.backgroundColor = [UIColor colorWithWhite:0.12 alpha:1.0];
 
-    UIBarButtonItem *cancel  = [[UIBarButtonItem alloc] initWithTitle:@"취소"
-                                 style:UIBarButtonItemStylePlain
-                                target:self action:@selector(handleCancel)];
-    UIBarButtonItem *spacer  = [[UIBarButtonItem alloc]
-                                 initWithBarButtonSystemItem:UIBarButtonSystemItemFlexibleSpace
-                                 target:nil action:nil];
-    UIBarButtonItem *confirm = [[UIBarButtonItem alloc] initWithTitle:@"사진 사용"
-                                 style:UIBarButtonItemStyleDone
-                                target:self action:@selector(handleConfirm)];
-    toolbar.items = @[cancel, spacer, confirm];
+    UIButton *cancelBtn = [UIButton buttonWithType:UIButtonTypeSystem];
+    [cancelBtn setTitle:@"취소" forState:UIControlStateNormal];
+    [cancelBtn setTitleColor:UIColor.systemBlueColor forState:UIControlStateNormal];
+    cancelBtn.titleLabel.font = [UIFont systemFontOfSize:17];
+    cancelBtn.translatesAutoresizingMaskIntoConstraints = NO;
+    [cancelBtn addTarget:self action:@selector(handleCancel)
+        forControlEvents:UIControlEventTouchUpInside];
 
+    UIButton *confirmBtn = [UIButton buttonWithType:UIButtonTypeSystem];
+    [confirmBtn setTitle:@"사진 사용" forState:UIControlStateNormal];
+    [confirmBtn setTitleColor:UIColor.systemBlueColor forState:UIControlStateNormal];
+    confirmBtn.titleLabel.font = [UIFont boldSystemFontOfSize:17];
+    confirmBtn.translatesAutoresizingMaskIntoConstraints = NO;
+    [confirmBtn addTarget:self action:@selector(handleConfirm)
+        forControlEvents:UIControlEventTouchUpInside];
+
+    [buttonBar addSubview:cancelBtn];
+    [buttonBar addSubview:confirmBtn];
+    [self.view addSubview:buttonBar];
+
+    // Anchor to view.bottomAnchor - 34 pt (home-indicator zone height on Face ID devices).
+    // safeAreaLayoutGuide.bottomAnchor is not used here because it can report 0 in some
+    // RN modal presentation paths, pushing the bar into the system gesture zone.
     [NSLayoutConstraint activateConstraints:@[
         [_imageView.topAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.topAnchor],
         [_imageView.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor],
         [_imageView.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor],
-        [toolbar.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor],
-        [toolbar.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor],
-        [toolbar.bottomAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.bottomAnchor],
-        [_imageView.bottomAnchor constraintEqualToAnchor:toolbar.topAnchor],
+        [_imageView.bottomAnchor constraintEqualToAnchor:buttonBar.topAnchor],
+
+        [buttonBar.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor],
+        [buttonBar.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor],
+        [buttonBar.bottomAnchor constraintEqualToAnchor:self.view.bottomAnchor constant:-34],
+        [buttonBar.heightAnchor constraintEqualToConstant:50],
+
+        [cancelBtn.leadingAnchor constraintEqualToAnchor:buttonBar.leadingAnchor constant:20],
+        [cancelBtn.centerYAnchor constraintEqualToAnchor:buttonBar.centerYAnchor],
+        [cancelBtn.heightAnchor constraintEqualToConstant:44],
+
+        [confirmBtn.trailingAnchor constraintEqualToAnchor:buttonBar.trailingAnchor constant:-20],
+        [confirmBtn.centerYAnchor constraintEqualToAnchor:buttonBar.centerYAnchor],
+        [confirmBtn.heightAnchor constraintEqualToConstant:44],
     ]];
 }
 
