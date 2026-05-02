@@ -2072,7 +2072,7 @@ SPEC CHECKSUMS:
   ReactCodegen: b3184a229afd01e7f8058dd81b805b843caa2bf9
   ReactCommon: fe2a3af8975e63efa60f95fca8c34dc85deee360
   ReactNativeDependencies: 5777b96aedecaec33462eba4bc548c002b59382e
-  ReceiptScanner: d1886e7994f5fa61aa3cc5a096b72198ae20d42a
+  ReceiptScanner: ca43449aeff211a528902e693258edfe1e67e06d
   Yoga: e83c3121d079541e69f3c5c623faaaf933fb5812
 
 PODFILE CHECKSUM: 4d9f682acbcb7892aa409c5868b84420295cf4ee
