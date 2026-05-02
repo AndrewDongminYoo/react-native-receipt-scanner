@@ -19,7 +19,7 @@ implementation("androidx.exifinterface:exifinterface:1.3.7")
 
 ### Scanner integration
 
-- [ ] Launch `GmsDocumentScanner` via `ActivityResult` API:
+- [x] Launch `GmsDocumentScanner` via `ActivityResult` API:
   ```kotlin
   val options = GmsDocumentScannerOptions.Builder()
     .setGalleryImportAllowed(source == "gallery")
@@ -28,39 +28,39 @@ implementation("androidx.exifinterface:exifinterface:1.3.7")
     .setScannerMode(GmsDocumentScannerOptions.SCANNER_MODE_FULL)
     .build()
   ```
-- [ ] Handle `GmsDocumentScanningResult.getPages()` → list of URI
+- [x] Handle `GmsDocumentScanningResult.getPages()` → list of URI
 
 ### Image processing
 
-- [ ] JPEG recompress each result URI:
+- [x] JPEG recompress each result URI:
   - `BitmapFactory.decodeFile(uri.path)`
   - `bitmap.compress(Bitmap.CompressFormat.JPEG, (quality * 100).toInt(), outputStream)`
   - Write to `context.cacheDir`
-- [ ] Read `width` and `height` from `BitmapFactory.Options` (inJustDecodeBounds)
-- [ ] Read `fileSize` after write
+- [x] Read `width` and `height` from `BitmapFactory.Options` (inJustDecodeBounds)
+- [x] Read `fileSize` after write
 
 ### EXIF
 
-- [ ] Read EXIF via `ExifInterface(filePath)`:
+- [x] Read EXIF via `ExifInterface(filePath)`:
   - `TAG_ORIENTATION`, `TAG_DATETIME_ORIGINAL`, `TAG_MAKE`, `TAG_MODEL`
   - `TAG_GPS_LATITUDE`, `TAG_GPS_LONGITUDE` — include only if `includeGpsExif=true`
-- [ ] Strip GPS tags from output file EXIF when `includeGpsExif=false`
+- [x] Strip GPS tags from output file EXIF when `includeGpsExif=false`
 
 ### OCR
 
-- [ ] Use `TextRecognition.getClient(KoreanTextRecognizerOptions())` (covers Korean + Latin)
-- [ ] `InputImage.fromFilePath(context, uri)` → `recognizer.process(image)`
-- [ ] Extract `.text` from `Text` result
-- [ ] Run only when `options.ocr === true`
+- [x] Use `TextRecognition.getClient(KoreanTextRecognizerOptions())` (covers Korean + Latin)
+- [x] `InputImage.fromFilePath(context, uri)` → `recognizer.process(image)`
+- [x] Extract `.text` from `Text` result
+- [x] Run only when `options.ocr === true`
 
 ### Result assembly
 
-- [ ] Build `WritableMap` per image: `uri`, `width`, `height`, `fileName`, `mimeType`, `fileSize`, `ocrText`, `exif`
-- [ ] Resolve promise with `WritableArray` of image maps
+- [x] Build `WritableMap` per image: `uri`, `width`, `height`, `fileName`, `mimeType`, `fileSize`, `ocrText`, `exif`
+- [x] Resolve promise with `WritableArray` of image maps
 
 ### Cleanup
 
-- [ ] Delete previous session temp files at the start of each `scan()` call
+- [x] Delete previous session temp files at the start of each `scan()` call
 
 ## Definition of Done
 

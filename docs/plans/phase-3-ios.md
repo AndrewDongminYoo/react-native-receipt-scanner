@@ -18,52 +18,52 @@ crop editor, because VisionKit has no built-in gallery import.
 
 ### Camera path
 
-- [ ] Present `VNDocumentCameraViewController` modally
-- [ ] Implement `VNDocumentCameraViewControllerDelegate`:
+- [x] Present `VNDocumentCameraViewController` modally
+- [x] Implement `VNDocumentCameraViewControllerDelegate`:
   - `cameraViewController(_:didFinishWith:)` — iterate `VNDocumentPage`, write each to temp JPEG
   - `cameraViewControllerDidCancel(_:)` — resolve with `{ status: 'cancelled' }`
-- [ ] Write cropped pages using `CGImageDestination` with `kCGImageDestinationLossyCompressionQuality`
+- [x] Write cropped pages using `CGImageDestination` with `kCGImageDestinationLossyCompressionQuality`
 
 ### Gallery path
 
-- [ ] Present `PHPickerViewController` with `PHPickerFilter.images`, `selectionLimit = maxPages`
-- [ ] For each picked item, load `UIImage` via `NSItemProvider`
-- [ ] Run `VNDetectRectanglesRequest` with `minimumConfidence: 0.7`
-- [ ] Show crop editor UI (custom view) pre-populated with detected corners; user can adjust
-- [ ] On confirm, apply perspective correction via `CIFilter(name: "CIPerspectiveCorrection")`
-- [ ] Write result to temp JPEG via `CGImageDestination`
+- [x] Present `PHPickerViewController` with `PHPickerFilter.images`, `selectionLimit = maxPages`
+- [x] For each picked item, load `UIImage` via `NSItemProvider`
+- [x] Run `VNDetectRectanglesRequest` with `minimumConfidence: 0.7`
+- [x] Show crop editor UI (`RNCropEditorViewController`) pre-populated with detected corners; user can adjust
+- [x] On confirm, apply perspective correction via `CIFilter(name: "CIPerspectiveCorrection")`
+- [x] Write result to temp JPEG via `CGImageDestination`
 
 ### JPEG recompress
 
-- [ ] Use `CGImageDestinationAddImage` with:
+- [x] Use `CGImageDestinationAddImage` with:
   ```swift
   kCGImageDestinationLossyCompressionQuality: quality
   ```
-- [ ] Never use `UIImageJPEGRepresentation` (strips EXIF)
+- [x] Never use `UIImageJPEGRepresentation` (strips EXIF)
 
 ### EXIF
 
-- [ ] Read via `CGImageSourceCopyPropertiesAtIndex`:
+- [x] Read via `CGImageSourceCopyPropertiesAtIndex`:
   - `kCGImagePropertyExifDictionary` → orientation, dateTimeOriginal
   - `kCGImagePropertyTIFFDictionary` → make, model
   - `kCGImagePropertyGPSDictionary` → lat/lon (strip unless `includeGpsExif=true`)
-- [ ] Write stripped EXIF back using `CGImageDestinationAddImageFromSource` with modified properties
+- [x] Write stripped EXIF back using `CGImageDestinationAddImageFromSource` with modified properties
 
 ### OCR
 
-- [ ] `VNRecognizeTextRequest` with:
+- [x] `VNRecognizeTextRequest` with:
   ```swift
   request.recognitionLanguages = ["ko-KR", "en-US"]
   request.recognitionLevel = .accurate
   ```
-- [ ] iOS 16 guard for `ko-KR`; fall back to `["en-US"]` on older versions
-- [ ] Run only when `options.ocr === true`
+- [x] iOS 16 guard for `ko-KR`; fall back to `["en-US"]` on older versions
+- [x] Run only when `options.ocr === true`
 
 ### Result & cleanup
 
-- [ ] Build result dictionary matching the Android shape: `uri`, `width`, `height`, `fileName`, `mimeType`, `fileSize`, `ocrText?`, `exif?`
-- [ ] Resolve JS promise
-- [ ] Delete previous session temp files at start of each `scan()` call
+- [x] Build result dictionary matching the Android shape: `uri`, `width`, `height`, `fileName`, `mimeType`, `fileSize`, `ocrText?`, `exif?`
+- [x] Resolve JS promise
+- [x] Delete previous session temp files at start of each `scan()` call
 
 ## Definition of Done
 

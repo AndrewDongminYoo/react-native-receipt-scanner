@@ -13,14 +13,14 @@ leaking into app code.
 
 ### Remove placeholder
 
-- [ ] Delete `src/multiply.tsx`, `src/multiply.native.tsx`
-- [ ] Remove `multiply` from `src/NativeReceiptScanner.ts`
-- [ ] Remove `multiply` from `android/src/main/java/com/receiptscanner/ReceiptScannerModule.kt`
-- [ ] Remove `multiply` from `ios/ReceiptScanner.mm` and `ios/ReceiptScanner.h`
+- [x] Delete `src/multiply.tsx`, `src/multiply.native.tsx`
+- [x] Remove `multiply` from `src/NativeReceiptScanner.ts`
+- [x] Remove `multiply` from `android/src/main/java/com/receiptscanner/ReceiptScannerModule.kt`
+- [x] Remove `multiply` from `ios/ReceiptScanner.mm` and `ios/ReceiptScanner.h`
 
 ### Define types
 
-- [ ] Create `src/types.ts` with:
+- [x] Create `src/types.ts` with:
   - `ScanReceiptOptions` (with defaults constant `DEFAULT_SCAN_OPTIONS`)
   - `ScanReceiptResult`
   - `ReceiptImage`
@@ -28,30 +28,30 @@ leaking into app code.
 
 ### JS entry point
 
-- [ ] Create `src/scan.ts` — applies defaults, calls native module
-- [ ] Create `src/scan.web.ts` — stub that always resolves `{ status: 'cancelled', images: [] }`
-- [ ] Update `src/index.tsx` to export `scan` and all types
+- [x] Create `src/scan.native.tsx` — applies defaults, calls native module
+- [x] Create `src/scan.tsx` — stub that always resolves `{ status: 'cancelled', images: [] }`
+- [x] Update `src/index.tsx` to export `scan` and all types
 
 ### TurboModule spec
 
-- [ ] Update `src/NativeReceiptScanner.ts`:
+- [x] Update `src/NativeReceiptScanner.ts`:
   - Method: `scan(options: Object): Promise<Object>`
   - Keep module name `'ReceiptScanner'`
 
 ### Native stubs (compile-only, no logic yet)
 
-- [ ] `ReceiptScannerModule.kt`: add `scan(options: ReadableMap, promise: Promise)` — resolves `null` for now
-- [ ] `ReceiptScanner.mm`: add `scan:(NSDictionary*)options resolve:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject` — resolves `nil`
+- [x] `ReceiptScannerModule.kt`: add `scan(options: ReadableMap, promise: Promise)` — resolves `null` for now
+- [x] `ReceiptScanner.mm`: add `scan:(NSDictionary*)options resolve:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject` — resolves `nil`
 
 ### Example app
 
-- [ ] Update `example/src/App.tsx` to call `scan()` and display result status
+- [x] Update `example/src/App.tsx` to call `scan()` and display result status
 
 ## Definition of Done
 
-- [ ] `yarn typecheck` passes with no errors
-- [ ] `yarn lint` passes
-- [ ] `yarn test` passes
-- [ ] `scan()` importable and callable in example app (returns `cancelled`)
-- [ ] No reference to `multiply` remains anywhere in the repo
-- [ ] All types exported from package root (`import type { ReceiptImage } from 'react-native-receipt-scanner'`)
+- [x] `yarn typecheck` passes with no errors
+- [x] `yarn lint` passes
+- [x] `yarn test` passes
+- [x] `scan()` importable and callable in example app (returns `cancelled`)
+- [x] No reference to `multiply` remains anywhere in the repo
+- [x] All types exported from package root (`import type { ReceiptImage } from 'react-native-receipt-scanner'`)
