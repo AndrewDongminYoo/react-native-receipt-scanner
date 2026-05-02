@@ -182,6 +182,32 @@ if (ext.origin.x != 0 || ext.origin.y != 0) {
 The resulting `ciInput.extent.size` matches `_sourceImage.size` (portrait), so
 `_corners` coordinates are valid.
 
+---
+
+## Reference: EXIF Orientation Values
+
+EXIF orientation describes **the rotation that must be applied to the raw pixel data
+to display the image correctly**. Values 6 and 8 are the most common source of confusion.
+
+| Value | Meaning                                     | Notes                              |
+| ----- | ------------------------------------------- | ---------------------------------- |
+| 1     | 정방향 (원본)                               | No correction needed               |
+| 2     | 좌우 반전                                   | Mirror horizontal                  |
+| 3     | 시계방향 180도 회전                         | Rotate 180°                        |
+| 4     | 상하 반전                                   | Mirror vertical                    |
+| 5     | 좌우 반전 + 시계방향 270도 회전             | Transpose                          |
+| 6     | **시계방향 90도 회전**                      | Most common: iPhone portrait photo |
+| 7     | 좌우 반전 + 시계방향 90도 회전              | Transverse                         |
+| 8     | **시계방향 270도 회전** (= 반시계방향 90도) | iPhone landscape photo             |
+
+**6과 8을 혼동하기 쉬운 이유**: "이미지를 바로 보기 위해 적용하는 회전"과
+"이미지가 현재 기울어진 양"은 서로 역방향이다. 위 표는 전자(보정 방향) 기준이며,
+ExifTool, Apple 등 주요 도구가 사용하는 표준 기준이다.
+
+`RNImageProcessor.processImage:` 는 `CGImageRef` 를 입력으로 받으며 CGImage에는
+방향 메타데이터가 없으므로, 출력 JPEG에는 항상 `kCGImagePropertyOrientationUp (1)`
+을 고정 기록한다. JS 측에서 받는 `exif.orientation` 은 항상 1이다.
+
 ### Consequences
 
 - Perspective correction output matches the user-selected quadrilateral exactly.
