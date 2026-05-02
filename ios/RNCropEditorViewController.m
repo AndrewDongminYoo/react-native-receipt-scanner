@@ -93,13 +93,13 @@ NS_ASSUME_NONNULL_END
     toolbar.translatesAutoresizingMaskIntoConstraints = NO;
     [self.view addSubview:toolbar];
 
-    UIBarButtonItem *cancel  = [[UIBarButtonItem alloc] initWithTitle:@"Cancel"
+    UIBarButtonItem *cancel  = [[UIBarButtonItem alloc] initWithTitle:@"취소"
                                  style:UIBarButtonItemStylePlain
                                 target:self action:@selector(handleCancel)];
     UIBarButtonItem *spacer  = [[UIBarButtonItem alloc]
                                  initWithBarButtonSystemItem:UIBarButtonSystemItemFlexibleSpace
                                  target:nil action:nil];
-    UIBarButtonItem *confirm = [[UIBarButtonItem alloc] initWithTitle:@"Use Photo"
+    UIBarButtonItem *confirm = [[UIBarButtonItem alloc] initWithTitle:@"사진 사용"
                                  style:UIBarButtonItemStyleDone
                                 target:self action:@selector(handleConfirm)];
     toolbar.items = @[cancel, spacer, confirm];
