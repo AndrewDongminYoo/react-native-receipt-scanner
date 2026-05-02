@@ -6,6 +6,7 @@ APPL
 appname
 Autoresizing
 CDPATH
+CFURL
 cmdline
 cocoapods
 codegen
@@ -34,6 +35,7 @@ mlkit
 nonatomic
 NONNULL
 normalisation
+NSURL
 objc
 Podfile
 podspec
