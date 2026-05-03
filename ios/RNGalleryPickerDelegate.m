@@ -322,11 +322,11 @@ static NSString * _Nullable OriginFromExifFields(NSString *make, NSString *model
     CGImageRelease(cropped);
 
     // Priority: PHAsset subtype → extracted exifData → raw source properties → "unknown".
-    // detectOriginFromSourceRef: is only reached when includeExif:NO left exifData nil;
-    // the ?: chain prevents a double-read when exifData is already populated.
+    // The source-ref read is gated on exifData being nil so we don't decode the same TIFF/EXIF
+    // dictionaries twice when extraction already ran (includeExif:YES).
     NSString *imageOrigin = earlyOrigin
         ?: [self detectOriginFromExifData:processed.exifData]
-        ?: [self detectOriginFromSourceRef:sourceHolder.ref]
+        ?: (processed.exifData == nil ? [self detectOriginFromSourceRef:sourceHolder.ref] : nil)
         ?: @"unknown";
 
     NSMutableDictionary *img = [@{
