@@ -2,8 +2,10 @@ package com.receiptscanner
 
 import android.app.Activity
 import android.content.Intent
+import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Color
+import android.graphics.PointF
 import android.graphics.RectF
 import android.graphics.Typeface
 import android.net.Uri
@@ -20,8 +22,14 @@ import android.widget.RelativeLayout
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.exifinterface.media.ExifInterface
+import com.google.mlkit.vision.common.InputImage
+import com.google.mlkit.vision.text.Text
+import com.google.mlkit.vision.text.TextRecognition
+import com.google.mlkit.vision.text.korean.KoreanTextRecognizerOptions
 import java.io.File
 import java.io.FileOutputStream
+import kotlin.math.PI
+import kotlin.math.atan2
 
 // Launched by ReceiptScannerModule for the gallery+crop flow.
 // Opens the system image picker, then shows a quad-crop editor.
@@ -228,14 +236,17 @@ internal class CropEditorActivity : Activity() {
                 imageView.height,
               )
             imageRect = rect
-            val ix = rect.width() * 0.05f
-            val iy = rect.height() * 0.05f
-            cropView.setImageRect(
-              rect.left + ix,
-              rect.top + iy,
-              rect.right - ix,
-              rect.bottom - iy,
+            cropView.setImageBounds(rect.left, rect.top, rect.right, rect.bottom)
+            // 10% inset as default fallback — matches iOS RNCropEditorViewController d=0.1
+            val ix = rect.width() * 0.1f
+            val iy = rect.height() * 0.1f
+            cropView.setCorners(
+              PointF(rect.left + ix, rect.top + iy),
+              PointF(rect.right - ix, rect.top + iy),
+              PointF(rect.right - ix, rect.bottom - iy),
+              PointF(rect.left + ix, rect.bottom - iy),
             )
+            detectCornersFromText(oriented)
           }
         }
       } catch (_: Exception) {
@@ -245,6 +256,84 @@ internal class CropEditorActivity : Activity() {
         }
       }
     }.start()
+  }
+
+  // Runs ML Kit text recognition on the display bitmap to find document corners.
+  // Updates cropView.setCorners() with the detected quad on success.
+  // Falls back silently to the current 10% inset if detection fails or finds too little text.
+  private fun detectCornersFromText(bitmap: Bitmap) {
+    val recognizer = TextRecognition.getClient(KoreanTextRecognizerOptions.Builder().build())
+    recognizer
+      .process(InputImage.fromBitmap(bitmap, 0))
+      .addOnSuccessListener { result ->
+        if (!isDestroyed && !isFinishing) {
+          val corners = quadFromTextBlocks(result, bitmap.width, bitmap.height)
+          if (corners != null) {
+            cropView.setCorners(corners[0], corners[1], corners[2], corners[3])
+          }
+        }
+        recognizer.close()
+      }.addOnFailureListener {
+        recognizer.close()
+      }
+  }
+
+  // Derives an approximate document quadrilateral from ML Kit TextBlock cornerPoints.
+  // Algorithm: collect all text corner points, find the furthest point in each of the four
+  // angular sectors from the centroid (TL/TR/BR/BL), then map back to display coordinates.
+  // Returns null if there are fewer than 2 text blocks or any sector has no coverage.
+  private fun quadFromTextBlocks(
+    result: Text,
+    bitmapWidth: Int,
+    bitmapHeight: Int,
+  ): Array<PointF>? {
+    val pts = mutableListOf<PointF>()
+    for (block in result.textBlocks) {
+      block.cornerPoints?.forEach { pts.add(PointF(it.x.toFloat(), it.y.toFloat())) }
+    }
+    if (pts.size < 8) return null // < 2 text blocks — not enough to infer document boundary
+
+    val cx = pts.sumOf { it.x.toDouble() }.toFloat() / pts.size
+    val cy = pts.sumOf { it.y.toDouble() }.toFloat() / pts.size
+
+    // In image coords (y-down), atan2 sectors map to document corners:
+    //   TL: angle ∈ (-π, -π/2)  TR: ∈ [-π/2, 0)  BR: ∈ [0, π/2)  BL: ∈ [π/2, π]
+    val best = arrayOfNulls<PointF>(4)
+    val bestDist = FloatArray(4)
+    val halfPi = (PI / 2).toFloat()
+    for (pt in pts) {
+      val dx = pt.x - cx
+      val dy = pt.y - cy
+      val angle = atan2(dy, dx)
+      val dist = dx * dx + dy * dy
+      val sector =
+        when {
+          angle < -halfPi -> 0
+
+          // TL
+          angle < 0f -> 1
+
+          // TR
+          angle < halfPi -> 2
+
+          // BR
+          else -> 3 // BL
+        }
+      if (dist > bestDist[sector]) {
+        bestDist[sector] = dist
+        best[sector] = pt
+      }
+    }
+
+    if (best.any { it == null }) return null
+
+    // Map text-recognition bitmap coords → display coords via imageRect
+    val scaleX = imageRect.width() / bitmapWidth
+    val scaleY = imageRect.height() / bitmapHeight
+
+    fun toDisplay(pt: PointF) = PointF(imageRect.left + pt.x * scaleX, imageRect.top + pt.y * scaleY)
+
+    return arrayOf(toDisplay(best[0]!!), toDisplay(best[1]!!), toDisplay(best[2]!!), toDisplay(best[3]!!))
   }
 
   private fun readExifOrientation(uri: Uri): Int =

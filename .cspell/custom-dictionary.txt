@@ -45,6 +45,7 @@ realdevice
 receiptscanner
 rescan
 Rescan
+rgba
 RNCG
 RNCORE
 Scanbot

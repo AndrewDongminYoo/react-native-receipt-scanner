@@ -22,6 +22,7 @@ internal class QuadCropView
     private val corners = Array(4) { PointF() }
     private var activeIndex = -1
     private val imageBounds = RectF()
+    private var userHasAdjusted = false
 
     // Matches iOS CAShapeLayer: fillColor = rgba(0, 0.5, 1, 0.2), strokeColor = rgba(0, 0.5, 1, 0.9)
     private val quadFillPaint =
@@ -52,17 +53,33 @@ internal class QuadCropView
     private val handleRadius get() = 16f * dp // matches iOS kHandleRadius = 16
     private val touchRadius get() = 40f * dp
 
-    fun setImageRect(
+    fun setImageBounds(
       left: Float,
       top: Float,
       right: Float,
       bottom: Float,
     ) {
       imageBounds.set(left, top, right, bottom)
-      corners[0].set(left, top)
-      corners[1].set(right, top)
-      corners[2].set(right, bottom)
-      corners[3].set(left, bottom)
+    }
+
+    // Sets corner positions, clamping each to imageBounds.
+    // No-op if the user has already started adjusting handles manually,
+    // so a late-arriving auto-detection result doesn't override their work.
+    fun setCorners(
+      tl: PointF,
+      tr: PointF,
+      br: PointF,
+      bl: PointF,
+    ) {
+      if (userHasAdjusted) return
+
+      fun cx(x: Float) = x.coerceIn(imageBounds.left, imageBounds.right)
+
+      fun cy(y: Float) = y.coerceIn(imageBounds.top, imageBounds.bottom)
+      corners[0].set(cx(tl.x), cy(tl.y))
+      corners[1].set(cx(tr.x), cy(tr.y))
+      corners[2].set(cx(br.x), cy(br.y))
+      corners[3].set(cx(bl.x), cy(bl.y))
       invalidate()
     }
 
@@ -108,7 +125,10 @@ internal class QuadCropView
       when (event.actionMasked) {
         MotionEvent.ACTION_DOWN -> {
           activeIndex = nearestHandle(event.x, event.y)
-          if (activeIndex != -1) parent?.requestDisallowInterceptTouchEvent(true)
+          if (activeIndex != -1) {
+            userHasAdjusted = true
+            parent?.requestDisallowInterceptTouchEvent(true)
+          }
           return activeIndex != -1
         }
 
