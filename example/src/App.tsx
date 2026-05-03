@@ -105,6 +105,33 @@ function Collapsible({
   );
 }
 
+// ─── Origin badge ─────────────────────────────────────────────────────────────
+
+const ORIGIN_LABEL: Record<string, string> = {
+  camera: "카메라",
+  screenshot: "스크린샷",
+  download: "다운로드",
+  unknown: "알 수 없음",
+};
+
+const ORIGIN_COLORS: Record<string, { bg: string; fg: string }> = {
+  camera: { bg: C.successBg, fg: C.successFg },
+  screenshot: { bg: C.primaryMuted, fg: C.primary },
+  download: { bg: C.warnBg, fg: C.warnFg },
+  unknown: { bg: C.surfaceAlt, fg: C.ink400 },
+};
+
+function OriginBadge({ origin }: { origin: string }) {
+  const colors = ORIGIN_COLORS[origin] ?? { bg: C.surfaceAlt, fg: C.ink400 };
+  return (
+    <View style={[styles.originBadge, { backgroundColor: colors.bg }]}>
+      <Text style={[styles.originBadgeText, { color: colors.fg }]}>
+        {ORIGIN_LABEL[origin] ?? origin}
+      </Text>
+    </View>
+  );
+}
+
 // ─── Image detail card ────────────────────────────────────────────────────────
 
 function ImageDetailCard({ image, index }: { image: ReceiptImage; index: number }) {
@@ -114,6 +141,11 @@ function ImageDetailCard({ image, index }: { image: ReceiptImage; index: number 
       <Text style={styles.imageCardTitle}>페이지 {index + 1}</Text>
 
       <Image source={{ uri: image.uri }} style={styles.imagePreview} resizeMode="contain" />
+
+      <View style={styles.originRow}>
+        <Text style={styles.originRowLabel}>이미지 출처</Text>
+        <OriginBadge origin={image.imageOrigin} />
+      </View>
 
       <Collapsible title="파일 정보">
         <MetaRow label="파일명" value={image.fileName} />
@@ -894,6 +926,27 @@ const styles = StyleSheet.create({
     color: C.ink900,
     flex: 1,
     fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
+  },
+
+  // Origin badge
+  originRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: S.md,
+  },
+  originRowLabel: {
+    fontSize: 12,
+    color: C.ink400,
+  },
+  originBadge: {
+    borderRadius: R.full,
+    paddingHorizontal: S.md,
+    paddingVertical: 4,
+  },
+  originBadgeText: {
+    fontSize: 12,
+    fontWeight: "600",
   },
 
   // OCR
