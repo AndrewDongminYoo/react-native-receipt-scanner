@@ -170,7 +170,16 @@ class ImageProcessor(
     }
     corrected.recycle()
 
-    val exifData = if (includeExif) readExif(originalUri, includeGpsExif, false) else null
+    // Pixels are already rotation-corrected; report orientation as NORMAL so callers
+    // don't apply a second rotation. Mirrors iOS RNImageProcessor which always writes
+    // kCGImagePropertyOrientationUp (1) in the output.
+    val exifData =
+      if (includeExif) {
+        readExif(originalUri, includeGpsExif, false)
+          .copy(orientation = ExifInterface.ORIENTATION_NORMAL)
+      } else {
+        null
+      }
     return ProcessedImage(outFile, width, height, exifData)
   }
 

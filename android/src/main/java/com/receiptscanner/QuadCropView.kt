@@ -6,6 +6,7 @@ import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.PointF
+import android.graphics.RectF
 import android.util.AttributeSet
 import android.view.MotionEvent
 import android.view.View
@@ -20,15 +21,17 @@ internal class QuadCropView
     private val dp = resources.displayMetrics.density
     private val corners = Array(4) { PointF() }
     private var activeIndex = -1
+    private val imageBounds = RectF()
 
-    private val dimPaint =
+    // Matches iOS CAShapeLayer: fillColor = rgba(0, 0.5, 1, 0.2), strokeColor = rgba(0, 0.5, 1, 0.9)
+    private val quadFillPaint =
       Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = 0xAA000000.toInt()
+        color = 0x330080FF.toInt()
         style = Paint.Style.FILL
       }
-    private val linePaint =
+    private val quadStrokePaint =
       Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.WHITE
+        color = 0xE60080FF.toInt()
         style = Paint.Style.STROKE
         strokeWidth = 2f * dp
       }
@@ -37,14 +40,16 @@ internal class QuadCropView
         color = Color.WHITE
         style = Paint.Style.FILL
       }
-    private val handleStrokePaint =
+
+    // Matches iOS handle.layer.borderColor = UIColor.systemBlueColor, borderWidth = 2
+    private val handleBorderPaint =
       Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = 0x55000000.toInt()
+        color = 0xFF007AFF.toInt()
         style = Paint.Style.STROKE
-        strokeWidth = 1.5f * dp
+        strokeWidth = 2f * dp
       }
 
-    private val handleRadius get() = 18f * dp
+    private val handleRadius get() = 16f * dp // matches iOS kHandleRadius = 16
     private val touchRadius get() = 40f * dp
 
     fun setImageRect(
@@ -53,6 +58,7 @@ internal class QuadCropView
       right: Float,
       bottom: Float,
     ) {
+      imageBounds.set(left, top, right, bottom)
       corners[0].set(left, top)
       corners[1].set(right, top)
       corners[2].set(right, bottom)
@@ -90,17 +96,11 @@ internal class QuadCropView
           lineTo(corners[3].x, corners[3].y)
           close()
         }
-      // Dim everything outside the quad
-      val overlay =
-        Path().apply {
-          addRect(0f, 0f, width.toFloat(), height.toFloat(), Path.Direction.CW)
-          op(quad, Path.Op.DIFFERENCE)
-        }
-      canvas.drawPath(overlay, dimPaint)
-      canvas.drawPath(quad, linePaint)
+      canvas.drawPath(quad, quadFillPaint)
+      canvas.drawPath(quad, quadStrokePaint)
       corners.forEach { pt ->
         canvas.drawCircle(pt.x, pt.y, handleRadius, handleFillPaint)
-        canvas.drawCircle(pt.x, pt.y, handleRadius, handleStrokePaint)
+        canvas.drawCircle(pt.x, pt.y, handleRadius, handleBorderPaint)
       }
     }
 
@@ -114,7 +114,10 @@ internal class QuadCropView
 
         MotionEvent.ACTION_MOVE -> {
           if (activeIndex != -1) {
-            corners[activeIndex].set(event.x, event.y)
+            // Clamp to image bounds, matching iOS behavior
+            val x = event.x.coerceIn(imageBounds.left, imageBounds.right)
+            val y = event.y.coerceIn(imageBounds.top, imageBounds.bottom)
+            corners[activeIndex].set(x, y)
             invalidate()
           }
         }

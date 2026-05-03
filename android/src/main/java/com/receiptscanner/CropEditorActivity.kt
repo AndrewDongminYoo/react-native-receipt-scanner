@@ -5,6 +5,7 @@ import android.content.Intent
 import android.graphics.BitmapFactory
 import android.graphics.Color
 import android.graphics.RectF
+import android.graphics.Typeface
 import android.net.Uri
 import android.os.Bundle
 import android.view.Gravity
@@ -15,6 +16,7 @@ import android.widget.Button
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
+import android.widget.RelativeLayout
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.exifinterface.media.ExifInterface
@@ -79,7 +81,7 @@ internal class CropEditorActivity : Activity() {
   private fun buildCropUI() {
     val dp = resources.displayMetrics.density
     val separatorHeight = (1 * dp).toInt().coerceAtLeast(1)
-    val buttonBarHeight = (64 * dp).toInt()
+    val buttonBarHeight = (50 * dp).toInt() // matches iOS buttonBar.heightAnchor = 50
 
     val root = FrameLayout(this)
     root.setBackgroundColor(Color.BLACK)
@@ -99,39 +101,55 @@ internal class CropEditorActivity : Activity() {
     root.addView(cropView, cropParams)
 
     // Wrap separator + button bar so nav-bar insets can be applied as a single paddingBottom
+    // Background matches iOS colorWithWhite:0.12 alpha:1.0 (0.12 * 255 ≈ 31 = 0x1F)
     val bottomContainer =
       LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL
-        setBackgroundColor(0xFF222222.toInt())
+        setBackgroundColor(0xFF1F1F1F.toInt())
       }
 
     val separatorView = View(this).apply { setBackgroundColor(0xFF444444.toInt()) }
 
-    val buttonBar =
-      LinearLayout(this).apply {
-        orientation = LinearLayout.HORIZONTAL
-        gravity = Gravity.CENTER_VERTICAL
-        setPadding((16 * dp).toInt(), 0, (16 * dp).toInt(), 0)
-      }
+    // RelativeLayout mirrors iOS: cancel pinned to leading +20, confirm pinned to trailing -20
+    val cancelId = View.generateViewId()
+    val confirmId = View.generateViewId()
+    val buttonBar = RelativeLayout(this)
 
+    val margin20 = (20 * dp).toInt()
     val cancelBtn =
       Button(this).apply {
+        id = cancelId
         text = context.getString(R.string.RNReceiptScanner_cancelButton)
         setTextColor(0xFF007AFF.toInt())
         textSize = 17f
+        background = null
         setOnClickListener { onCancelTapped() }
       }
     val confirmBtn =
       Button(this).apply {
+        id = confirmId
         text = context.getString(R.string.RNReceiptScanner_confirmButton)
         setTextColor(0xFF007AFF.toInt())
         textSize = 17f
+        setTypeface(typeface, Typeface.BOLD)
+        background = null
         setOnClickListener { onConfirmTapped() }
       }
 
-    val halfWeight = LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f)
-    buttonBar.addView(cancelBtn, halfWeight)
-    buttonBar.addView(confirmBtn, halfWeight)
+    val cancelParams =
+      RelativeLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply {
+        addRule(RelativeLayout.ALIGN_PARENT_START)
+        addRule(RelativeLayout.CENTER_VERTICAL)
+        marginStart = margin20
+      }
+    val confirmParams =
+      RelativeLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply {
+        addRule(RelativeLayout.ALIGN_PARENT_END)
+        addRule(RelativeLayout.CENTER_VERTICAL)
+        marginEnd = margin20
+      }
+    buttonBar.addView(cancelBtn, cancelParams)
+    buttonBar.addView(confirmBtn, confirmParams)
 
     bottomContainer.addView(
       separatorView,
