@@ -10,12 +10,13 @@ static id RNNullToNil(id value) {
     RNScanOptions *opts = [RNScanOptions new];
 
     if (![dict isKindOfClass:[NSDictionary class]]) {
-        opts.source         = @"camera";
-        opts.maxPages       = 1;
-        opts.quality        = 0.82;
-        opts.includeExif    = YES;
-        opts.includeGpsExif = NO;
-        opts.ocr            = YES;
+        opts.source           = @"camera";
+        opts.maxPages         = 1;
+        opts.quality          = 0.82;
+        opts.includeExif      = YES;
+        opts.includeGpsExif   = NO;
+        opts.ocr              = YES;
+        opts.cropAutoConfirm  = NO;
         return opts;
     }
 
@@ -28,12 +29,14 @@ static id RNNullToNil(id value) {
     NSNumber *qualityNum = RNNullToNil(dict[@"quality"]) ?: @0.82;
     opts.quality = MAX(0.0, MIN(1.0, qualityNum.doubleValue));
 
-    NSNumber *includeExifNum    = RNNullToNil(dict[@"includeExif"])     ?: @YES;
-    NSNumber *includeGpsExifNum = RNNullToNil(dict[@"includeGpsExif"])  ?: @NO;
-    NSNumber *ocrNum            = RNNullToNil(dict[@"ocr"])             ?: @YES;
-    opts.includeExif    = includeExifNum.boolValue;
-    opts.includeGpsExif = includeGpsExifNum.boolValue;
-    opts.ocr            = ocrNum.boolValue;
+    NSNumber *includeExifNum     = RNNullToNil(dict[@"includeExif"])      ?: @YES;
+    NSNumber *includeGpsExifNum  = RNNullToNil(dict[@"includeGpsExif"])   ?: @NO;
+    NSNumber *ocrNum             = RNNullToNil(dict[@"ocr"])              ?: @YES;
+    NSNumber *cropAutoConfirmNum = RNNullToNil(dict[@"cropAutoConfirm"]) ?: @NO;
+    opts.includeExif      = includeExifNum.boolValue;
+    opts.includeGpsExif   = includeGpsExifNum.boolValue;
+    opts.ocr              = ocrNum.boolValue;
+    opts.cropAutoConfirm  = cropAutoConfirmNum.boolValue;
 
     return opts;
 }

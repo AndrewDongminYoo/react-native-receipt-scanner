@@ -4,6 +4,7 @@
 #import <UIKit/UIKit.h>
 #import <PhotosUI/PhotosUI.h>
 #import <Vision/Vision.h>
+#import <CoreImage/CoreImage.h>
 #import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
 
 static CGImagePropertyOrientation CIOrientationFromUIOrientation(UIImageOrientation o) {
@@ -92,6 +93,8 @@ didFinishPicking:(NSArray<PHPickerResult *> *)results {
     VNDetectRectanglesRequest *request = [[VNDetectRectanglesRequest alloc] init];
     request.minimumConfidence = 0.7;
     request.maximumObservations = 1;
+    // More permissive for perspective-distorted receipts (default is 30°).
+    request.quadratureTolerance = 45;
 
     // Pass the CGImage + explicit orientation so Vision processes pixels in the
     // same oriented space as image.size. initWithCIImage: ignores the orientation
@@ -119,6 +122,17 @@ didFinishPicking:(NSArray<PHPickerResult *> *)results {
         ];
     }
 
+    // Skip the crop editor when detection is confident and the caller opted in.
+    // Called on a background thread (PHPickerResult completion), so we can do
+    // the perspective-correction render here without an extra dispatch.
+    if (self.options.cropAutoConfirm && obs && obs.confidence >= 0.85) {
+        [self applyCropAndFinishImage:image
+                              corners:corners
+                          orientation:exifOrientation
+                            sourceRef:sourceRef];
+        return;
+    }
+
     dispatch_async(dispatch_get_main_queue(), ^{
         UIViewController *presentingVC = self.presentingVC;
         if (!presentingVC) {
@@ -130,49 +144,97 @@ didFinishPicking:(NSArray<PHPickerResult *> *)results {
             [[RNCropEditorViewController alloc] initWithImage:image
                                                       corners:corners
                                                    completion:^(CGImageRef cropped) {
+            // Called from the editor's background dispatch after rendering.
             if (!cropped) {
                 if (sourceRef) CFRelease(sourceRef);
                 [self didFinishOneItem:nil];
                 return;
             }
-            dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
-                NSError *err = nil;
-                RNProcessedImage *processed =
-                    [RNImageProcessor processImage:cropped
-                                           quality:self.options.quality
-                                         sourceRef:sourceRef
-                                      includeExif:self.options.includeExif
-                                   includeGpsExif:self.options.includeGpsExif
-                                            error:&err];
-                if (sourceRef) CFRelease(sourceRef);
-                if (!processed) {
-                    CGImageRelease(cropped);
-                    [self didFinishOneItem:nil];
-                    return;
-                }
-                NSString *ocrText = nil;
-                if (self.options.ocr) {
-                    UIImage *croppedUIImage = [UIImage imageWithCGImage:cropped];
-                    NSError *ocrErr = nil;
-                    ocrText = [RNOcrProcessor recognizeTextInImage:croppedUIImage error:&ocrErr];
-                }
-                CGImageRelease(cropped);
-                NSMutableDictionary *img = [@{
-                    @"uri":      [@"file://" stringByAppendingString:processed.fileURL.path],
-                    @"width":    @(processed.width),
-                    @"height":   @(processed.height),
-                    @"fileName": processed.fileURL.lastPathComponent,
-                    @"mimeType": @"image/jpeg",
-                    @"fileSize": @(processed.fileSize),
-                } mutableCopy];
-                if (ocrText)            img[@"ocrText"] = ocrText;
-                if (processed.exifData) img[@"exif"]    = processed.exifData;
-                [self didFinishOneItem:[img copy]];
-            });
+            [self processAndFinishCGImage:cropped sourceRef:sourceRef];
         }];
         editor.modalPresentationStyle = UIModalPresentationFullScreen;
         [presentingVC presentViewController:editor animated:YES completion:nil];
     });
+}
+
+// Applies CIPerspectiveCorrection using the Vision-detected corners and feeds the
+// result into the normal processing pipeline. Must be called from a background thread.
+- (void)applyCropAndFinishImage:(UIImage *)image
+                        corners:(NSArray<NSValue *> *)corners
+                    orientation:(CGImagePropertyOrientation)orientation
+                      sourceRef:(CGImageSourceRef)sourceRef {
+    CGPoint tl = [corners[0] CGPointValue];
+    CGPoint tr = [corners[1] CGPointValue];
+    CGPoint br = [corners[2] CGPointValue];
+    CGPoint bl = [corners[3] CGPointValue];
+
+    CIImage *ciInput = [[[CIImage alloc] initWithCGImage:image.CGImage]
+        imageByApplyingOrientation:orientation];
+    CGRect ext = ciInput.extent;
+    if (ext.origin.x != 0 || ext.origin.y != 0) {
+        ciInput = [ciInput imageByApplyingTransform:
+            CGAffineTransformMakeTranslation(-ext.origin.x, -ext.origin.y)];
+    }
+    CIFilter *filter = [CIFilter filterWithName:@"CIPerspectiveCorrection"];
+    [filter setValue:ciInput              forKey:kCIInputImageKey];
+    [filter setValue:[CIVector vectorWithX:tl.x Y:tl.y] forKey:@"inputTopLeft"];
+    [filter setValue:[CIVector vectorWithX:tr.x Y:tr.y] forKey:@"inputTopRight"];
+    [filter setValue:[CIVector vectorWithX:br.x Y:br.y] forKey:@"inputBottomRight"];
+    [filter setValue:[CIVector vectorWithX:bl.x Y:bl.y] forKey:@"inputBottomLeft"];
+    CIImage *output = filter.outputImage;
+    if (!output) {
+        if (sourceRef) CFRelease(sourceRef);
+        [self didFinishOneItem:nil];
+        return;
+    }
+
+    static CIContext *ctx;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{ ctx = [CIContext context]; });
+    CGImageRef cropped = [ctx createCGImage:output fromRect:output.extent];
+    if (!cropped) {
+        if (sourceRef) CFRelease(sourceRef);
+        [self didFinishOneItem:nil];
+        return;
+    }
+    [self processAndFinishCGImage:cropped sourceRef:sourceRef];
+}
+
+// Encodes, optionally runs OCR, and resolves a single image result.
+// Must be called from a background thread; takes ownership of cropped and sourceRef.
+- (void)processAndFinishCGImage:(CGImageRef)cropped sourceRef:(CGImageSourceRef)sourceRef {
+    NSError *err = nil;
+    RNProcessedImage *processed =
+        [RNImageProcessor processImage:cropped
+                               quality:self.options.quality
+                             sourceRef:sourceRef
+                          includeExif:self.options.includeExif
+                       includeGpsExif:self.options.includeGpsExif
+                                error:&err];
+    if (sourceRef) CFRelease(sourceRef);
+    if (!processed) {
+        CGImageRelease(cropped);
+        [self didFinishOneItem:nil];
+        return;
+    }
+    NSString *ocrText = nil;
+    if (self.options.ocr) {
+        UIImage *croppedUIImage = [UIImage imageWithCGImage:cropped];
+        NSError *ocrErr = nil;
+        ocrText = [RNOcrProcessor recognizeTextInImage:croppedUIImage error:&ocrErr];
+    }
+    CGImageRelease(cropped);
+    NSMutableDictionary *img = [@{
+        @"uri":      [@"file://" stringByAppendingString:processed.fileURL.path],
+        @"width":    @(processed.width),
+        @"height":   @(processed.height),
+        @"fileName": processed.fileURL.lastPathComponent,
+        @"mimeType": @"image/jpeg",
+        @"fileSize": @(processed.fileSize),
+    } mutableCopy];
+    if (ocrText)            img[@"ocrText"] = ocrText;
+    if (processed.exifData) img[@"exif"]    = processed.exifData;
+    [self didFinishOneItem:[img copy]];
 }
 
 - (void)didFinishOneItem:(nullable NSDictionary *)imageResult {

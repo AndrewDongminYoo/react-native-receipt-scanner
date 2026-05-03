@@ -5,6 +5,7 @@ export type ScanReceiptOptions = {
   includeExif?: boolean;
   includeGpsExif?: boolean;
   ocr?: boolean;
+  cropAutoConfirm?: boolean;
 };
 
 export type ReceiptExif = {
@@ -41,4 +42,5 @@ export const DEFAULT_SCAN_OPTIONS: Required<ScanReceiptOptions> = {
   includeExif: true,
   includeGpsExif: false,
   ocr: true,
+  cropAutoConfirm: false,
 };

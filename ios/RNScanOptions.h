@@ -9,6 +9,7 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, assign) BOOL       includeExif;
 @property (nonatomic, assign) BOOL       includeGpsExif;
 @property (nonatomic, assign) BOOL       ocr;
+@property (nonatomic, assign) BOOL       cropAutoConfirm;
 
 + (instancetype)optionsFromDictionary:(NSDictionary *)dict;
 @end
