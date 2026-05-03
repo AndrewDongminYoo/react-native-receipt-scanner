@@ -26,6 +26,8 @@ lint:
     - linters: [markdownlint]
       paths: [.github/**/*.md]
   enabled:
+    - grype@0.112.0
+    - osv-scanner@2.3.6
     - actionlint@1.7.12
     - checkov@3.2.526
     - dotenv-linter@4.0.0

@@ -38,6 +38,7 @@ NONNULL
 normalisation
 NSURL
 NSUUID
+nvmrc
 objc
 Podfile
 podspec
@@ -50,6 +51,7 @@ Rescan
 RNCORE
 Scanbot
 sdkmanager
+shellcheck
 shellness
 Srcs
 stabilised
