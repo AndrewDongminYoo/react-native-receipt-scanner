@@ -74,7 +74,11 @@ class ReceiptScannerModule(
         val p = pendingPromise
         pendingPromise = null
         pendingOptions = null
-        p?.reject("SCANNER_INIT_FAILED", e.message ?: "Failed to initialize ML Kit scanner", e)
+        p?.reject(
+          "SCANNER_INIT_FAILED",
+          e.message ?: "Failed to initialize ML Kit scanner",
+          e,
+        )
       }
   }
 
@@ -112,7 +116,8 @@ class ReceiptScannerModule(
 
     executor.execute {
       try {
-        val ocrProcessor = if (scanOptions.ocr) OcrProcessor(reactApplicationContext) else null
+        val ocrProcessor =
+          if (scanOptions.ocr) OcrProcessor(reactApplicationContext) else null
 
         val imageResults =
           pages.map { page ->

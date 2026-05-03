@@ -15,11 +15,16 @@ import android.widget.Button
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.exifinterface.media.ExifInterface
+import java.io.File
+import java.io.FileOutputStream
 
 // Launched by ReceiptScannerModule for the gallery+crop flow.
 // Opens the system image picker, then shows a quad-crop editor.
-// On confirm, returns EXTRA_ORIGINAL_URI (String) and EXTRA_CORNERS (FloatArray[8])
+// On confirm, copies the picker URI to cache (picker_get_content permission expires on finish),
+// then returns EXTRA_ORIGINAL_URI (file:// String) and EXTRA_CORNERS (FloatArray[8])
 // where corners are [tl.x, tl.y, tr.x, tr.y, br.x, br.y, bl.x, bl.y] in full-res pixels.
 internal class CropEditorActivity : Activity() {
   companion object {
@@ -75,49 +80,52 @@ internal class CropEditorActivity : Activity() {
     val dp = resources.displayMetrics.density
     val separatorHeight = (1 * dp).toInt().coerceAtLeast(1)
     val buttonBarHeight = (64 * dp).toInt()
-    val barTotalHeight = separatorHeight + buttonBarHeight
 
     val root = FrameLayout(this)
     root.setBackgroundColor(Color.BLACK)
 
-    imageView =
-      ImageView(this).apply {
-        scaleType = ImageView.ScaleType.FIT_CENTER
-      }
+    imageView = ImageView(this).apply { scaleType = ImageView.ScaleType.FIT_CENTER }
     cropView = QuadCropView(this)
 
-    val contentParams =
+    val imageParams =
       FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT).apply {
-        bottomMargin = barTotalHeight
+        bottomMargin = separatorHeight + buttonBarHeight
       }
-    root.addView(imageView, contentParams)
-    root.addView(cropView, contentParams)
+    val cropParams =
+      FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT).apply {
+        bottomMargin = separatorHeight + buttonBarHeight
+      }
+    root.addView(imageView, imageParams)
+    root.addView(cropView, cropParams)
 
-    val separator =
-      View(this).apply {
-        setBackgroundColor(0xFF444444.toInt())
+    // Wrap separator + button bar so nav-bar insets can be applied as a single paddingBottom
+    val bottomContainer =
+      LinearLayout(this).apply {
+        orientation = LinearLayout.VERTICAL
+        setBackgroundColor(0xFF222222.toInt())
       }
+
+    val separatorView = View(this).apply { setBackgroundColor(0xFF444444.toInt()) }
 
     val buttonBar =
       LinearLayout(this).apply {
         orientation = LinearLayout.HORIZONTAL
-        setBackgroundColor(0xFF222222.toInt())
         gravity = Gravity.CENTER_VERTICAL
         setPadding((16 * dp).toInt(), 0, (16 * dp).toInt(), 0)
       }
 
     val cancelBtn =
       Button(this).apply {
-        text = "Cancel"
+        text = context.getString(R.string.RNReceiptScanner_cancelButton)
         setTextColor(0xFFCCCCCC.toInt())
-        textSize = 16f
+        textSize = 17f
         setOnClickListener { onCancelTapped() }
       }
     val confirmBtn =
       Button(this).apply {
-        text = "Confirm"
+        text = context.getString(R.string.RNReceiptScanner_confirmButton)
         setTextColor(0xFF4CAF50.toInt())
-        textSize = 16f
+        textSize = 17f
         setOnClickListener { onConfirmTapped() }
       }
 
@@ -125,30 +133,40 @@ internal class CropEditorActivity : Activity() {
     buttonBar.addView(cancelBtn, halfWeight)
     buttonBar.addView(confirmBtn, halfWeight)
 
-    val separatorParams =
-      FrameLayout.LayoutParams(MATCH_PARENT, separatorHeight).apply {
-        gravity = Gravity.BOTTOM
-        bottomMargin = buttonBarHeight
-      }
-    val barParams =
-      FrameLayout.LayoutParams(MATCH_PARENT, buttonBarHeight).apply {
-        gravity = Gravity.BOTTOM
-      }
-    root.addView(separator, separatorParams)
-    root.addView(buttonBar, barParams)
+    bottomContainer.addView(
+      separatorView,
+      LinearLayout.LayoutParams(MATCH_PARENT, separatorHeight),
+    )
+    bottomContainer.addView(buttonBar, LinearLayout.LayoutParams(MATCH_PARENT, buttonBarHeight))
+
+    root.addView(
+      bottomContainer,
+      FrameLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { gravity = Gravity.BOTTOM },
+    )
 
     setContentView(root)
+
+    ViewCompat.setOnApplyWindowInsetsListener(root) { _, insets ->
+      val navBottom = insets.getInsets(WindowInsetsCompat.Type.navigationBars()).bottom
+      bottomContainer.setPadding(0, 0, 0, navBottom)
+      val totalBottom = separatorHeight + buttonBarHeight + navBottom
+      imageParams.bottomMargin = totalBottom
+      cropParams.bottomMargin = totalBottom
+      imageView.requestLayout()
+      cropView.requestLayout()
+      insets
+    }
   }
 
   private fun loadAndDisplayImage() {
     val uri = originalUri ?: return
     Thread {
       try {
-        // Determine original dimensions without decoding
         val boundsOpts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-        contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, boundsOpts) }
+        contentResolver
+          .openInputStream(uri)
+          ?.use { BitmapFactory.decodeStream(it, null, boundsOpts) }
 
-        // Compute a power-of-2 sample size to keep the display bitmap under 2048px
         val maxDim = 2048
         var sample = 1
         var w = boundsOpts.outWidth
@@ -171,11 +189,9 @@ internal class CropEditorActivity : Activity() {
             return@Thread
           }
 
-        // Auto-rotate to match display orientation
         val exifOrientation = readExifOrientation(uri)
         val oriented = ImageProcessor.applyExifRotation(raw, exifOrientation)
 
-        // Approximate full-res oriented dimensions for corner scaling
         originalWidth = oriented.width * sample
         originalHeight = oriented.height * sample
 
@@ -185,7 +201,6 @@ internal class CropEditorActivity : Activity() {
             return@runOnUiThread
           }
           imageView.setImageBitmap(oriented)
-          // Wait for the ImageView to be laid out before computing imageRect
           imageView.post {
             val rect =
               computeFitCenterRect(
@@ -197,7 +212,12 @@ internal class CropEditorActivity : Activity() {
             imageRect = rect
             val ix = rect.width() * 0.05f
             val iy = rect.height() * 0.05f
-            cropView.setImageRect(rect.left + ix, rect.top + iy, rect.right - ix, rect.bottom - iy)
+            cropView.setImageRect(
+              rect.left + ix,
+              rect.top + iy,
+              rect.right - ix,
+              rect.bottom - iy,
+            )
           }
         }
       } catch (_: Exception) {
@@ -249,13 +269,37 @@ internal class CropEditorActivity : Activity() {
         originalWidth,
         originalHeight,
       )
-    val result =
-      Intent().apply {
-        putExtra(EXTRA_ORIGINAL_URI, uri.toString())
-        putExtra(EXTRA_CORNERS, corners)
+    // picker_get_content URI permission expires when this activity finishes.
+    // Copy the bytes to cache now so ImageProcessor can read via file:// after finish.
+    Thread {
+      val cachedFile = File(cacheDir, "receipt_pick_${System.currentTimeMillis()}.jpg")
+      try {
+        contentResolver.openInputStream(uri)?.use { input ->
+          FileOutputStream(cachedFile).use { output -> input.copyTo(output) }
+        } ?: run {
+          runOnUiThread {
+            setResult(RESULT_CANCELED)
+            finish()
+          }
+          return@Thread
+        }
+      } catch (_: Exception) {
+        runOnUiThread {
+          setResult(RESULT_CANCELED)
+          finish()
+        }
+        return@Thread
       }
-    setResult(RESULT_OK, result)
-    finish()
+      val result =
+        Intent().apply {
+          putExtra(EXTRA_ORIGINAL_URI, Uri.fromFile(cachedFile).toString())
+          putExtra(EXTRA_CORNERS, corners)
+        }
+      runOnUiThread {
+        setResult(RESULT_OK, result)
+        finish()
+      }
+    }.start()
   }
 
   private fun onCancelTapped() {

@@ -56,7 +56,8 @@ class ImageProcessor(
     }
     bitmap.recycle()
 
-    val exifData = if (includeExif) readExif(sourceUri, includeGpsExif, synthesizeDeviceInfo) else null
+    val exifData =
+      if (includeExif) readExif(sourceUri, includeGpsExif, synthesizeDeviceInfo) else null
 
     return ProcessedImage(outFile, width, height, exifData)
   }
@@ -95,7 +96,14 @@ class ImageProcessor(
     val gps =
       if (includeGps) {
         val latLon = FloatArray(2)
-        if (exif.getLatLong(latLon)) Pair(latLon[0].toDouble(), latLon[1].toDouble()) else null
+        if (exif.getLatLong(latLon)) {
+          Pair(
+            latLon[0].toDouble(),
+            latLon[1].toDouble(),
+          )
+        } else {
+          null
+        }
       } else {
         null
       }
@@ -111,7 +119,14 @@ class ImageProcessor(
         ?: if (synthesizeDeviceInfo) Build.MODEL else null
     val dateTime =
       exif.getAttribute(ExifInterface.TAG_DATETIME_ORIGINAL)
-        ?: if (synthesizeDeviceInfo) SimpleDateFormat("yyyy:MM:dd HH:mm:ss", Locale.US).format(Date()) else null
+        ?: if (synthesizeDeviceInfo) {
+          SimpleDateFormat(
+            "yyyy:MM:dd HH:mm:ss",
+            Locale.US,
+          ).format(Date())
+        } else {
+          null
+        }
 
     return ExifData(
       orientation = rawOrientation.takeIf { it != ExifInterface.ORIENTATION_UNDEFINED },
@@ -248,7 +263,16 @@ class ImageProcessor(
     val outH = ((leftH + rightH) / 2f).toInt().coerceAtLeast(1)
 
     val dst =
-      floatArrayOf(0f, 0f, outW.toFloat(), 0f, outW.toFloat(), outH.toFloat(), 0f, outH.toFloat())
+      floatArrayOf(
+        0f,
+        0f,
+        outW.toFloat(),
+        0f,
+        outW.toFloat(),
+        outH.toFloat(),
+        0f,
+        outH.toFloat(),
+      )
 
     val matrix = Matrix()
     matrix.setPolyToPoly(corners, 0, dst, 0, 4)
@@ -305,7 +329,8 @@ class ImageProcessor(
           return bitmap
         }
       }
-      val rotated = Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
+      val rotated =
+        Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
       bitmap.recycle()
       return rotated
     }
