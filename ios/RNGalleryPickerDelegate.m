@@ -4,7 +4,6 @@
 #import <UIKit/UIKit.h>
 #import <PhotosUI/PhotosUI.h>
 #import <Vision/Vision.h>
-#import <CoreImage/CoreImage.h>
 #import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
 
 // Below this confidence the user sees the crop editor; above it we apply the
@@ -22,6 +21,15 @@ static CGImagePropertyOrientation CIOrientationFromUIOrientation(UIImageOrientat
         case UIImageOrientationLeftMirrored:  return kCGImagePropertyOrientationLeftMirrored;
         case UIImageOrientationRightMirrored: return kCGImagePropertyOrientationRightMirrored;
     }
+}
+
+static VNDetectRectanglesRequest *MakeReceiptRectangleRequest(float minimumConfidence) {
+    VNDetectRectanglesRequest *req = [VNDetectRectanglesRequest new];
+    req.minimumConfidence   = minimumConfidence;
+    req.maximumObservations = 1;
+    // More permissive for perspective-distorted receipts (default is 30°).
+    req.quadratureTolerance = 45;
+    return req;
 }
 
 // RNCropEditorViewController has no header — redeclare its interface here
@@ -94,14 +102,10 @@ didFinishPicking:(NSArray<PHPickerResult *> *)results {
 }
 
 - (void)detectRectangleAndCrop:(UIImage *)image sourceRef:(CGImageSourceRef)sourceRef {
-    // Batch both requests on one handler so Vision processes the image only once.
     VNDetectDocumentSegmentationRequest *docRequest =
         [VNDetectDocumentSegmentationRequest new];
-    VNDetectRectanglesRequest *rectRequest = [VNDetectRectanglesRequest new];
-    rectRequest.minimumConfidence  = 0.5;
-    rectRequest.maximumObservations = 1;
-    // More permissive for perspective-distorted receipts (default is 30°).
-    rectRequest.quadratureTolerance = 45;
+    // 0.5 catches more receipts than the ~0.7 default while still filtering noise.
+    VNDetectRectanglesRequest *rectRequest = MakeReceiptRectangleRequest(0.5f);
 
     // Pass the CGImage + explicit orientation so Vision processes pixels in the
     // same oriented space as image.size. initWithCIImage: ignores the orientation
@@ -118,18 +122,11 @@ didFinishPicking:(NSArray<PHPickerResult *> *)results {
     CGFloat W = image.size.width;
     CGFloat H = image.size.height;
 
-    // Preferred path: run rectangle detection on the clean binary document mask.
-    // The mask is already in the oriented image coordinate space, so its normalized
-    // results multiply directly to W/H without any extra transform.
-    // Fallback: use rectangle detection run directly on the original image.
-    VNRectangleObservation *obs = nil;
-    VNDocumentObservation *docObs = docRequest.results.firstObject;
-    if (docObs) {
-        obs = [self rectangleInDocumentMask:docObs.pixelBuffer];
-    }
-    if (!obs) {
-        obs = rectRequest.results.firstObject;
-    }
+    // Prefer the ML-based document segmentation result; fall back to classic
+    // rectangle detection when no document is found. Both requests return
+    // VNRectangleObservation, so the corners are used the same way below.
+    VNRectangleObservation *obs =
+        docRequest.results.firstObject ?: rectRequest.results.firstObject;
 
     NSArray<NSValue *> *corners = nil;
     if (obs) {
@@ -173,23 +170,6 @@ didFinishPicking:(NSArray<PHPickerResult *> *)results {
         editor.modalPresentationStyle = UIModalPresentationFullScreen;
         [presentingVC presentViewController:editor animated:YES completion:nil];
     });
-}
-
-// Runs rectangle detection on the binary document segmentation mask returned by
-// VNDetectDocumentSegmentationRequest. The mask is in the same oriented coordinate
-// space as the original image, so no orientation correction is needed here and the
-// resulting normalized coordinates map directly to the original image's W/H.
-- (nullable VNRectangleObservation *)rectangleInDocumentMask:(CVPixelBufferRef)maskBuffer {
-    CIImage *maskCI = [CIImage imageWithCVPixelBuffer:maskBuffer];
-    VNDetectRectanglesRequest *req = [VNDetectRectanglesRequest new];
-    // The mask is a clean binary image: lower threshold is reliable here.
-    req.minimumConfidence   = 0.3;
-    req.maximumObservations = 1;
-    req.quadratureTolerance = 45;
-    VNImageRequestHandler *maskHandler = [[VNImageRequestHandler alloc]
-        initWithCIImage:maskCI options:@{}];
-    [maskHandler performRequests:@[req] error:nil];
-    return req.results.firstObject;
 }
 
 // Must be called from a background thread.
