@@ -1,6 +1,20 @@
 #import "RNImageProcessor.h"
 #import <UIKit/UIKit.h>
+#import <CoreImage/CoreImage.h>
 #import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
+
+static CGImagePropertyOrientation RNOrientationFromUIImageOrientation(UIImageOrientation o) {
+    switch (o) {
+        case UIImageOrientationUp:            return kCGImagePropertyOrientationUp;
+        case UIImageOrientationDown:          return kCGImagePropertyOrientationDown;
+        case UIImageOrientationLeft:          return kCGImagePropertyOrientationLeft;
+        case UIImageOrientationRight:         return kCGImagePropertyOrientationRight;
+        case UIImageOrientationUpMirrored:    return kCGImagePropertyOrientationUpMirrored;
+        case UIImageOrientationDownMirrored:  return kCGImagePropertyOrientationDownMirrored;
+        case UIImageOrientationLeftMirrored:  return kCGImagePropertyOrientationLeftMirrored;
+        case UIImageOrientationRightMirrored: return kCGImagePropertyOrientationRightMirrored;
+    }
+}
 
 @implementation RNProcessedImage
 @end
@@ -131,6 +145,37 @@
     }
 
     return exif.count > 0 ? [exif copy] : nil;
+}
+
++ (nullable CGImageRef)perspectiveCorrectedCGImage:(UIImage *)image
+                                           corners:(NSArray<NSValue *> *)corners
+    CF_RETURNS_RETAINED {
+    CGPoint tl = [corners[0] CGPointValue];
+    CGPoint tr = [corners[1] CGPointValue];
+    CGPoint br = [corners[2] CGPointValue];
+    CGPoint bl = [corners[3] CGPointValue];
+
+    CGImagePropertyOrientation orientation = RNOrientationFromUIImageOrientation(image.imageOrientation);
+    CIImage *ciInput = [[[CIImage alloc] initWithCGImage:image.CGImage]
+        imageByApplyingOrientation:orientation];
+    CGRect ext = ciInput.extent;
+    if (ext.origin.x != 0 || ext.origin.y != 0) {
+        ciInput = [ciInput imageByApplyingTransform:
+            CGAffineTransformMakeTranslation(-ext.origin.x, -ext.origin.y)];
+    }
+    CIFilter *filter = [CIFilter filterWithName:@"CIPerspectiveCorrection"];
+    [filter setValue:ciInput              forKey:kCIInputImageKey];
+    [filter setValue:[CIVector vectorWithX:tl.x Y:tl.y] forKey:@"inputTopLeft"];
+    [filter setValue:[CIVector vectorWithX:tr.x Y:tr.y] forKey:@"inputTopRight"];
+    [filter setValue:[CIVector vectorWithX:br.x Y:br.y] forKey:@"inputBottomRight"];
+    [filter setValue:[CIVector vectorWithX:bl.x Y:bl.y] forKey:@"inputBottomLeft"];
+    CIImage *output = filter.outputImage;
+    if (!output) return NULL;
+
+    // Allocate a fresh CIContext per call so concurrent callers (maxPages > 1) are safe.
+    // CIContext is not thread-safe; a shared static instance would race under multi-image picks.
+    CIContext *ctx = [CIContext context];
+    return [ctx createCGImage:output fromRect:output.extent];
 }
 
 + (UIImage *)normalizeOrientation:(UIImage *)image {

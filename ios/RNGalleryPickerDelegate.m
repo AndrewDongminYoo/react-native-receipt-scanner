@@ -4,8 +4,11 @@
 #import <UIKit/UIKit.h>
 #import <PhotosUI/PhotosUI.h>
 #import <Vision/Vision.h>
-#import <CoreImage/CoreImage.h>
 #import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
+
+// Below this confidence the user sees the crop editor; above it we apply the
+// detected corners automatically when cropAutoConfirm is enabled.
+static const float kCropAutoConfirmMinConfidence = 0.85f;
 
 static CGImagePropertyOrientation CIOrientationFromUIOrientation(UIImageOrientation o) {
     switch (o) {
@@ -125,10 +128,9 @@ didFinishPicking:(NSArray<PHPickerResult *> *)results {
     // Skip the crop editor when detection is confident and the caller opted in.
     // Called on a background thread (PHPickerResult completion), so we can do
     // the perspective-correction render here without an extra dispatch.
-    if (self.options.cropAutoConfirm && obs && obs.confidence >= 0.85) {
+    if (self.options.cropAutoConfirm && obs && obs.confidence >= kCropAutoConfirmMinConfidence) {
         [self applyCropAndFinishImage:image
                               corners:corners
-                          orientation:exifOrientation
                             sourceRef:sourceRef];
         return;
     }
@@ -157,41 +159,11 @@ didFinishPicking:(NSArray<PHPickerResult *> *)results {
     });
 }
 
-// Applies CIPerspectiveCorrection using the Vision-detected corners and feeds the
-// result into the normal processing pipeline. Must be called from a background thread.
+// Must be called from a background thread.
 - (void)applyCropAndFinishImage:(UIImage *)image
                         corners:(NSArray<NSValue *> *)corners
-                    orientation:(CGImagePropertyOrientation)orientation
                       sourceRef:(CGImageSourceRef)sourceRef {
-    CGPoint tl = [corners[0] CGPointValue];
-    CGPoint tr = [corners[1] CGPointValue];
-    CGPoint br = [corners[2] CGPointValue];
-    CGPoint bl = [corners[3] CGPointValue];
-
-    CIImage *ciInput = [[[CIImage alloc] initWithCGImage:image.CGImage]
-        imageByApplyingOrientation:orientation];
-    CGRect ext = ciInput.extent;
-    if (ext.origin.x != 0 || ext.origin.y != 0) {
-        ciInput = [ciInput imageByApplyingTransform:
-            CGAffineTransformMakeTranslation(-ext.origin.x, -ext.origin.y)];
-    }
-    CIFilter *filter = [CIFilter filterWithName:@"CIPerspectiveCorrection"];
-    [filter setValue:ciInput              forKey:kCIInputImageKey];
-    [filter setValue:[CIVector vectorWithX:tl.x Y:tl.y] forKey:@"inputTopLeft"];
-    [filter setValue:[CIVector vectorWithX:tr.x Y:tr.y] forKey:@"inputTopRight"];
-    [filter setValue:[CIVector vectorWithX:br.x Y:br.y] forKey:@"inputBottomRight"];
-    [filter setValue:[CIVector vectorWithX:bl.x Y:bl.y] forKey:@"inputBottomLeft"];
-    CIImage *output = filter.outputImage;
-    if (!output) {
-        if (sourceRef) CFRelease(sourceRef);
-        [self didFinishOneItem:nil];
-        return;
-    }
-
-    static CIContext *ctx;
-    static dispatch_once_t once;
-    dispatch_once(&once, ^{ ctx = [CIContext context]; });
-    CGImageRef cropped = [ctx createCGImage:output fromRect:output.extent];
+    CGImageRef cropped = [RNImageProcessor perspectiveCorrectedCGImage:image corners:corners];
     if (!cropped) {
         if (sourceRef) CFRelease(sourceRef);
         [self didFinishOneItem:nil];
@@ -220,8 +192,7 @@ didFinishPicking:(NSArray<PHPickerResult *> *)results {
     NSString *ocrText = nil;
     if (self.options.ocr) {
         UIImage *croppedUIImage = [UIImage imageWithCGImage:cropped];
-        NSError *ocrErr = nil;
-        ocrText = [RNOcrProcessor recognizeTextInImage:croppedUIImage error:&ocrErr];
+        ocrText = [RNOcrProcessor recognizeTextInImage:croppedUIImage error:NULL];
     }
     CGImageRelease(cropped);
     NSMutableDictionary *img = [@{

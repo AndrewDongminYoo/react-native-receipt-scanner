@@ -1,18 +1,5 @@
+#import "RNImageProcessor.h"
 #import <UIKit/UIKit.h>
-#import <CoreImage/CoreImage.h>
-
-static CGImagePropertyOrientation CIOrientationFromUIOrientation(UIImageOrientation o) {
-    switch (o) {
-        case UIImageOrientationUp:            return kCGImagePropertyOrientationUp;
-        case UIImageOrientationDown:          return kCGImagePropertyOrientationDown;
-        case UIImageOrientationLeft:          return kCGImagePropertyOrientationLeft;
-        case UIImageOrientationRight:         return kCGImagePropertyOrientationRight;
-        case UIImageOrientationUpMirrored:    return kCGImagePropertyOrientationUpMirrored;
-        case UIImageOrientationDownMirrored:  return kCGImagePropertyOrientationDownMirrored;
-        case UIImageOrientationLeftMirrored:  return kCGImagePropertyOrientationLeftMirrored;
-        case UIImageOrientationRightMirrored: return kCGImagePropertyOrientationRightMirrored;
-    }
-}
 
 static const CGFloat kHandleRadius = 16.0;
 static const NSInteger kTopLeft     = 0;
@@ -241,55 +228,17 @@ NS_ASSUME_NONNULL_END
 }
 
 - (void)handleConfirm {
-    CGPoint tl = [_corners[kTopLeft]     CGPointValue];
-    CGPoint tr = [_corners[kTopRight]    CGPointValue];
-    CGPoint br = [_corners[kBottomRight] CGPointValue];
-    CGPoint bl = [_corners[kBottomLeft]  CGPointValue];
+    NSArray<NSValue *> *corners = [_corners copy];
+    UIImage *sourceImage = self.sourceImage;
 
-    // Build CIImage in the same coordinate space as _corners.
-    // initWithImage: embeds the orientation as a lazy transform; some CIFilters
-    // (including CIPerspectiveCorrection) can operate on the un-transformed raw
-    // pixels instead. Using initWithCGImage: + imageByApplyingOrientation: bakes
-    // the rotation into the pixel data so the extent always matches _sourceImage.size.
-    CGImagePropertyOrientation exifOrientation =
-        CIOrientationFromUIOrientation(self.sourceImage.imageOrientation);
-    CIImage *ciInput = [[[CIImage alloc] initWithCGImage:self.sourceImage.CGImage]
-        imageByApplyingOrientation:exifOrientation];
-    // Normalize to (0,0) origin in case the rotation produced an offset extent.
-    CGRect ext = ciInput.extent;
-    if (ext.origin.x != 0 || ext.origin.y != 0) {
-        ciInput = [ciInput imageByApplyingTransform:
-            CGAffineTransformMakeTranslation(-ext.origin.x, -ext.origin.y)];
-    }
-    CIFilter *filter  = [CIFilter filterWithName:@"CIPerspectiveCorrection"];
-    [filter setValue:ciInput forKey:kCIInputImageKey];
-    [filter setValue:[CIVector vectorWithX:tl.x Y:tl.y] forKey:@"inputTopLeft"];
-    [filter setValue:[CIVector vectorWithX:tr.x Y:tr.y] forKey:@"inputTopRight"];
-    [filter setValue:[CIVector vectorWithX:br.x Y:br.y] forKey:@"inputBottomRight"];
-    [filter setValue:[CIVector vectorWithX:bl.x Y:bl.y] forKey:@"inputBottomLeft"];
-
-    CIImage *output = filter.outputImage;
-    if (!output) {
-        [self dismissViewControllerAnimated:YES completion:^{
-            if (self.completion) self.completion(nil);
-        }];
-        return;
-    }
-
-    // Capture completion before dismissal so the VC can be released by UIKit
-    // without waiting for the background render to finish.
     void (^completion)(CGImageRef) = self.completion;
     self.completion = nil;
 
-    // Dismiss immediately so the tap feels responsive. CIContext rendering
-    // (createCGImage:fromRect:) is expensive on full-resolution photos and must
-    // not run on the main thread.
+    // Dismiss immediately so the tap feels responsive; render on a background thread.
     [self dismissViewControllerAnimated:YES completion:^{
         dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
-            static CIContext *ctx;
-            static dispatch_once_t once;
-            dispatch_once(&once, ^{ ctx = [CIContext context]; });
-            CGImageRef cropped = [ctx createCGImage:output fromRect:output.extent];
+            CGImageRef cropped = [RNImageProcessor perspectiveCorrectedCGImage:sourceImage
+                                                                       corners:corners];
             if (completion) completion(cropped);
             else if (cropped) CGImageRelease(cropped);
         });

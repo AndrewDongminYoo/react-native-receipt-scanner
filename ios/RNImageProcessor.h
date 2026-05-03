@@ -28,6 +28,14 @@ NS_ASSUME_NONNULL_BEGIN
                             includeGpsExif:(BOOL)includeGpsExif
                                      error:(NSError **)error;
 
+/**
+ * Applies CIPerspectiveCorrection to image using four corners in CIImage coordinate space
+ * (origin bottom-left, Y up, pixel values relative to image.size). Returns NULL on failure.
+ */
++ (nullable CGImageRef)perspectiveCorrectedCGImage:(UIImage *)image
+                                           corners:(NSArray<NSValue *> *)corners
+    CF_RETURNS_RETAINED;
+
 /** Normalize UIImage orientation to UIImageOrientationUp. */
 + (UIImage *)normalizeOrientation:(UIImage *)image;
 
