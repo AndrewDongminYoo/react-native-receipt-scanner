@@ -267,6 +267,14 @@ type ReceiptExif = {
 
 ---
 
+## Planned
+
+| Feature                                   | Notes                                                                                                                                                                                                                                                                                                                                                                                       |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **PDF export with searchable text layer** | Android: `GmsDocumentScannerOptions.RESULT_FORMAT_PDF` already produces a multi-page PDF — cost is near-zero. iOS: compose pages with `PDFKit` and overlay the OCR result as an invisible text layer so the file is copy-pasteable and full-text-searchable in any PDF viewer. New `ScanReceiptOptions.outputFormat: "jpeg" \| "pdf"` option; result carries a `pdfUri` alongside `images`. |
+
+---
+
 ## Contributing
 
 - [Development workflow](CONTRIBUTING.md#development-workflow)
