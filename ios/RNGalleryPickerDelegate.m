@@ -8,6 +8,8 @@
 #import <CoreImage/CoreImage.h>
 #import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
 
+#import "RNCropEditorViewController.h"
+
 // Below this confidence the user sees the crop editor; above it we apply the
 // detected corners automatically when cropAutoConfirm is enabled.
 static const float kCropAutoConfirmMinConfidence = 0.85f;
@@ -51,8 +53,6 @@ static VNDetectRectanglesRequest *MakeReceiptRectangleRequest(float minimumConfi
 - (void)dealloc { if (_ref) CFRelease(_ref); }
 @end
 
-#import "RNCropEditorViewController.h"
-
 @interface RNGalleryPickerDelegate () <PHPickerViewControllerDelegate>
 @property (nonatomic, strong) RNScanOptions                      *options;
 @property (nonatomic, weak)   UIViewController                   *presentingVC;
@@ -88,7 +88,7 @@ didFinishPicking:(NSArray<PHPickerResult *> *)results {
 
     if (results.count == 0) {
         [picker dismissViewControllerAnimated:YES completion:^{
-            self.resolve(@{@"status": @"cancelled", @"images": @[]});
+            self.resolve(@{ @"status": @"cancelled", @"images": @[] });
         }];
         return;
     }
@@ -107,11 +107,9 @@ didFinishPicking:(NSArray<PHPickerResult *> *)results {
                     [self didFinishOneItem:nil];
                     return;
                 }
-                CGImageSourceRef rawRef = CGImageSourceCreateWithData(
-                    (__bridge CFDataRef)data, NULL);
+                CGImageSourceRef rawRef = CGImageSourceCreateWithData((__bridge CFDataRef)data, NULL);
                 // Wrap immediately so ARC handles release even on the early-return paths below.
-                RNCGImageSourceHolder *sourceHolder = rawRef
-                    ? [[RNCGImageSourceHolder alloc] initWithRef:rawRef] : nil;
+                RNCGImageSourceHolder *sourceHolder = rawRef ? [[RNCGImageSourceHolder alloc] initWithRef:rawRef] : nil;
                 UIImage *image = [UIImage imageWithData:data];
                 if (!image || !sourceHolder) {
                     [self didFinishOneItem:nil];
@@ -128,8 +126,7 @@ didFinishPicking:(NSArray<PHPickerResult *> *)results {
 - (nullable NSString *)originForPickerResult:(PHPickerResult *)result {
     if (!self.hasLibraryAccess || !result.assetIdentifier) return nil;
 
-    PHFetchResult<PHAsset *> *fetchResult =
-        [PHAsset fetchAssetsWithLocalIdentifiers:@[result.assetIdentifier] options:nil];
+    PHFetchResult<PHAsset *> *fetchResult = [PHAsset fetchAssetsWithLocalIdentifiers:@[result.assetIdentifier] options:nil];
     PHAsset *asset = fetchResult.firstObject;
     if (!asset) return nil;
 
@@ -164,14 +161,14 @@ static NSString * _Nullable OriginFromExifFields(NSString *make, NSString *model
 // Reads source properties directly so origin detection is independent of the includeExif option.
 - (nullable NSString *)detectOriginFromSourceRef:(CGImageSourceRef)sourceRef {
     if (!sourceRef) return nil;
-    NSDictionary *props = (__bridge_transfer NSDictionary *)
-        CGImageSourceCopyPropertiesAtIndex(sourceRef, 0, NULL);
+    NSDictionary *props = (__bridge_transfer NSDictionary *) CGImageSourceCopyPropertiesAtIndex(sourceRef, 0, NULL);
     NSDictionary *tiff = props[(NSString *)kCGImagePropertyTIFFDictionary];
     NSDictionary *exif = props[(NSString *)kCGImagePropertyExifDictionary];
     return OriginFromExifFields(
         tiff[(NSString *)kCGImagePropertyTIFFMake],
         tiff[(NSString *)kCGImagePropertyTIFFModel],
-        exif[(NSString *)kCGImagePropertyExifDateTimeOriginal]);
+        exif[(NSString *)kCGImagePropertyExifDateTimeOriginal]
+    );
 }
 
 - (void)detectRectangleAndCrop:(UIImage *)image
@@ -197,10 +194,9 @@ static NSString * _Nullable OriginFromExifFields(NSString *make, NSString *model
             [self didFinishOneItem:nil];
             return;
         }
-        RNCropEditorViewController *editor =
-            [[RNCropEditorViewController alloc] initWithImage:image
-                                                      corners:corners
-                                                   completion:^(CGImageRef cropped) {
+        RNCropEditorViewController *editor = [[RNCropEditorViewController alloc] initWithImage:image
+                                                                                      corners:corners
+                                                                                   completion:^(CGImageRef cropped) {
             // Called from the editor's background dispatch after rendering.
             if (!cropped) {
                 [self didFinishOneItem:nil];
@@ -225,32 +221,26 @@ static NSString * _Nullable OriginFromExifFields(NSString *make, NSString *model
     // same oriented space as image.size. initWithCIImage: ignores the orientation
     // transform embedded by [CIImage initWithImage:], returning landscape coords
     // for portrait UIImages — which would mismatch _corners in the crop editor.
-    CGImagePropertyOrientation exifOrientation =
-        CIOrientationFromUIOrientation(image.imageOrientation);
-    VNImageRequestHandler *handler =
-        [[VNImageRequestHandler alloc] initWithCGImage:image.CGImage
-                                           orientation:exifOrientation
-                                               options:@{}];
+    CGImagePropertyOrientation exifOrientation = CIOrientationFromUIOrientation(image.imageOrientation);
+    VNImageRequestHandler *handler = [[VNImageRequestHandler alloc] initWithCGImage:image.CGImage
+                                                                        orientation:exifOrientation
+                                                                            options:@{}];
     [handler performRequests:@[docRequest, rectRequest] error:error];
 
     CGFloat W = image.size.width;
     CGFloat H = image.size.height;
 
-    // Preferred: run rectangle detection on the clean binary document mask.
-    // The mask is already in the oriented image coordinate space, so its normalized
-    // results multiply directly to W/H without any extra transform.
-    // Fallback: rectangle detection on the original image.
+    // Preferred: VNDetectDocumentSegmentationRequest is trained for documents and returns
+    // VNRectangleObservation corners that are more confident on receipts than the generic
+    // rectangle detector. isKindOfClass: guards against future SDK revisions changing the
+    // result subclass.
+    // Fallback: VNDetectRectanglesRequest on the original image.
     VNRectangleObservation *obs = nil;
     float detectedConfidence = 0;
 
-    VNDocumentObservation *docObs = docRequest.results.firstObject;
-    if (docObs) {
-        obs = [self rectangleInDocumentMask:docObs.pixelBuffer];
-        if (obs) {
-            // Use document segmentation confidence — more meaningful than the mask
-            // rect confidence since the mask is a clean binary image.
-            detectedConfidence = docObs.confidence;
-        }
+    if ([docRequest.results.firstObject isKindOfClass:[VNRectangleObservation class]]) {
+        obs = (VNRectangleObservation *)docRequest.results.firstObject;
+        detectedConfidence = obs.confidence;
     }
     if (!obs) {
         obs = rectRequest.results.firstObject;
@@ -266,21 +256,6 @@ static NSString * _Nullable OriginFromExifFields(NSString *make, NSString *model
         [NSValue valueWithCGPoint:CGPointMake(obs.bottomRight.x * W, obs.bottomRight.y * H)],
         [NSValue valueWithCGPoint:CGPointMake(obs.bottomLeft.x  * W, obs.bottomLeft.y  * H)],
     ];
-}
-
-// Runs rectangle detection on the binary document segmentation mask returned by
-// VNDetectDocumentSegmentationRequest. The mask is in the same oriented coordinate
-// space as the original image, so no orientation correction is needed here and the
-// resulting normalized coordinates map directly to the original image's W/H.
-- (nullable VNRectangleObservation *)rectangleInDocumentMask:(CVPixelBufferRef)maskBuffer {
-    CIImage *maskCI = [CIImage imageWithCVPixelBuffer:maskBuffer];
-    // Lower threshold: the mask is a clean binary image, so even 0.3-confidence
-    // rectangles reliably correspond to real document boundaries.
-    VNDetectRectanglesRequest *req = MakeReceiptRectangleRequest(0.3f);
-    VNImageRequestHandler *maskHandler = [[VNImageRequestHandler alloc]
-        initWithCIImage:maskCI options:@{}];
-    [maskHandler performRequests:@[req] error:nil];
-    return req.results.firstObject;
 }
 
 // Must be called from a background thread.
@@ -302,13 +277,12 @@ static NSString * _Nullable OriginFromExifFields(NSString *make, NSString *model
                    sourceHolder:(RNCGImageSourceHolder *)sourceHolder
                     earlyOrigin:(nullable NSString *)earlyOrigin {
     NSError *err = nil;
-    RNProcessedImage *processed =
-        [RNImageProcessor processImage:cropped
-                               quality:self.options.quality
-                             sourceRef:sourceHolder.ref
-                          includeExif:self.options.includeExif
-                       includeGpsExif:self.options.includeGpsExif
-                                error:&err];
+    RNProcessedImage *processed = [RNImageProcessor processImage:cropped
+                                                         quality:self.options.quality
+                                                       sourceRef:sourceHolder.ref
+                                                    includeExif:self.options.includeExif
+                                                 includeGpsExif:self.options.includeGpsExif
+                                                          error:&err];
     if (!processed) {
         CGImageRelease(cropped);
         [self didFinishOneItem:nil];
@@ -353,12 +327,13 @@ static NSString * _Nullable OriginFromExifFields(NSString *make, NSString *model
         self.pendingCount--;
         if (self.pendingCount == 0) {
             if (self.results.count > 0) {
-                self.resolve(@{@"status": @"success", @"images": [self.results copy]});
+                self.resolve(@{ @"status": @"success", @"images": [self.results copy] });
             } else {
-                self.resolve(@{@"status": @"cancelled", @"images": @[]});
+                self.resolve(@{ @"status": @"cancelled", @"images": @[] });
             }
         }
     });
 }
 
 @end
+
