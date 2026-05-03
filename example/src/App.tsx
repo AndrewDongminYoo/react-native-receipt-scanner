@@ -13,6 +13,7 @@ import {
 } from "react-native";
 import {
   scan,
+  type ImageOrigin,
   type ReceiptImage,
   type ScanReceiptOptions,
   type ScanReceiptResult,
@@ -107,27 +108,25 @@ function Collapsible({
 
 // ─── Origin badge ─────────────────────────────────────────────────────────────
 
-const ORIGIN_LABEL: Record<string, string> = {
+const ORIGIN_LABEL: Record<ImageOrigin, string> = {
   camera: "카메라",
   screenshot: "스크린샷",
   download: "다운로드",
   unknown: "알 수 없음",
 };
 
-const ORIGIN_COLORS: Record<string, { bg: string; fg: string }> = {
+const ORIGIN_COLORS: Record<ImageOrigin, { bg: string; fg: string }> = {
   camera: { bg: C.successBg, fg: C.successFg },
   screenshot: { bg: C.primaryMuted, fg: C.primary },
   download: { bg: C.warnBg, fg: C.warnFg },
   unknown: { bg: C.surfaceAlt, fg: C.ink400 },
 };
 
-function OriginBadge({ origin }: { origin: string }) {
-  const colors = ORIGIN_COLORS[origin] ?? { bg: C.surfaceAlt, fg: C.ink400 };
+function OriginBadge({ origin }: { origin: ImageOrigin }) {
+  const colors = ORIGIN_COLORS[origin];
   return (
     <View style={[styles.originBadge, { backgroundColor: colors.bg }]}>
-      <Text style={[styles.originBadgeText, { color: colors.fg }]}>
-        {ORIGIN_LABEL[origin] ?? origin}
-      </Text>
+      <Text style={[styles.originBadgeText, { color: colors.fg }]}>{ORIGIN_LABEL[origin]}</Text>
     </View>
   );
 }
