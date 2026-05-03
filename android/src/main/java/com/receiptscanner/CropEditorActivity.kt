@@ -117,14 +117,14 @@ internal class CropEditorActivity : Activity() {
     val cancelBtn =
       Button(this).apply {
         text = context.getString(R.string.RNReceiptScanner_cancelButton)
-        setTextColor(0xFFCCCCCC.toInt())
+        setTextColor(0xFF007AFF.toInt())
         textSize = 17f
         setOnClickListener { onCancelTapped() }
       }
     val confirmBtn =
       Button(this).apply {
         text = context.getString(R.string.RNReceiptScanner_confirmButton)
-        setTextColor(0xFF4CAF50.toInt())
+        setTextColor(0xFF007AFF.toInt())
         textSize = 17f
         setOnClickListener { onConfirmTapped() }
       }

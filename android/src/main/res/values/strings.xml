@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="RNReceiptScanner_cancelButton">Cancel</string>
-    <string name="RNReceiptScanner_confirmButton">Confirm</string>
+    <string name="RNReceiptScanner_cancelButton">취소</string>
+    <string name="RNReceiptScanner_confirmButton">사진 사용</string>
 </resources>
