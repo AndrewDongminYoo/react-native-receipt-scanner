@@ -141,20 +141,37 @@ didFinishPicking:(NSArray<PHPickerResult *> *)results {
     return nil;
 }
 
-// Returns imageOrigin based on already-extracted EXIF metadata. Reuses the dict that
-// RNImageProcessor builds during processImage: so the source is not decoded twice.
+// Classifies imageOrigin from three EXIF indicators.
+// dateTimeOriginal is the strongest camera signal — it records the shutter moment and
+// is absent from screenshots and most web-downloaded images.
+// make+model together (without dateTime) also indicates a camera-originated image.
+// Complete absence of all three → "download".
+// One field present but not the others → ambiguous (nil).
+static NSString * _Nullable OriginFromExifFields(NSString *make, NSString *model, NSString *dateTime) {
+    if (dateTime)          return @"camera";   // shutter timestamp — strong camera signal
+    if (make && model)     return @"camera";   // device IDs without timestamp — still camera-like
+    if (!make && !model)   return @"download"; // no camera metadata at all
+    return nil;                                // make XOR model, no dateTime — ambiguous
+}
+
+// Uses already-extracted EXIF dict (avoids re-reading CGImageSourceRef when includeExif:YES).
 - (nullable NSString *)detectOriginFromExifData:(nullable NSDictionary *)exifData {
     if (!exifData) return nil;
-    NSString *make     = exifData[@"make"];
-    NSString *model    = exifData[@"model"];
-    NSString *dateTime = exifData[@"dateTimeOriginal"];
+    return OriginFromExifFields(exifData[@"make"], exifData[@"model"], exifData[@"dateTimeOriginal"]);
+}
 
-    // Camera photos carry make, model, and a shutter timestamp.
-    if (make && model && dateTime) return @"camera";
-    // Images with no camera metadata at all are likely web downloads or synthetic images.
-    if (!make && !model && !dateTime) return @"download";
-    // Ambiguous — partial EXIF (e.g. edited photo).
-    return nil;
+// Fallback used when includeExif:NO left processed.exifData nil.
+// Reads source properties directly so origin detection is independent of the includeExif option.
+- (nullable NSString *)detectOriginFromSourceRef:(CGImageSourceRef)sourceRef {
+    if (!sourceRef) return nil;
+    NSDictionary *props = (__bridge_transfer NSDictionary *)
+        CGImageSourceCopyPropertiesAtIndex(sourceRef, 0, NULL);
+    NSDictionary *tiff = props[(NSString *)kCGImagePropertyTIFFDictionary];
+    NSDictionary *exif = props[(NSString *)kCGImagePropertyExifDictionary];
+    return OriginFromExifFields(
+        tiff[(NSString *)kCGImagePropertyTIFFMake],
+        tiff[(NSString *)kCGImagePropertyTIFFModel],
+        exif[(NSString *)kCGImagePropertyExifDateTimeOriginal]);
 }
 
 - (void)detectRectangleAndCrop:(UIImage *)image
@@ -304,8 +321,12 @@ didFinishPicking:(NSArray<PHPickerResult *> *)results {
     }
     CGImageRelease(cropped);
 
+    // Priority: PHAsset subtype → extracted exifData → raw source properties → "unknown".
+    // detectOriginFromSourceRef: is only reached when includeExif:NO left exifData nil;
+    // the ?: chain prevents a double-read when exifData is already populated.
     NSString *imageOrigin = earlyOrigin
         ?: [self detectOriginFromExifData:processed.exifData]
+        ?: [self detectOriginFromSourceRef:sourceHolder.ref]
         ?: @"unknown";
 
     NSMutableDictionary *img = [@{
