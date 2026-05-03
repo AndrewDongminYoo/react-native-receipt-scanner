@@ -56,14 +56,15 @@ class ReceiptScannerModule(
       return
     }
 
-    // Camera path: GmsDocumentScanner (gallery import disabled — handled above)
+    // Camera path: GmsDocumentScanner
+    val cameraOpts = scanOptions.androidCameraOptions
     val scannerOptions =
       GmsDocumentScannerOptions
         .Builder()
-        .setGalleryImportAllowed(false)
+        .setGalleryImportAllowed(cameraOpts.allowGalleryImport)
         .setPageLimit(scanOptions.maxPages)
         .setResultFormats(GmsDocumentScannerOptions.RESULT_FORMAT_JPEG)
-        .setScannerMode(GmsDocumentScannerOptions.SCANNER_MODE_FULL)
+        .setScannerMode(cameraOpts.scannerMode)
         .build()
 
     val scanner: GmsDocumentScanner = GmsDocumentScanning.getClient(scannerOptions)
