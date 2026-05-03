@@ -36,6 +36,7 @@ class ImageProcessor(
     quality: Double,
     includeExif: Boolean,
     includeGpsExif: Boolean,
+    synthesizeDeviceInfo: Boolean = false,
   ): ProcessedImage {
     val bitmap = decodeBitmap(sourceUri)
     val width = bitmap.width
@@ -50,7 +51,7 @@ class ImageProcessor(
     }
     bitmap.recycle()
 
-    val exifData = if (includeExif) readExif(sourceUri, includeGpsExif) else null
+    val exifData = if (includeExif) readExif(sourceUri, includeGpsExif, synthesizeDeviceInfo) else null
 
     return ProcessedImage(outFile, width, height, exifData)
   }
@@ -68,6 +69,7 @@ class ImageProcessor(
   private fun readExif(
     sourceUri: Uri,
     includeGps: Boolean,
+    synthesizeDeviceInfo: Boolean,
   ): ExifData {
     val exif =
       if (sourceUri.scheme == "content") {
@@ -93,18 +95,18 @@ class ImageProcessor(
         null
       }
 
-    // GmsDocumentScanner outputs are re-encoded JPEGs with no original EXIF.
-    // Fall back to device identifiers so the fields are not silently empty.
-    val isFileUri = sourceUri.scheme != "content"
+    // GmsDocumentScanner re-encodes pages as new JPEGs, stripping original EXIF.
+    // Synthesize device info only for camera-sourced images so gallery images
+    // honestly report null rather than inheriting the device's make/model.
     val make =
       exif.getAttribute(ExifInterface.TAG_MAKE)
-        ?: if (isFileUri) Build.MANUFACTURER else null
+        ?: if (synthesizeDeviceInfo) Build.MANUFACTURER else null
     val model =
       exif.getAttribute(ExifInterface.TAG_MODEL)
-        ?: if (isFileUri) Build.MODEL else null
+        ?: if (synthesizeDeviceInfo) Build.MODEL else null
     val dateTime =
       exif.getAttribute(ExifInterface.TAG_DATETIME_ORIGINAL)
-        ?: if (isFileUri) SimpleDateFormat("yyyy:MM:dd HH:mm:ss", Locale.US).format(Date()) else null
+        ?: if (synthesizeDeviceInfo) SimpleDateFormat("yyyy:MM:dd HH:mm:ss", Locale.US).format(Date()) else null
 
     return ExifData(
       orientation = rawOrientation.takeIf { it != ExifInterface.ORIENTATION_UNDEFINED },

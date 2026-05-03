@@ -11,6 +11,7 @@ object ResultBuilder {
     height: Int,
     ocrText: String?,
     exifData: ImageProcessor.ExifData?,
+    imageOrigin: String,
   ): WritableMap =
     Arguments.createMap().apply {
       putString("uri", "file://${file.absolutePath}")
@@ -19,6 +20,7 @@ object ResultBuilder {
       putString("fileName", file.name)
       putString("mimeType", "image/jpeg")
       putDouble("fileSize", file.length().toDouble())
+      putString("imageOrigin", imageOrigin)
 
       if (ocrText != null) putString("ocrText", ocrText)
 

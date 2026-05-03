@@ -68,7 +68,7 @@ class ReceiptScannerModule(
         val p = pendingPromise
         pendingPromise = null
         pendingOptions = null
-        p?.reject("SCANNER_INIT_FAILED", e.message ?: "Failed to initialise ML Kit scanner", e)
+        p?.reject("SCANNER_INIT_FAILED", e.message ?: "Failed to initialize ML Kit scanner", e)
       }
   }
 
@@ -101,6 +101,9 @@ class ReceiptScannerModule(
     executor.execute {
       try {
         val ocrProcessor = if (scanOptions.ocr) OcrProcessor(reactApplicationContext) else null
+        // GmsDocumentScanner does not expose the original gallery URI, so a gallery
+        // import always reports "unknown" — see docs/specs/api-contract.md.
+        val imageOrigin = if (scanOptions.source == "gallery") "unknown" else "camera"
 
         val imageResults =
           pages.map { page ->
@@ -110,6 +113,7 @@ class ReceiptScannerModule(
                 scanOptions.quality,
                 scanOptions.includeExif,
                 scanOptions.includeGpsExif,
+                synthesizeDeviceInfo = imageOrigin == "camera",
               )
 
             val ocrText =
@@ -129,6 +133,7 @@ class ReceiptScannerModule(
               height = processed.height,
               ocrText = ocrText,
               exifData = processed.exifData,
+              imageOrigin = imageOrigin,
             )
           }
 
