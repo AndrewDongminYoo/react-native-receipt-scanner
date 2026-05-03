@@ -67,9 +67,9 @@ crop editor, because VisionKit has no built-in gallery import.
 
 ## Definition of Done
 
-- [ ] Camera scan → cropped JPEG → `ocrText` returned to JS (iOS)
-- [ ] Gallery image → rectangle detection → crop editor → JPEG → `ocrText` returned (iOS)
-- [ ] `exif` fields populated; GPS absent by default
-- [ ] `uri` is a `file://` path — no base64
-- [ ] Korean receipt OCR functional on iOS 16+; graceful fallback on iOS 15
-- [ ] `yarn example ios` runs the full flow end-to-end
+- [x] Camera scan → cropped JPEG → `ocrText` returned to JS (iOS)
+- [x] Gallery image → rectangle detection → crop editor → JPEG → `ocrText` returned (iOS)
+- [x] `exif` fields populated; GPS absent by default
+- [x] `uri` is a `file://` path — no base64
+- [x] Korean receipt OCR functional on iOS 16+; graceful fallback on iOS 15
+- [x] `yarn example ios` runs the full flow end-to-end

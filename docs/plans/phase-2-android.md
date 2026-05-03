@@ -64,11 +64,11 @@ implementation("androidx.exifinterface:exifinterface:1.3.7")
 
 ## Definition of Done
 
-- [ ] Camera scan → cropped JPEG → `ocrText` returned to JS
-- [ ] Gallery image → document crop flow → `ocrText` returned to JS
-- [ ] `width`, `height`, `fileSize` correct
-- [ ] `exif.orientation`, `exif.dateTimeOriginal` populated when available
-- [ ] `exif.gps` absent by default; present when `includeGpsExif=true`
-- [ ] `uri` is a `file://` path — no base64
-- [ ] Tested on a low-end device (≤3 GB RAM): no OOM crash
-- [ ] `yarn example android` runs the full flow end-to-end
+- [x] Camera scan → cropped JPEG → `ocrText` returned to JS
+- [x] Gallery image → document crop flow → `ocrText` returned to JS
+- [x] `width`, `height`, `fileSize` correct
+- [x] `exif.orientation`, `exif.dateTimeOriginal` populated when available
+- [x] `exif.gps` absent by default; present when `includeGpsExif=true`
+- [x] `uri` is a `file://` path — no base64
+- [ ] Tested on a low-end device (≤3 GB RAM): no OOM crash — requires physical device
+- [x] `yarn example android` runs the full flow end-to-end
