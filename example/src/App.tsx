@@ -210,9 +210,7 @@ function ScanPage({
               <Text style={[styles.sourceLabel, source === "camera" && styles.sourceLabelSelected]}>
                 카메라
               </Text>
-              <Text style={styles.sourceSublabel}>
-                {Platform.OS === "ios" ? "문서 스캐너" : "카메라 스캔 + 원근 보정"}
-              </Text>
+              <Text style={styles.sourceSublabel}>문서 스캐너</Text>
             </Pressable>
 
             <Pressable
@@ -225,9 +223,7 @@ function ScanPage({
               >
                 갤러리
               </Text>
-              <Text style={styles.sourceSublabel}>
-                {Platform.OS === "ios" ? "사진 가져오기 + 원근 보정" : "사진 가져오기"}
-              </Text>
+              <Text style={styles.sourceSublabel}>사진 가져오기 + 원근 보정</Text>
             </Pressable>
           </View>
 
@@ -236,7 +232,7 @@ function ScanPage({
               <Text style={styles.infoText}>
                 {Platform.OS === "ios"
                   ? "📐 iOS: VNDetectRectangles가 문서 모서리를 자동 감지하고 드래그 핸들로 원근 보정이 가능합니다"
-                  : "🖼️ Android: 갤러리에서 직접 사진을 선택합니다. 원근 보정은 카메라 모드에서 지원됩니다"}
+                  : "📷 Android: 카메라 화면이 먼저 열립니다. 하단 갤러리 버튼을 탭해 사진을 선택하세요"}
               </Text>
             </View>
           )}

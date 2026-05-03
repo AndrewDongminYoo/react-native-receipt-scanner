@@ -50,33 +50,10 @@ class ReceiptScannerModule(
     pendingPromise = promise
     pendingOptions = scanOptions
 
-    if (scanOptions.source == "gallery") {
-      launchGalleryPicker(activity, scanOptions.maxPages)
-    } else {
-      launchDocumentScanner(activity, scanOptions)
-    }
-  }
-
-  private fun launchGalleryPicker(
-    activity: Activity,
-    maxPages: Int,
-  ) {
-    val intent =
-      Intent(Intent.ACTION_GET_CONTENT).apply {
-        type = "image/*"
-        if (maxPages > 1) putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
-      }
-    activity.startActivityForResult(intent, GALLERY_REQUEST_CODE)
-  }
-
-  private fun launchDocumentScanner(
-    activity: Activity,
-    scanOptions: ScanOptions,
-  ) {
     val scannerOptions =
       GmsDocumentScannerOptions
         .Builder()
-        .setGalleryImportAllowed(false)
+        .setGalleryImportAllowed(scanOptions.source == "gallery")
         .setPageLimit(scanOptions.maxPages)
         .setResultFormats(GmsDocumentScannerOptions.RESULT_FORMAT_JPEG)
         .setScannerMode(GmsDocumentScannerOptions.SCANNER_MODE_FULL)
@@ -101,16 +78,8 @@ class ReceiptScannerModule(
     resultCode: Int,
     data: Intent?,
   ) {
-    when (requestCode) {
-      SCAN_REQUEST_CODE -> handleDocumentScannerResult(resultCode, data)
-      GALLERY_REQUEST_CODE -> handleGalleryResult(resultCode, data)
-    }
-  }
+    if (requestCode != SCAN_REQUEST_CODE) return
 
-  private fun handleDocumentScannerResult(
-    resultCode: Int,
-    data: Intent?,
-  ) {
     val promise = pendingPromise ?: return
     val scanOptions = pendingOptions ?: return
     pendingPromise = null
@@ -171,81 +140,6 @@ class ReceiptScannerModule(
     }
   }
 
-  private fun handleGalleryResult(
-    resultCode: Int,
-    data: Intent?,
-  ) {
-    val promise = pendingPromise ?: return
-    val scanOptions = pendingOptions ?: return
-    pendingPromise = null
-    pendingOptions = null
-
-    if (resultCode == Activity.RESULT_CANCELED) {
-      promise.resolve(ResultBuilder.buildCancelled())
-      return
-    }
-
-    if (resultCode != Activity.RESULT_OK || data == null) {
-      promise.reject("SCAN_FAILED", "Gallery selection failed with result code: $resultCode")
-      return
-    }
-
-    val selectedUris = mutableListOf<Uri>()
-    data.clipData?.let { clip ->
-      for (i in 0 until minOf(clip.itemCount, scanOptions.maxPages)) {
-        selectedUris.add(clip.getItemAt(i).uri)
-      }
-    } ?: data.data?.let { uri ->
-      selectedUris.add(uri)
-    }
-
-    if (selectedUris.isEmpty()) {
-      promise.resolve(ResultBuilder.buildCancelled())
-      return
-    }
-
-    executor.execute {
-      try {
-        val ocrProcessor = if (scanOptions.ocr) OcrProcessor(reactApplicationContext) else null
-
-        val imageResults =
-          selectedUris.map { uri ->
-            val processed =
-              imageProcessor.process(
-                uri,
-                scanOptions.quality,
-                scanOptions.includeExif,
-                scanOptions.includeGpsExif,
-              )
-
-            val ocrText =
-              if (ocrProcessor != null) {
-                try {
-                  ocrProcessor.recognize(Uri.fromFile(processed.file))
-                } catch (e: Exception) {
-                  null
-                }
-              } else {
-                null
-              }
-
-            ResultBuilder.buildImage(
-              file = processed.file,
-              width = processed.width,
-              height = processed.height,
-              ocrText = ocrText,
-              exifData = processed.exifData,
-            )
-          }
-
-        ocrProcessor?.close()
-        promise.resolve(ResultBuilder.buildSuccess(imageResults))
-      } catch (e: Exception) {
-        promise.reject("PROCESSING_FAILED", e.message ?: "Image processing failed", e)
-      }
-    }
-  }
-
   override fun onNewIntent(intent: Intent) = Unit
 
   override fun invalidate() {
@@ -257,6 +151,5 @@ class ReceiptScannerModule(
   companion object {
     const val NAME = NativeReceiptScannerSpec.NAME
     private const val SCAN_REQUEST_CODE = 0x9001
-    private const val GALLERY_REQUEST_CODE = 0x9002
   }
 }
