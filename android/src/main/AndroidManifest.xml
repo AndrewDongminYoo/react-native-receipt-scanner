@@ -2,7 +2,7 @@
     <application>
         <activity
             android:name=".CropEditorActivity"
-            android:theme="@android:style/Theme.Black.NoTitleBar.Fullscreen"
+            android:theme="@android:style/Theme.Black.NoTitleBar"
             android:configChanges="orientation|screenSize"
             android:exported="false" />
     </application>

@@ -2,14 +2,13 @@ package com.receiptscanner
 
 import android.app.Activity
 import android.content.Intent
-import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Color
-import android.graphics.Matrix
 import android.graphics.RectF
 import android.net.Uri
 import android.os.Bundle
 import android.view.Gravity
+import android.view.View
 import android.view.ViewGroup.LayoutParams.MATCH_PARENT
 import android.view.ViewGroup.LayoutParams.WRAP_CONTENT
 import android.widget.Button
@@ -33,7 +32,6 @@ internal class CropEditorActivity : Activity() {
   private lateinit var cropView: QuadCropView
 
   private var originalUri: Uri? = null
-  private var displayBitmap: Bitmap? = null
   private var originalWidth: Int = 0
   private var originalHeight: Int = 0
   private var imageRect: RectF = RectF()
@@ -41,6 +39,8 @@ internal class CropEditorActivity : Activity() {
   @Suppress("DEPRECATION")
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
+    window.navigationBarColor = Color.BLACK
+    window.statusBarColor = Color.BLACK
     val intent = Intent(Intent.ACTION_GET_CONTENT).apply { type = "image/*" }
     startActivityForResult(intent, PICK_REQUEST_CODE)
   }
@@ -73,7 +73,9 @@ internal class CropEditorActivity : Activity() {
 
   private fun buildCropUI() {
     val dp = resources.displayMetrics.density
-    val buttonBarHeight = (80 * dp).toInt()
+    val separatorHeight = (1 * dp).toInt().coerceAtLeast(1)
+    val buttonBarHeight = (64 * dp).toInt()
+    val barTotalHeight = separatorHeight + buttonBarHeight
 
     val root = FrameLayout(this)
     root.setBackgroundColor(Color.BLACK)
@@ -86,31 +88,36 @@ internal class CropEditorActivity : Activity() {
 
     val contentParams =
       FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT).apply {
-        bottomMargin = buttonBarHeight
+        bottomMargin = barTotalHeight
       }
     root.addView(imageView, contentParams)
     root.addView(cropView, contentParams)
 
+    val separator =
+      View(this).apply {
+        setBackgroundColor(0xFF444444.toInt())
+      }
+
     val buttonBar =
       LinearLayout(this).apply {
         orientation = LinearLayout.HORIZONTAL
-        setBackgroundColor(0xFF1A1A1A.toInt())
+        setBackgroundColor(0xFF222222.toInt())
         gravity = Gravity.CENTER_VERTICAL
-        setPadding((16 * dp).toInt(), (8 * dp).toInt(), (16 * dp).toInt(), (8 * dp).toInt())
+        setPadding((16 * dp).toInt(), 0, (16 * dp).toInt(), 0)
       }
 
     val cancelBtn =
       Button(this).apply {
         text = "Cancel"
-        setTextColor(Color.WHITE)
-        setBackgroundColor(Color.TRANSPARENT)
+        setTextColor(0xFFCCCCCC.toInt())
+        textSize = 16f
         setOnClickListener { onCancelTapped() }
       }
     val confirmBtn =
       Button(this).apply {
         text = "Confirm"
         setTextColor(0xFF4CAF50.toInt())
-        setBackgroundColor(Color.TRANSPARENT)
+        textSize = 16f
         setOnClickListener { onConfirmTapped() }
       }
 
@@ -118,10 +125,16 @@ internal class CropEditorActivity : Activity() {
     buttonBar.addView(cancelBtn, halfWeight)
     buttonBar.addView(confirmBtn, halfWeight)
 
+    val separatorParams =
+      FrameLayout.LayoutParams(MATCH_PARENT, separatorHeight).apply {
+        gravity = Gravity.BOTTOM
+        bottomMargin = buttonBarHeight
+      }
     val barParams =
       FrameLayout.LayoutParams(MATCH_PARENT, buttonBarHeight).apply {
         gravity = Gravity.BOTTOM
       }
+    root.addView(separator, separatorParams)
     root.addView(buttonBar, barParams)
 
     setContentView(root)
@@ -161,7 +174,6 @@ internal class CropEditorActivity : Activity() {
         // Auto-rotate to match display orientation
         val exifOrientation = readExifOrientation(uri)
         val oriented = ImageProcessor.applyExifRotation(raw, exifOrientation)
-        displayBitmap = oriented
 
         // Approximate full-res oriented dimensions for corner scaling
         originalWidth = oriented.width * sample
@@ -183,7 +195,9 @@ internal class CropEditorActivity : Activity() {
                 imageView.height,
               )
             imageRect = rect
-            cropView.setImageRect(rect.left, rect.top, rect.right, rect.bottom)
+            val ix = rect.width() * 0.05f
+            val iy = rect.height() * 0.05f
+            cropView.setImageRect(rect.left + ix, rect.top + iy, rect.right - ix, rect.bottom - iy)
           }
         }
       } catch (_: Exception) {
