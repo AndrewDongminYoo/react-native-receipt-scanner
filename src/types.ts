@@ -19,6 +19,8 @@ export type ReceiptExif = {
   };
 };
 
+export type ImageOrigin = "camera" | "screenshot" | "download" | "unknown";
+
 export type ReceiptImage = {
   uri: string;
   width: number;
@@ -28,6 +30,7 @@ export type ReceiptImage = {
   fileSize: number;
   ocrText?: string;
   exif?: ReceiptExif;
+  imageOrigin: ImageOrigin;
 };
 
 export type ScanReceiptResult = {

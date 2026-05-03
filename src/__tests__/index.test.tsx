@@ -21,6 +21,7 @@ describe("DEFAULT_SCAN_OPTIONS", () => {
       includeExif: true,
       includeGpsExif: false,
       ocr: true,
+      cropAutoConfirm: false,
     });
   });
 });

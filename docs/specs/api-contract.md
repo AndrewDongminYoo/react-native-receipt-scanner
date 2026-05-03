@@ -14,14 +14,15 @@ and the system cannot show the rationale dialog).
 
 ## `ScanReceiptOptions`
 
-| Field            | Type                    | Default    | Description                                                                                             |
-| ---------------- | ----------------------- | ---------- | ------------------------------------------------------------------------------------------------------- |
-| `source`         | `'camera' \| 'gallery'` | `'camera'` | Whether to open the document scanner camera or the image picker.                                        |
-| `maxPages`       | `number`                | `1`        | Maximum pages per scan session.                                                                         |
-| `quality`        | `number` (0.0–1.0)      | `0.82`     | JPEG compression quality applied after crop.                                                            |
-| `includeExif`    | `boolean`               | `true`     | Attach EXIF metadata to each image result.                                                              |
-| `includeGpsExif` | `boolean`               | `false`    | Include GPS coordinates in EXIF. **Leave false** — GPS is a privacy risk and irrelevant to OCR quality. |
-| `ocr`            | `boolean`               | `true`     | Run on-device OCR and return `ocrText`.                                                                 |
+| Field             | Type                    | Default    | Description                                                                                             |
+| ----------------- | ----------------------- | ---------- | ------------------------------------------------------------------------------------------------------- |
+| `source`          | `'camera' \| 'gallery'` | `'camera'` | Whether to open the document scanner camera or the image picker.                                        |
+| `maxPages`        | `number`                | `1`        | Maximum pages per scan session.                                                                         |
+| `quality`         | `number` (0.0–1.0)      | `0.82`     | JPEG compression quality applied after crop.                                                            |
+| `includeExif`     | `boolean`               | `true`     | Attach EXIF metadata to each image result.                                                              |
+| `includeGpsExif`  | `boolean`               | `false`    | Include GPS coordinates in EXIF. **Leave false** — GPS is a privacy risk and irrelevant to OCR quality. |
+| `ocr`             | `boolean`               | `true`     | Run on-device OCR and return `ocrText`.                                                                 |
+| `cropAutoConfirm` | `boolean`               | `false`    | (iOS gallery only) Skip the crop editor when detection confidence is high (≥ 0.85).                     |
 
 ## Localization
 
@@ -64,15 +65,33 @@ type ReceiptImage = {
   fileSize: number;
   ocrText?: string;
   exif?: ReceiptExif;
+  imageOrigin: "camera" | "screenshot" | "download" | "unknown";
 };
 ```
 
-| Field     | Present when                   |
-| --------- | ------------------------------ |
-| `ocrText` | `options.ocr === true`         |
-| `exif`    | `options.includeExif === true` |
+| Field         | Present when                              |
+| ------------- | ----------------------------------------- |
+| `ocrText`     | `options.ocr === true`                    |
+| `exif`        | `options.includeExif === true`            |
+| `imageOrigin` | Always present (see platform notes below) |
 
 `uri` is a `file://` path. Never a `data:` URI — base64 is disabled to prevent OOM on low-end devices.
+
+### `imageOrigin` platform behavior
+
+| Source            | iOS                                                                     | Android                                                           |
+| ----------------- | ----------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| `source: camera`  | `"camera"` (always)                                                     | `"camera"` (always)                                               |
+| `source: gallery` | PHAsset-based: `"screenshot"`, `"camera"`, `"download"`, or `"unknown"` | `"unknown"` (GmsDocumentScanner does not expose the original URI) |
+
+**iOS gallery detection logic (in priority order):**
+
+1. `PHAssetMediaSubtypePhotoScreenshot` → `"screenshot"` (definitive, requires `NSPhotoLibraryUsageDescription` in `Info.plist`)
+2. EXIF has `make` + `model` + `dateTimeOriginal` → `"camera"`
+3. EXIF has none of those fields → `"download"`
+4. Partial or missing EXIF → `"unknown"`
+
+If the user denies photo library permission, PHAsset detection is skipped and only EXIF heuristics (steps 2–4) are used.
 
 ## `ReceiptExif`
 
