@@ -4,6 +4,7 @@
 #import <UIKit/UIKit.h>
 #import <PhotosUI/PhotosUI.h>
 #import <Vision/Vision.h>
+#import <CoreImage/CoreImage.h>
 #import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
 
 // Below this confidence the user sees the crop editor; above it we apply the
@@ -31,6 +32,23 @@ static VNDetectRectanglesRequest *MakeReceiptRectangleRequest(float minimumConfi
     req.quadratureTolerance = 45;
     return req;
 }
+
+// Wraps a CGImageSourceRef so ARC manages its lifetime instead of manual CFRelease calls.
+// Without this, every early-return path must remember to call CFRelease — a leak hazard.
+@interface RNCGImageSourceHolder : NSObject
+@property (nonatomic, readonly) CGImageSourceRef ref;
+- (instancetype)initWithRef:(CGImageSourceRef)ref NS_DESIGNATED_INITIALIZER;
+- (instancetype)init NS_UNAVAILABLE;
+@end
+
+@implementation RNCGImageSourceHolder
+- (instancetype)initWithRef:(CGImageSourceRef)ref {
+    self = [super init];
+    _ref = ref;
+    return self;
+}
+- (void)dealloc { if (_ref) CFRelease(_ref); }
+@end
 
 // RNCropEditorViewController has no header — redeclare its interface here
 @interface RNCropEditorViewController : UIViewController
@@ -87,24 +105,66 @@ didFinishPicking:(NSArray<PHPickerResult *> *)results {
                     [self didFinishOneItem:nil];
                     return;
                 }
-                CGImageSourceRef sourceRef = CGImageSourceCreateWithData(
+                CGImageSourceRef rawRef = CGImageSourceCreateWithData(
                     (__bridge CFDataRef)data, NULL);
+                // Wrap immediately so ARC handles release even on the early-return paths below.
+                RNCGImageSourceHolder *sourceHolder = rawRef
+                    ? [[RNCGImageSourceHolder alloc] initWithRef:rawRef] : nil;
                 UIImage *image = [UIImage imageWithData:data];
-                if (!image || !sourceRef) {
-                    if (sourceRef) CFRelease(sourceRef);
+                if (!image || !sourceHolder) {
                     [self didFinishOneItem:nil];
                     return;
                 }
-                [self detectRectangleAndCrop:image sourceRef:sourceRef];
+                [self detectRectangleAndCrop:image sourceHolder:sourceHolder];
             }];
         }
     }];
 }
 
-- (void)detectRectangleAndCrop:(UIImage *)image sourceRef:(CGImageSourceRef)sourceRef {
-    VNDetectDocumentSegmentationRequest *docRequest =
-        [VNDetectDocumentSegmentationRequest new];
-    // 0.5 catches more receipts than the ~0.7 default while still filtering noise.
+- (void)detectRectangleAndCrop:(UIImage *)image
+                  sourceHolder:(RNCGImageSourceHolder *)sourceHolder {
+    NSError *visionError = nil;
+    float confidence = 0;
+    NSArray<NSValue *> *corners = [self detectCornersForImage:image
+                                                   confidence:&confidence
+                                                        error:&visionError];
+    if (visionError) {
+        NSLog(@"[ReceiptScanner] Vision request failed: %@", visionError);
+    }
+
+    if (self.options.cropAutoConfirm && corners && confidence >= kCropAutoConfirmMinConfidence) {
+        [self applyCropAndFinishImage:image corners:corners sourceHolder:sourceHolder];
+        return;
+    }
+
+    dispatch_async(dispatch_get_main_queue(), ^{
+        UIViewController *presentingVC = self.presentingVC;
+        if (!presentingVC) {
+            [self didFinishOneItem:nil];
+            return;
+        }
+        RNCropEditorViewController *editor =
+            [[RNCropEditorViewController alloc] initWithImage:image
+                                                      corners:corners
+                                                   completion:^(CGImageRef cropped) {
+            // Called from the editor's background dispatch after rendering.
+            if (!cropped) {
+                [self didFinishOneItem:nil];
+                return;
+            }
+            [self processAndFinishCGImage:cropped sourceHolder:sourceHolder];
+        }];
+        editor.modalPresentationStyle = UIModalPresentationFullScreen;
+        [presentingVC presentViewController:editor animated:YES completion:nil];
+    });
+}
+
+// Returns corners in CIImage coordinate space (origin bottom-left, Y upward), or nil if
+// nothing was detected. Sets *confidence to the detection confidence, or 0 on failure.
+- (nullable NSArray<NSValue *> *)detectCornersForImage:(UIImage *)image
+                                            confidence:(float *)confidence
+                                                 error:(NSError **)error {
+    VNDetectDocumentSegmentationRequest *docRequest = [VNDetectDocumentSegmentationRequest new];
     VNDetectRectanglesRequest *rectRequest = MakeReceiptRectangleRequest(0.5f);
 
     // Pass the CGImage + explicit orientation so Vision processes pixels in the
@@ -117,86 +177,82 @@ didFinishPicking:(NSArray<PHPickerResult *> *)results {
         [[VNImageRequestHandler alloc] initWithCGImage:image.CGImage
                                            orientation:exifOrientation
                                                options:@{}];
-    [handler performRequests:@[docRequest, rectRequest] error:nil];
+    [handler performRequests:@[docRequest, rectRequest] error:error];
 
     CGFloat W = image.size.width;
     CGFloat H = image.size.height;
 
-    // Prefer the ML-based document segmentation result; fall back to classic
-    // rectangle detection when no document is found. Both requests return
-    // VNRectangleObservation, so the corners are used the same way below.
-    VNRectangleObservation *obs =
-        docRequest.results.firstObject ?: rectRequest.results.firstObject;
+    // Preferred: run rectangle detection on the clean binary document mask.
+    // The mask is already in the oriented image coordinate space, so its normalized
+    // results multiply directly to W/H without any extra transform.
+    // Fallback: rectangle detection on the original image.
+    VNRectangleObservation *obs = nil;
+    float detectedConfidence = 0;
 
-    NSArray<NSValue *> *corners = nil;
-    if (obs) {
-        corners = @[
-            [NSValue valueWithCGPoint:CGPointMake(obs.topLeft.x     * W, obs.topLeft.y     * H)],
-            [NSValue valueWithCGPoint:CGPointMake(obs.topRight.x    * W, obs.topRight.y    * H)],
-            [NSValue valueWithCGPoint:CGPointMake(obs.bottomRight.x * W, obs.bottomRight.y * H)],
-            [NSValue valueWithCGPoint:CGPointMake(obs.bottomLeft.x  * W, obs.bottomLeft.y  * H)],
-        ];
-    }
-
-    // Skip the crop editor when detection is confident and the caller opted in.
-    // Called on a background thread (PHPickerResult completion), so we can do
-    // the perspective-correction render here without an extra dispatch.
-    if (self.options.cropAutoConfirm && obs && obs.confidence >= kCropAutoConfirmMinConfidence) {
-        [self applyCropAndFinishImage:image
-                              corners:corners
-                            sourceRef:sourceRef];
-        return;
-    }
-
-    dispatch_async(dispatch_get_main_queue(), ^{
-        UIViewController *presentingVC = self.presentingVC;
-        if (!presentingVC) {
-            if (sourceRef) CFRelease(sourceRef);
-            [self didFinishOneItem:nil];
-            return;
+    VNDocumentObservation *docObs = docRequest.results.firstObject;
+    if (docObs) {
+        obs = [self rectangleInDocumentMask:docObs.pixelBuffer];
+        if (obs) {
+            // Use document segmentation confidence — more meaningful than the mask
+            // rect confidence since the mask is a clean binary image.
+            detectedConfidence = docObs.confidence;
         }
-        RNCropEditorViewController *editor =
-            [[RNCropEditorViewController alloc] initWithImage:image
-                                                      corners:corners
-                                                   completion:^(CGImageRef cropped) {
-            // Called from the editor's background dispatch after rendering.
-            if (!cropped) {
-                if (sourceRef) CFRelease(sourceRef);
-                [self didFinishOneItem:nil];
-                return;
-            }
-            [self processAndFinishCGImage:cropped sourceRef:sourceRef];
-        }];
-        editor.modalPresentationStyle = UIModalPresentationFullScreen;
-        [presentingVC presentViewController:editor animated:YES completion:nil];
-    });
+    }
+    if (!obs) {
+        obs = rectRequest.results.firstObject;
+        if (obs) detectedConfidence = obs.confidence;
+    }
+
+    if (confidence) *confidence = detectedConfidence;
+    if (!obs) return nil;
+
+    return @[
+        [NSValue valueWithCGPoint:CGPointMake(obs.topLeft.x     * W, obs.topLeft.y     * H)],
+        [NSValue valueWithCGPoint:CGPointMake(obs.topRight.x    * W, obs.topRight.y    * H)],
+        [NSValue valueWithCGPoint:CGPointMake(obs.bottomRight.x * W, obs.bottomRight.y * H)],
+        [NSValue valueWithCGPoint:CGPointMake(obs.bottomLeft.x  * W, obs.bottomLeft.y  * H)],
+    ];
+}
+
+// Runs rectangle detection on the binary document segmentation mask returned by
+// VNDetectDocumentSegmentationRequest. The mask is in the same oriented coordinate
+// space as the original image, so no orientation correction is needed here and the
+// resulting normalized coordinates map directly to the original image's W/H.
+- (nullable VNRectangleObservation *)rectangleInDocumentMask:(CVPixelBufferRef)maskBuffer {
+    CIImage *maskCI = [CIImage imageWithCVPixelBuffer:maskBuffer];
+    // Lower threshold: the mask is a clean binary image, so even 0.3-confidence
+    // rectangles reliably correspond to real document boundaries.
+    VNDetectRectanglesRequest *req = MakeReceiptRectangleRequest(0.3f);
+    VNImageRequestHandler *maskHandler = [[VNImageRequestHandler alloc]
+        initWithCIImage:maskCI options:@{}];
+    [maskHandler performRequests:@[req] error:nil];
+    return req.results.firstObject;
 }
 
 // Must be called from a background thread.
 - (void)applyCropAndFinishImage:(UIImage *)image
                         corners:(NSArray<NSValue *> *)corners
-                      sourceRef:(CGImageSourceRef)sourceRef {
+                   sourceHolder:(RNCGImageSourceHolder *)sourceHolder {
     CGImageRef cropped = [RNImageProcessor perspectiveCorrectedCGImage:image corners:corners];
     if (!cropped) {
-        if (sourceRef) CFRelease(sourceRef);
         [self didFinishOneItem:nil];
         return;
     }
-    [self processAndFinishCGImage:cropped sourceRef:sourceRef];
+    [self processAndFinishCGImage:cropped sourceHolder:sourceHolder];
 }
 
 // Encodes, optionally runs OCR, and resolves a single image result.
-// Must be called from a background thread; takes ownership of cropped and sourceRef.
-- (void)processAndFinishCGImage:(CGImageRef)cropped sourceRef:(CGImageSourceRef)sourceRef {
+// Must be called from a background thread; takes ownership of cropped.
+- (void)processAndFinishCGImage:(CGImageRef)cropped
+                   sourceHolder:(RNCGImageSourceHolder *)sourceHolder {
     NSError *err = nil;
     RNProcessedImage *processed =
         [RNImageProcessor processImage:cropped
                                quality:self.options.quality
-                             sourceRef:sourceRef
+                             sourceRef:sourceHolder.ref
                           includeExif:self.options.includeExif
                        includeGpsExif:self.options.includeGpsExif
                                 error:&err];
-    if (sourceRef) CFRelease(sourceRef);
     if (!processed) {
         CGImageRelease(cropped);
         [self didFinishOneItem:nil];
@@ -209,15 +265,19 @@ didFinishPicking:(NSArray<PHPickerResult *> *)results {
     }
     CGImageRelease(cropped);
     NSMutableDictionary *img = [@{
-        @"uri":      [@"file://" stringByAppendingString:processed.fileURL.path],
+        // absoluteString gives a properly percent-encoded file:// URI, unlike
+        // manually appending .path which breaks on paths containing spaces or
+        // non-ASCII characters (e.g. usernames with special characters).
+        @"uri":      processed.fileURL.absoluteString,
         @"width":    @(processed.width),
         @"height":   @(processed.height),
         @"fileName": processed.fileURL.lastPathComponent,
         @"mimeType": @"image/jpeg",
         @"fileSize": @(processed.fileSize),
     } mutableCopy];
-    if (ocrText)            img[@"ocrText"] = ocrText;
-    if (processed.exifData) img[@"exif"]    = processed.exifData;
+    // length > 0 distinguishes "OCR ran, found text" from "OCR ran, empty result".
+    if (ocrText.length > 0)  img[@"ocrText"] = ocrText;
+    if (processed.exifData)  img[@"exif"]    = processed.exifData;
     [self didFinishOneItem:[img copy]];
 }
 
