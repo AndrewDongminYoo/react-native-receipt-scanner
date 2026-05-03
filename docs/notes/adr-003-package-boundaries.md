@@ -25,7 +25,7 @@ The package owns **image primitive operations only**:
 | On-device OCR text (raw string)        | Point / reward business logic                 |
 | Temp file lifecycle                    | Server-side validation rules                  |
 
-The `ocrText` field returns the raw recognised string. Interpreting that string
+The `ocrText` field returns the raw recognized string. Interpreting that string
 (is this a valid receipt? what is the total?) is the responsibility of the app layer
 or the server.
 

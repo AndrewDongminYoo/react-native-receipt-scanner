@@ -16,7 +16,7 @@ docs/
    documentation needs for this project.
 
 2. **Do not create `docs/superpowers/`** or any skill-, framework-, or agent-internal
-   directory here. Those artefacts do not belong in project documentation.
+   directory here. Those artifacts do not belong in project documentation.
 
 3. **One canonical file per topic.** Do not create date-prefixed copies of existing files
    (e.g. `2026-05-01-phase-2-android.md` alongside `phase-2-android.md`). Update the

@@ -250,7 +250,7 @@ type ReceiptExif = {
 | `SCAN_IN_PROGRESS`    | `scan()` called while a previous call has not yet resolved          |
 | `NO_ACTIVITY`         | No foreground activity / view controller found (Android)            |
 | `NOT_SUPPORTED`       | `VNDocumentCameraViewController` not supported on this device (iOS) |
-| `SCANNER_INIT_FAILED` | ML Kit scanner failed to initialise (Android)                       |
+| `SCANNER_INIT_FAILED` | ML Kit scanner failed to initialize (Android)                       |
 | `SCAN_FAILED`         | Unexpected activity result code (Android)                           |
 | `PROCESSING_FAILED`   | Image processing or OCR failed                                      |
 | `CAMERA_FAILED`       | `VNDocumentCameraViewController` reported an error (iOS)            |
