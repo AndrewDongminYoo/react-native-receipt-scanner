@@ -43,12 +43,16 @@ NS_ASSUME_NONNULL_END
         if (corners && corners.count == 4) {
             _corners = [corners mutableCopy];
         } else {
-            // Default to full image corners (CIImage bottom-left origin)
+            // Vision found nothing. A 10% inset is a far better starting point than
+            // full-image edges: receipts rarely fill 100% of the frame, so inset
+            // corners are closer to the actual receipt than (0,0)/(W,H) extremes.
+            // CIImage coordinate space: origin bottom-left, Y increases upward.
+            CGFloat d = 0.1;
             _corners = [@[
-                [NSValue valueWithCGPoint:CGPointMake(0, H)],  // topLeft
-                [NSValue valueWithCGPoint:CGPointMake(W, H)],  // topRight
-                [NSValue valueWithCGPoint:CGPointMake(W, 0)],  // bottomRight
-                [NSValue valueWithCGPoint:CGPointMake(0, 0)],  // bottomLeft
+                [NSValue valueWithCGPoint:CGPointMake(W * d,       H * (1 - d))],  // topLeft
+                [NSValue valueWithCGPoint:CGPointMake(W * (1 - d), H * (1 - d))],  // topRight
+                [NSValue valueWithCGPoint:CGPointMake(W * (1 - d), H * d)],        // bottomRight
+                [NSValue valueWithCGPoint:CGPointMake(W * d,       H * d)],        // bottomLeft
             ] mutableCopy];
         }
     }

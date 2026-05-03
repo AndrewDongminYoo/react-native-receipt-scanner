@@ -37,6 +37,7 @@ nonatomic
 NONNULL
 normalisation
 NSURL
+NSUUID
 objc
 Podfile
 podspec

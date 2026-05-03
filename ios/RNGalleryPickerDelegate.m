@@ -94,7 +94,9 @@ didFinishPicking:(NSArray<PHPickerResult *> *)results {
 
 - (void)detectRectangleAndCrop:(UIImage *)image sourceRef:(CGImageSourceRef)sourceRef {
     VNDetectRectanglesRequest *request = [[VNDetectRectanglesRequest alloc] init];
-    request.minimumConfidence = 0.7;
+    // 0.5 catches more receipts than the default-like 0.7 while still filtering noise.
+    // Results are confidence-sorted, so firstObject remains the best candidate.
+    request.minimumConfidence = 0.5;
     request.maximumObservations = 1;
     // More permissive for perspective-distorted receipts (default is 30°).
     request.quadratureTolerance = 45;
