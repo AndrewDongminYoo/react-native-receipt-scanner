@@ -62,14 +62,19 @@
             }
 
             NSMutableDictionary *img = [@{
-                @"uri":      [@"file://" stringByAppendingString:processed.fileURL.path],
-                @"width":    @(processed.width),
-                @"height":   @(processed.height),
-                @"fileName": processed.fileURL.lastPathComponent,
-                @"mimeType": @"image/jpeg",
-                @"fileSize": @(processed.fileSize),
+                // absoluteString gives a properly percent-encoded file:// URI; manually
+                // appending .path breaks on paths with spaces or non-ASCII (e.g. usernames
+                // with special characters in the cache directory).
+                @"uri":         processed.fileURL.absoluteString,
+                @"width":       @(processed.width),
+                @"height":      @(processed.height),
+                @"fileName":    processed.fileURL.lastPathComponent,
+                @"mimeType":    @"image/jpeg",
+                @"fileSize":    @(processed.fileSize),
+                @"imageOrigin": @"camera",
             } mutableCopy];
-            if (ocrText) img[@"ocrText"] = ocrText;
+            if (ocrText)             img[@"ocrText"] = ocrText;
+            if (processed.exifData)  img[@"exif"]    = processed.exifData;
             [images addObject:[img copy]];
         }
 

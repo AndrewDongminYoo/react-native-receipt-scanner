@@ -10,6 +10,7 @@ NS_ASSUME_NONNULL_BEGIN
 
 - (instancetype)initWithOptions:(RNScanOptions *)options
        presentingViewController:(UIViewController *)presentingVC
+               hasLibraryAccess:(BOOL)hasLibraryAccess
                         resolve:(RNResolveBlock)resolve
                          reject:(RNRejectBlock)reject;
 

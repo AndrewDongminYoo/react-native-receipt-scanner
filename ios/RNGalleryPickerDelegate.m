@@ -3,6 +3,7 @@
 #import "RNOcrProcessor.h"
 #import <UIKit/UIKit.h>
 #import <PhotosUI/PhotosUI.h>
+#import <Photos/Photos.h>
 #import <Vision/Vision.h>
 #import <CoreImage/CoreImage.h>
 #import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
@@ -55,6 +56,7 @@ static VNDetectRectanglesRequest *MakeReceiptRectangleRequest(float minimumConfi
 @interface RNGalleryPickerDelegate () <PHPickerViewControllerDelegate>
 @property (nonatomic, strong) RNScanOptions                      *options;
 @property (nonatomic, weak)   UIViewController                   *presentingVC;
+@property (nonatomic, assign) BOOL                                hasLibraryAccess;
 @property (nonatomic, copy)   RNResolveBlock                      resolve;
 @property (nonatomic, copy)   RNRejectBlock                       reject;
 @property (nonatomic, strong) NSMutableArray<NSDictionary *>     *results;
@@ -65,16 +67,18 @@ static VNDetectRectanglesRequest *MakeReceiptRectangleRequest(float minimumConfi
 
 - (instancetype)initWithOptions:(RNScanOptions *)options
        presentingViewController:(UIViewController *)presentingVC
+               hasLibraryAccess:(BOOL)hasLibraryAccess
                         resolve:(RNResolveBlock)resolve
                          reject:(RNRejectBlock)reject {
     self = [super init];
     if (self) {
-        _options      = options;
-        _presentingVC = presentingVC;
-        _resolve      = resolve;
-        _reject       = reject;
-        _results      = [NSMutableArray new];
-        _pendingCount = 0;
+        _options           = options;
+        _presentingVC      = presentingVC;
+        _hasLibraryAccess  = hasLibraryAccess;
+        _resolve           = resolve;
+        _reject            = reject;
+        _results           = [NSMutableArray new];
+        _pendingCount      = 0;
     }
     return self;
 }
@@ -94,6 +98,9 @@ didFinishPicking:(NSArray<PHPickerResult *> *)results {
         self.pendingCount = results.count;
 
         for (PHPickerResult *result in results) {
+            // PHAsset fetch is synchronous for local identifiers — safe to call on main thread.
+            NSString *earlyOrigin = [self originForPickerResult:result];
+
             [result.itemProvider loadDataRepresentationForTypeIdentifier:UTTypeImage.identifier
                                                        completionHandler:^(NSData *data, NSError *err) {
                 if (!data || err) {
@@ -110,14 +117,49 @@ didFinishPicking:(NSArray<PHPickerResult *> *)results {
                     [self didFinishOneItem:nil];
                     return;
                 }
-                [self detectRectangleAndCrop:image sourceHolder:sourceHolder];
+                [self detectRectangleAndCrop:image sourceHolder:sourceHolder earlyOrigin:earlyOrigin];
             }];
         }
     }];
 }
 
+// Returns a definitive imageOrigin from the Photos library if library access is available,
+// or nil if origin cannot be determined at this stage (EXIF heuristics run later).
+- (nullable NSString *)originForPickerResult:(PHPickerResult *)result {
+    if (!self.hasLibraryAccess || !result.assetIdentifier) return nil;
+
+    PHFetchResult<PHAsset *> *fetchResult =
+        [PHAsset fetchAssetsWithLocalIdentifiers:@[result.assetIdentifier] options:nil];
+    PHAsset *asset = fetchResult.firstObject;
+    if (!asset) return nil;
+
+    if (asset.mediaSubtypes & PHAssetMediaSubtypePhotoScreenshot) {
+        return @"screenshot";
+    }
+    // No dedicated "download" subtype in Photos framework.
+    // Fall through to EXIF heuristics in processAndFinishCGImage:.
+    return nil;
+}
+
+// Returns imageOrigin based on already-extracted EXIF metadata. Reuses the dict that
+// RNImageProcessor builds during processImage: so the source is not decoded twice.
+- (nullable NSString *)detectOriginFromExifData:(nullable NSDictionary *)exifData {
+    if (!exifData) return nil;
+    NSString *make     = exifData[@"make"];
+    NSString *model    = exifData[@"model"];
+    NSString *dateTime = exifData[@"dateTimeOriginal"];
+
+    // Camera photos carry make, model, and a shutter timestamp.
+    if (make && model && dateTime) return @"camera";
+    // Images with no camera metadata at all are likely web downloads or synthetic images.
+    if (!make && !model && !dateTime) return @"download";
+    // Ambiguous — partial EXIF (e.g. edited photo).
+    return nil;
+}
+
 - (void)detectRectangleAndCrop:(UIImage *)image
-                  sourceHolder:(RNCGImageSourceHolder *)sourceHolder {
+                  sourceHolder:(RNCGImageSourceHolder *)sourceHolder
+                   earlyOrigin:(nullable NSString *)earlyOrigin {
     NSError *visionError = nil;
     float confidence = 0;
     NSArray<NSValue *> *corners = [self detectCornersForImage:image
@@ -128,7 +170,7 @@ didFinishPicking:(NSArray<PHPickerResult *> *)results {
     }
 
     if (self.options.cropAutoConfirm && corners && confidence >= kCropAutoConfirmMinConfidence) {
-        [self applyCropAndFinishImage:image corners:corners sourceHolder:sourceHolder];
+        [self applyCropAndFinishImage:image corners:corners sourceHolder:sourceHolder earlyOrigin:earlyOrigin];
         return;
     }
 
@@ -147,7 +189,7 @@ didFinishPicking:(NSArray<PHPickerResult *> *)results {
                 [self didFinishOneItem:nil];
                 return;
             }
-            [self processAndFinishCGImage:cropped sourceHolder:sourceHolder];
+            [self processAndFinishCGImage:cropped sourceHolder:sourceHolder earlyOrigin:earlyOrigin];
         }];
         editor.modalPresentationStyle = UIModalPresentationFullScreen;
         [presentingVC presentViewController:editor animated:YES completion:nil];
@@ -227,19 +269,21 @@ didFinishPicking:(NSArray<PHPickerResult *> *)results {
 // Must be called from a background thread.
 - (void)applyCropAndFinishImage:(UIImage *)image
                         corners:(NSArray<NSValue *> *)corners
-                   sourceHolder:(RNCGImageSourceHolder *)sourceHolder {
+                   sourceHolder:(RNCGImageSourceHolder *)sourceHolder
+                    earlyOrigin:(nullable NSString *)earlyOrigin {
     CGImageRef cropped = [RNImageProcessor perspectiveCorrectedCGImage:image corners:corners];
     if (!cropped) {
         [self didFinishOneItem:nil];
         return;
     }
-    [self processAndFinishCGImage:cropped sourceHolder:sourceHolder];
+    [self processAndFinishCGImage:cropped sourceHolder:sourceHolder earlyOrigin:earlyOrigin];
 }
 
 // Encodes, optionally runs OCR, and resolves a single image result.
 // Must be called from a background thread; takes ownership of cropped.
 - (void)processAndFinishCGImage:(CGImageRef)cropped
-                   sourceHolder:(RNCGImageSourceHolder *)sourceHolder {
+                   sourceHolder:(RNCGImageSourceHolder *)sourceHolder
+                    earlyOrigin:(nullable NSString *)earlyOrigin {
     NSError *err = nil;
     RNProcessedImage *processed =
         [RNImageProcessor processImage:cropped
@@ -259,16 +303,22 @@ didFinishPicking:(NSArray<PHPickerResult *> *)results {
         ocrText = [RNOcrProcessor recognizeTextInImage:croppedUIImage error:NULL];
     }
     CGImageRelease(cropped);
+
+    NSString *imageOrigin = earlyOrigin
+        ?: [self detectOriginFromExifData:processed.exifData]
+        ?: @"unknown";
+
     NSMutableDictionary *img = [@{
         // absoluteString gives a properly percent-encoded file:// URI, unlike
         // manually appending .path which breaks on paths containing spaces or
         // non-ASCII characters (e.g. usernames with special characters).
-        @"uri":      processed.fileURL.absoluteString,
-        @"width":    @(processed.width),
-        @"height":   @(processed.height),
-        @"fileName": processed.fileURL.lastPathComponent,
-        @"mimeType": @"image/jpeg",
-        @"fileSize": @(processed.fileSize),
+        @"uri":         processed.fileURL.absoluteString,
+        @"width":       @(processed.width),
+        @"height":      @(processed.height),
+        @"fileName":    processed.fileURL.lastPathComponent,
+        @"mimeType":    @"image/jpeg",
+        @"fileSize":    @(processed.fileSize),
+        @"imageOrigin": imageOrigin,
     } mutableCopy];
     // length > 0 distinguishes "OCR ran, found text" from "OCR ran, empty result".
     if (ocrText.length > 0)  img[@"ocrText"] = ocrText;
