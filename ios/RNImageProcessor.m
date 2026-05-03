@@ -107,11 +107,24 @@ static CGImagePropertyOrientation RNOrientationFromUIImageOrientation(UIImageOri
     result.height   = (NSInteger)CGImageGetHeight(cgImage);
     result.fileSize = [attrs[NSFileSize] integerValue];
 
-    if (includeExif && sourceProps) {
-        result.exifData = [self buildExifDict:sourceProps includeGps:includeGpsExif];
+    if (includeExif) {
+        result.exifData = sourceProps
+            ? [self buildExifDict:sourceProps includeGps:includeGpsExif]
+            : [self buildDeviceExifDict];
     }
 
     return result;
+}
+
++ (NSDictionary *)buildDeviceExifDict {
+    NSDateFormatter *fmt = [NSDateFormatter new];
+    fmt.dateFormat = @"yyyy:MM:dd HH:mm:ss";
+    return @{
+        @"make":              @"Apple",
+        @"model":             [UIDevice currentDevice].model,
+        @"orientation":       @(kCGImagePropertyOrientationUp),
+        @"dateTimeOriginal":  [fmt stringFromDate:[NSDate date]],
+    };
 }
 
 + (nullable NSDictionary *)buildExifDict:(NSDictionary *)sourceProps includeGps:(BOOL)includeGps {

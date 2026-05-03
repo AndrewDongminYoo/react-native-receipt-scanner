@@ -44,12 +44,13 @@
             CGImageRef cgImage  = normalized.CGImage;
 
             NSError *err = nil;
-            // Camera images have no original EXIF source; pass NULL for sourceRef
+            // sourceRef is NULL — VisionKit does not expose the original shutter EXIF.
+            // RNImageProcessor synthesizes make/model/dateTime from UIDevice in this case.
             RNProcessedImage *processed =
                 [RNImageProcessor processImage:cgImage
                                        quality:strongSelf.options.quality
                                      sourceRef:NULL
-                                  includeExif:NO
+                                  includeExif:strongSelf.options.includeExif
                                includeGpsExif:NO
                                         error:&err];
             if (!processed) continue;

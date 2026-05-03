@@ -50,12 +50,7 @@ static VNDetectRectanglesRequest *MakeReceiptRectangleRequest(float minimumConfi
 - (void)dealloc { if (_ref) CFRelease(_ref); }
 @end
 
-// RNCropEditorViewController has no header — redeclare its interface here
-@interface RNCropEditorViewController : UIViewController
-- (instancetype)initWithImage:(UIImage *)image
-                      corners:(nullable NSArray<NSValue *> *)corners
-                   completion:(void (^)(CGImageRef _Nullable cgImage))completion;
-@end
+#import "RNCropEditorViewController.h"
 
 @interface RNGalleryPickerDelegate () <PHPickerViewControllerDelegate>
 @property (nonatomic, strong) RNScanOptions                      *options;

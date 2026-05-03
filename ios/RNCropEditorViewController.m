@@ -1,3 +1,4 @@
+#import "RNCropEditorViewController.h"
 #import "RNImageProcessor.h"
 #import <UIKit/UIKit.h>
 
@@ -6,16 +7,6 @@ static const NSInteger kTopLeft     = 0;
 static const NSInteger kTopRight    = 1;
 static const NSInteger kBottomRight = 2;
 static const NSInteger kBottomLeft  = 3;
-
-NS_ASSUME_NONNULL_BEGIN
-
-@interface RNCropEditorViewController : UIViewController
-- (instancetype)initWithImage:(UIImage *)image
-                      corners:(nullable NSArray<NSValue *> *)corners
-                   completion:(void (^)(CGImageRef _Nullable cgImage))completion;
-@end
-
-NS_ASSUME_NONNULL_END
 
 @interface RNCropEditorViewController ()
 @property (nonatomic, strong) UIImage              *sourceImage;

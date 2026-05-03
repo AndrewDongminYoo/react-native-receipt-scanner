@@ -17,8 +17,9 @@ NS_ASSUME_NONNULL_BEGIN
 @interface RNImageProcessor : NSObject
 
 /**
- * Recompress cgImage to JPEG at the given quality, optionally copying EXIF/GPS
- * from sourceRef (pass NULL for camera images that have no original EXIF source).
+ * Recompress cgImage to JPEG at the given quality.
+ * When sourceRef is non-NULL and includeExif is YES, copies EXIF/GPS from the source image.
+ * When sourceRef is NULL and includeExif is YES, synthesizes make/model/dateTime from UIDevice.
  * Returns nil and sets error on failure.
  */
 + (nullable RNProcessedImage *)processImage:(CGImageRef)cgImage
