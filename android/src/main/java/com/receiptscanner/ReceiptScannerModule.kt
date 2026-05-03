@@ -101,9 +101,7 @@ class ReceiptScannerModule(
     executor.execute {
       try {
         val ocrProcessor = if (scanOptions.ocr) OcrProcessor(reactApplicationContext) else null
-        // GmsDocumentScanner does not expose the original gallery URI, so a gallery
-        // import always reports "unknown" — see docs/specs/api-contract.md.
-        val imageOrigin = if (scanOptions.source == "gallery") "unknown" else "camera"
+        val isCamera = scanOptions.source != "gallery"
 
         val imageResults =
           pages.map { page ->
@@ -113,8 +111,20 @@ class ReceiptScannerModule(
                 scanOptions.quality,
                 scanOptions.includeExif,
                 scanOptions.includeGpsExif,
-                synthesizeDeviceInfo = imageOrigin == "camera",
+                synthesizeDeviceInfo = isCamera,
               )
+
+            // Camera source is always definitive. For gallery, apply EXIF heuristics:
+            // dateTimeOriginal alone or make+model together indicate a camera photo.
+            // "download" is NOT inferred here — GmsDocumentScanner strips source EXIF
+            // regardless of origin, so absent metadata cannot mean "downloaded image".
+            val imageOrigin: String =
+              when {
+                isCamera -> "camera"
+                processed.exifData?.dateTimeOriginal != null -> "camera"
+                processed.exifData?.make != null && processed.exifData.model != null -> "camera"
+                else -> "unknown"
+              }
 
             val ocrText =
               if (ocrProcessor != null) {
