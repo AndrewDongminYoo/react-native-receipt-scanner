@@ -42,18 +42,24 @@ class ReceiptScannerModule(
       }
 
     val scanOptions = ScanOptions.from(options)
-
-    executor.execute {
-      imageProcessor.deletePreviousSessionFiles()
-    }
-
+    executor.execute { imageProcessor.deletePreviousSessionFiles() }
     pendingPromise = promise
     pendingOptions = scanOptions
 
+    if (scanOptions.source == "gallery") {
+      @Suppress("DEPRECATION")
+      activity.startActivityForResult(
+        Intent(activity, CropEditorActivity::class.java),
+        GALLERY_REQUEST_CODE,
+      )
+      return
+    }
+
+    // Camera path: GmsDocumentScanner (gallery import disabled — handled above)
     val scannerOptions =
       GmsDocumentScannerOptions
         .Builder()
-        .setGalleryImportAllowed(scanOptions.source == "gallery")
+        .setGalleryImportAllowed(false)
         .setPageLimit(scanOptions.maxPages)
         .setResultFormats(GmsDocumentScannerOptions.RESULT_FORMAT_JPEG)
         .setScannerMode(GmsDocumentScannerOptions.SCANNER_MODE_FULL)
@@ -78,8 +84,16 @@ class ReceiptScannerModule(
     resultCode: Int,
     data: Intent?,
   ) {
-    if (requestCode != SCAN_REQUEST_CODE) return
+    when (requestCode) {
+      SCAN_REQUEST_CODE -> handleCameraResult(resultCode, data)
+      GALLERY_REQUEST_CODE -> handleGalleryResult(resultCode, data)
+    }
+  }
 
+  private fun handleCameraResult(
+    resultCode: Int,
+    data: Intent?,
+  ) {
     val promise = pendingPromise ?: return
     val scanOptions = pendingOptions ?: return
     pendingPromise = null
@@ -89,19 +103,16 @@ class ReceiptScannerModule(
       promise.resolve(ResultBuilder.buildCancelled())
       return
     }
-
     if (resultCode != Activity.RESULT_OK || data == null) {
       promise.reject("SCAN_FAILED", "Unexpected result code: $resultCode")
       return
     }
 
-    val scanningResult = GmsDocumentScanningResult.fromActivityResultIntent(data)
-    val pages = scanningResult?.pages ?: emptyList()
+    val pages = GmsDocumentScanningResult.fromActivityResultIntent(data)?.pages ?: emptyList()
 
     executor.execute {
       try {
         val ocrProcessor = if (scanOptions.ocr) OcrProcessor(reactApplicationContext) else null
-        val isCamera = scanOptions.source != "gallery"
 
         val imageResults =
           pages.map { page ->
@@ -111,39 +122,23 @@ class ReceiptScannerModule(
                 scanOptions.quality,
                 scanOptions.includeExif,
                 scanOptions.includeGpsExif,
-                synthesizeDeviceInfo = isCamera,
+                synthesizeDeviceInfo = true,
               )
-
-            // Camera source is always definitive. For gallery, apply EXIF heuristics:
-            // dateTimeOriginal alone or make+model together indicate a camera photo.
-            // "download" is NOT inferred here — GmsDocumentScanner strips source EXIF
-            // regardless of origin, so absent metadata cannot mean "downloaded image".
-            val imageOrigin: String =
-              when {
-                isCamera -> "camera"
-                processed.exifData?.dateTimeOriginal != null -> "camera"
-                processed.exifData?.make != null && processed.exifData.model != null -> "camera"
-                else -> "unknown"
-              }
-
             val ocrText =
-              if (ocrProcessor != null) {
+              ocrProcessor?.let { ocr ->
                 try {
-                  ocrProcessor.recognize(Uri.fromFile(processed.file))
-                } catch (e: Exception) {
+                  ocr.recognize(Uri.fromFile(processed.file))
+                } catch (_: Exception) {
                   null
                 }
-              } else {
-                null
               }
-
             ResultBuilder.buildImage(
               file = processed.file,
               width = processed.width,
               height = processed.height,
               ocrText = ocrText,
               exifData = processed.exifData,
-              imageOrigin = imageOrigin,
+              imageOrigin = "camera",
             )
           }
 
@@ -151,6 +146,74 @@ class ReceiptScannerModule(
         promise.resolve(ResultBuilder.buildSuccess(imageResults))
       } catch (e: Exception) {
         promise.reject("PROCESSING_FAILED", e.message ?: "Image processing failed", e)
+      }
+    }
+  }
+
+  private fun handleGalleryResult(
+    resultCode: Int,
+    data: Intent?,
+  ) {
+    val promise = pendingPromise ?: return
+    val scanOptions = pendingOptions ?: return
+    pendingPromise = null
+    pendingOptions = null
+
+    if (resultCode == Activity.RESULT_CANCELED || data == null) {
+      promise.resolve(ResultBuilder.buildCancelled())
+      return
+    }
+
+    val originalUriStr = data.getStringExtra(CropEditorActivity.EXTRA_ORIGINAL_URI)
+    val corners = data.getFloatArrayExtra(CropEditorActivity.EXTRA_CORNERS)
+    if (resultCode != Activity.RESULT_OK || originalUriStr == null || corners == null) {
+      promise.resolve(ResultBuilder.buildCancelled())
+      return
+    }
+
+    val originalUri = Uri.parse(originalUriStr)
+    executor.execute {
+      try {
+        val processed =
+          imageProcessor.processGallery(
+            originalUri,
+            corners,
+            scanOptions.quality,
+            scanOptions.includeExif,
+            scanOptions.includeGpsExif,
+          )
+        val imageOrigin = imageProcessor.inferOrigin(originalUri, processed.exifData)
+
+        val ocrText =
+          if (scanOptions.ocr) {
+            val ocr = OcrProcessor(reactApplicationContext)
+            try {
+              ocr.recognize(Uri.fromFile(processed.file))
+            } catch (_: Exception) {
+              null
+            } finally {
+              ocr.close()
+            }
+          } else {
+            null
+          }
+
+        promise.resolve(
+          ResultBuilder.buildSuccess(
+            listOf(
+              ResultBuilder.buildImage(
+                file = processed.file,
+                width = processed.width,
+                height = processed.height,
+                ocrText = ocrText,
+                exifData = processed.exifData,
+                imageOrigin = imageOrigin,
+              ),
+            ),
+          ),
+        )
+      } catch (e: Exception) {
+        promise.reject("PROCESSING_FAILED", e.message ?: "Gallery processing failed", e)
       }
     }
   }
@@ -166,5 +229,6 @@ class ReceiptScannerModule(
   companion object {
     const val NAME = NativeReceiptScannerSpec.NAME
     private const val SCAN_REQUEST_CODE = 0x9001
+    private const val GALLERY_REQUEST_CODE = 0x9002
   }
 }
