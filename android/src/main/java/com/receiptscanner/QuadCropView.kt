@@ -27,7 +27,8 @@ internal class QuadCropView
     // Matches iOS CAShapeLayer: fillColor = rgba(0, 0.5, 1, 0.2), strokeColor = rgba(0, 0.5, 1, 0.9)
     private val quadFillPaint =
       Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = 0x330080FF.toInt()
+        // 0x330080FF fits in positive Int (alpha 0x33 < 0x80) — no .toInt() needed.
+        color = 0x330080FF
         style = Paint.Style.FILL
       }
     private val quadStrokePaint =
@@ -52,6 +53,10 @@ internal class QuadCropView
 
     private val handleRadius get() = 16f * dp // matches iOS kHandleRadius = 16
     private val touchRadius get() = 40f * dp
+
+    // Reused across onDraw frames. rewind() preserves the internal data buffer so
+    // the per-frame allocation cost stays out of the draw hot path.
+    private val quadPath = Path()
 
     fun setImageBounds(
       left: Float,
@@ -105,16 +110,14 @@ internal class QuadCropView
 
     override fun onDraw(canvas: Canvas) {
       super.onDraw(canvas)
-      val quad =
-        Path().apply {
-          moveTo(corners[0].x, corners[0].y)
-          lineTo(corners[1].x, corners[1].y)
-          lineTo(corners[2].x, corners[2].y)
-          lineTo(corners[3].x, corners[3].y)
-          close()
-        }
-      canvas.drawPath(quad, quadFillPaint)
-      canvas.drawPath(quad, quadStrokePaint)
+      quadPath.rewind()
+      quadPath.moveTo(corners[0].x, corners[0].y)
+      quadPath.lineTo(corners[1].x, corners[1].y)
+      quadPath.lineTo(corners[2].x, corners[2].y)
+      quadPath.lineTo(corners[3].x, corners[3].y)
+      quadPath.close()
+      canvas.drawPath(quadPath, quadFillPaint)
+      canvas.drawPath(quadPath, quadStrokePaint)
       corners.forEach { pt ->
         canvas.drawCircle(pt.x, pt.y, handleRadius, handleFillPaint)
         canvas.drawCircle(pt.x, pt.y, handleRadius, handleBorderPaint)
@@ -142,11 +145,25 @@ internal class QuadCropView
           }
         }
 
-        MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+        MotionEvent.ACTION_UP -> {
+          parent?.requestDisallowInterceptTouchEvent(false)
+          activeIndex = -1
+          performClick()
+        }
+
+        MotionEvent.ACTION_CANCEL -> {
           parent?.requestDisallowInterceptTouchEvent(false)
           activeIndex = -1
         }
       }
+      return true
+    }
+
+    // Required by ClickableViewAccessibility lint when overriding onTouchEvent.
+    // The view has no click semantics of its own (handles are dragged, not tapped),
+    // but the override lets accessibility services dispatch click events.
+    override fun performClick(): Boolean {
+      super.performClick()
       return true
     }
 

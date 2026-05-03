@@ -261,6 +261,8 @@ internal class CropEditorActivity : Activity() {
   // Runs ML Kit text recognition on the display bitmap to find document corners.
   // Updates cropView.setCorners() with the detected quad on success.
   // Falls back silently to the current 10% inset if detection fails or finds too little text.
+  // Reuses the Korean recognizer (same artifact OcrProcessor uses) — it covers Latin too,
+  // and adding text-recognition (Latin) as a separate dep would inflate APK size.
   private fun detectCornersFromText(bitmap: Bitmap) {
     val recognizer = TextRecognition.getClient(KoreanTextRecognizerOptions.Builder().build())
     recognizer
@@ -308,16 +310,17 @@ internal class CropEditorActivity : Activity() {
       val dist = dx * dx + dy * dy
       val sector =
         when {
+          // TL
           angle < -halfPi -> 0
 
-          // TL
+          // TR
           angle < 0f -> 1
 
-          // TR
+          // BR
           angle < halfPi -> 2
 
-          // BR
-          else -> 3 // BL
+          // BL
+          else -> 3
         }
       if (dist > bestDist[sector]) {
         bestDist[sector] = dist
@@ -325,7 +328,8 @@ internal class CropEditorActivity : Activity() {
       }
     }
 
-    if (best.any { it == null }) return null
+    val resolved = best.filterNotNull()
+    if (resolved.size != 4) return null
 
     // Map text-recognition bitmap coords → display coords via imageRect
     val scaleX = imageRect.width() / bitmapWidth
@@ -333,7 +337,7 @@ internal class CropEditorActivity : Activity() {
 
     fun toDisplay(pt: PointF) = PointF(imageRect.left + pt.x * scaleX, imageRect.top + pt.y * scaleY)
 
-    return arrayOf(toDisplay(best[0]!!), toDisplay(best[1]!!), toDisplay(best[2]!!), toDisplay(best[3]!!))
+    return arrayOf(toDisplay(resolved[0]), toDisplay(resolved[1]), toDisplay(resolved[2]), toDisplay(resolved[3]))
   }
 
   private fun readExifOrientation(uri: Uri): Int =

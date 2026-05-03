@@ -3,6 +3,7 @@ package com.receiptscanner
 import android.app.Activity
 import android.content.Intent
 import android.net.Uri
+import androidx.core.net.toUri
 import com.facebook.react.bridge.ActivityEventListener
 import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactApplicationContext
@@ -36,7 +37,7 @@ class ReceiptScannerModule(
     }
 
     val activity =
-      currentActivity ?: run {
+      reactApplicationContext.getCurrentActivity() ?: run {
         promise.reject("NO_ACTIVITY", "No foreground activity found")
         return
       }
@@ -176,7 +177,7 @@ class ReceiptScannerModule(
       return
     }
 
-    val originalUri = Uri.parse(originalUriStr)
+    val originalUri = originalUriStr.toUri()
     executor.execute {
       try {
         val processed =

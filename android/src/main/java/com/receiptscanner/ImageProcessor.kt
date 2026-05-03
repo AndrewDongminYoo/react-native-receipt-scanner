@@ -9,6 +9,7 @@ import android.graphics.Paint
 import android.net.Uri
 import android.os.Build
 import android.provider.MediaStore
+import androidx.core.graphics.createBitmap
 import androidx.exifinterface.media.ExifInterface
 import java.io.File
 import java.io.FileOutputStream
@@ -96,6 +97,7 @@ class ImageProcessor(
     val gps =
       if (includeGps) {
         val latLon = FloatArray(2)
+        @Suppress("DEPRECATION")
         if (exif.getLatLong(latLon)) {
           Pair(
             latLon[0].toDouble(),
@@ -286,7 +288,7 @@ class ImageProcessor(
     val matrix = Matrix()
     matrix.setPolyToPoly(corners, 0, dst, 0, 4)
 
-    val output = Bitmap.createBitmap(outW, outH, Bitmap.Config.ARGB_8888)
+    val output = createBitmap(outW, outH)
     val canvas = Canvas(output)
     canvas.drawBitmap(bitmap, matrix, Paint(Paint.FILTER_BITMAP_FLAG))
     return output
