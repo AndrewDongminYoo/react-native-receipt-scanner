@@ -263,7 +263,7 @@ function ScanPage({
               <Text style={styles.infoText}>
                 {Platform.OS === "ios"
                   ? "📐 iOS: VNDetectRectangles가 문서 모서리를 자동 감지하고 드래그 핸들로 원근 보정이 가능합니다"
-                  : "📷 Android: 카메라 화면이 먼저 열립니다. 하단 갤러리 버튼을 탭해 사진을 선택하세요"}
+                  : "📷 Android: 갤러리에서 영수증 사진을 직접 선택합니다. 문서 모서리를 드래그 핸들로 보정해주세요."}
               </Text>
             </View>
           )}
