@@ -22,6 +22,7 @@ describe("DEFAULT_SCAN_OPTIONS", () => {
       includeGpsExif: false,
       ocr: true,
       cropAutoConfirm: false,
+      androidCameraOptions: {},
     });
   });
 });

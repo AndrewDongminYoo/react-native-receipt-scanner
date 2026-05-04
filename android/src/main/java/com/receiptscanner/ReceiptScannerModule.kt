@@ -76,9 +76,18 @@ class ReceiptScannerModule(
         val p = pendingPromise
         pendingPromise = null
         pendingOptions = null
+
+        val message = e.message ?: "Failed to initialize ML Kit scanner"
+        val userFriendlyMessage =
+          if (message.contains("GmsNetworkStack") || message.contains("AuthPII")) {
+            "Google Play Services network error. Please check your internet connection, Google account, and device date/time settings."
+          } else {
+            message
+          }
+
         p?.reject(
           "SCANNER_INIT_FAILED",
-          e.message ?: "Failed to initialize ML Kit scanner",
+          userFriendlyMessage,
           e,
         )
       }
@@ -114,7 +123,15 @@ class ReceiptScannerModule(
       return
     }
 
-    val pages = GmsDocumentScanningResult.fromActivityResultIntent(data)?.pages ?: emptyList()
+    val scanningResult =
+      try {
+        GmsDocumentScanningResult.fromActivityResultIntent(data)
+      } catch (e: Exception) {
+        promise.reject("SCAN_RESULT_ERROR", "Failed to parse scanning result: ${e.message}", e)
+        return
+      }
+
+    val pages = scanningResult?.pages ?: emptyList()
 
     executor.execute {
       try {

@@ -48,7 +48,12 @@ data class ScanOptions(
           } else {
             "camera"
           },
-        maxPages = if (map.hasKey("maxPages")) map.getInt("maxPages") else 1,
+        maxPages =
+          if (map.hasKey("maxPages")) {
+            map.getInt("maxPages").coerceAtLeast(1)
+          } else {
+            1
+          },
         quality = if (map.hasKey("quality")) map.getDouble("quality") else 0.82,
         includeExif = if (map.hasKey("includeExif")) map.getBoolean("includeExif") else true,
         includeGpsExif = if (map.hasKey("includeGpsExif")) map.getBoolean("includeGpsExif") else false,
