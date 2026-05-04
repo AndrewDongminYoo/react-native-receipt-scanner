@@ -16,8 +16,6 @@ export type ScanReceiptOptions = {
   includeGpsExif?: boolean;
   ocr?: boolean;
   cropAutoConfirm?: boolean;
-  /** Android-only options forwarded to GmsDocumentScannerOptions. Ignored on iOS. */
-  androidCameraOptions?: AndroidCameraOptions;
 };
 
 export type ReceiptExif = {
@@ -58,5 +56,4 @@ export const DEFAULT_SCAN_OPTIONS: Required<ScanReceiptOptions> = {
   includeGpsExif: false,
   ocr: true,
   cropAutoConfirm: false,
-  androidCameraOptions: {},
 };
