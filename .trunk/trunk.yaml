@@ -7,7 +7,7 @@ cli:
 plugins:
   sources:
     - id: trunk
-      ref: v1.8.0
+      ref: v1.10.0
       uri: https://github.com/trunk-io/plugins
 # Many linters and tools depend on runtimes - configure them here. (https://docs.trunk.io/runtimes)
 runtimes:
@@ -18,6 +18,8 @@ runtimes:
     - python@3.14.4
 # This is the section where you manage your linters. (https://docs.trunk.io/check/configuration)
 lint:
+  disabled:
+    - dotenv-linter
   ignore:
     - linters: [shellcheck]
       paths: [example/android/gradlew]
@@ -26,11 +28,11 @@ lint:
     - linters: [markdownlint]
       paths: [.github/**/*.md]
   enabled:
+    - taplo@0.10.0
     - grype@0.112.0
-    - osv-scanner@2.3.6
+    - osv-scanner@2.3.8
     - actionlint@1.7.12
-    - checkov@3.3.5
-    - dotenv-linter@4.0.0
+    - checkov@3.3.6
     - eslint@9.39.4
     - git-diff-check
     - ktlint@1.8.0
@@ -39,7 +41,7 @@ lint:
     - prettier@3.9.4
     - shellcheck@0.11.0
     - shfmt@3.6.0
-    - trufflehog@3.95.2
+    - trufflehog@3.95.3
     - yamllint@1.38.0
 actions:
   enabled:

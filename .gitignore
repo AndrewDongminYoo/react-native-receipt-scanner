@@ -59,7 +59,9 @@ yarn-error.log
 buck-out/
 \.buckd/
 android/app/libs
-android/keystores/debug.keystore
+!example/android/app/debug.keystore
+example/android/app/release.keystore
+example/android/app/keystore.properties
 
 # Yarn
 .yarn/*
@@ -84,6 +86,3 @@ android/generated
 
 # React Native Nitro Modules
 nitrogen/
-
-# OCR test fixtures — kept local only (real-receipt corpus, not for commit)
-src/__tests__/fixtures/

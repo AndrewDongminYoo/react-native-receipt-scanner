@@ -25,6 +25,7 @@ instancetype
 JAVACMD
 licence
 lobanov
+logcat
 lproj
 metacharacter
 Millis
@@ -43,6 +44,7 @@ postclean
 Pressable
 realdevice
 receiptscanner
+Recog
 rescan
 Rescan
 rgba
@@ -58,3 +60,4 @@ Sublayer
 Subview
 Subviews
 turborepo
+xcassets

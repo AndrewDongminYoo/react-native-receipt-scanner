@@ -4,7 +4,7 @@
   "globalEnv": ["NODE_ENV"],
   "tasks": {
     "build:android": {
-      "env": ["ANDROID_HOME", "ORG_GRADLE_PROJECT_newArchEnabled"],
+      "env": ["ANDROID_HOME", "BUILD_NUMBER", "ORG_GRADLE_PROJECT_newArchEnabled"],
       "inputs": [
         "package.json",
         "android",
@@ -23,6 +23,7 @@
       "env": [
         "RCT_NEW_ARCH_ENABLED",
         "RCT_REMOVE_LEGACY_ARCH",
+        "BUILD_NUMBER",
         "RCT_USE_RN_DEP",
         "RCT_USE_PREBUILT_RNCORE"
       ],

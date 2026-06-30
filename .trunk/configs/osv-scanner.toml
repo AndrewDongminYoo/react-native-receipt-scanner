@@ -1,0 +1,29 @@
+# OSV-Scanner config — https://google.github.io/osv-scanner/configuration/
+#
+# Each [[IgnoredVulns]] block suppresses a single advisory. Re-evaluate every
+# entry on or before its `ignoreUntil` date — remove the block once the
+# affected dependency has been bumped or pinned past the vulnerable range.
+
+# @babel/plugin-transform-modules-systemjs — arbitrary code generation when
+# compiling. Pulled in transitively via @babel/preset-env; we don't emit
+# SystemJS modules from this library (Metro/RN target ESM/CJS only), so the
+# vulnerable code path is unreachable for our build.
+[[IgnoredVulns]]
+id = "GHSA-fv7c-fp4j-7gwp"
+ignoreUntil = 2026-11-10
+reason = "Transitive dep via @babel/preset-env; SystemJS module transform is not exercised by Metro/RN bundling."
+
+# fast-xml-builder 1.1.5 — comment-value regex bypass. Used transitively
+# inside the dependency graph; this package only writes XML, never parses
+# untrusted input, so the bypass has no exploitable surface here.
+[[IgnoredVulns]]
+id = "GHSA-45c6-75p6-83cc"
+ignoreUntil = 2026-11-10
+reason = "Transitive dep; fast-xml-builder writes XML and is never fed untrusted input by this package."
+
+# fast-xml-builder 1.1.5 — attribute-value quote bypass. Same surface as
+# GHSA-45c6-75p6-83cc; not reachable in our usage pattern.
+[[IgnoredVulns]]
+id = "GHSA-5wm8-gmm8-39j9"
+ignoreUntil = 2026-11-10
+reason = "Transitive dep; same non-exploitable surface as GHSA-45c6-75p6-83cc — no untrusted input flows into fast-xml-builder."
