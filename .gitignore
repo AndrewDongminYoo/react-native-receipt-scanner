@@ -84,3 +84,6 @@ android/generated
 
 # React Native Nitro Modules
 nitrogen/
+
+# OCR test fixtures — kept local only (real-receipt corpus, not for commit)
+src/__tests__/fixtures/
