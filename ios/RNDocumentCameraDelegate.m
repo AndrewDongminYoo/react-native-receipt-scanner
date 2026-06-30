@@ -41,25 +41,46 @@
         for (NSInteger i = 0; i < limit; i++) {
             UIImage *page       = [scan imageOfPageAtIndex:i];
             UIImage *normalized = [RNImageProcessor normalizeOrientation:page];
-            CGImageRef cgImage  = normalized.CGImage;
+
+            // OCR + rotation detection runs *before* JPEG encoding so we can
+            // bake the chosen rotation into the output pixels (autoRotate path).
+            NSString *ocrText = nil;
+            NSInteger rotationDegrees = 0;
+            double ocrMeanConfidence = 0.0;
+            if (strongSelf.options.ocr) {
+                NSError *ocrErr = nil;
+                RNOcrResult *ocr =
+                    [RNOcrProcessor recognizeAndDetectRotationInImage:normalized
+                                                    minimumTextHeight:strongSelf.options.minimumTextHeight
+                                                                error:&ocrErr];
+                if (ocr) {
+                    ocrText = ocr.text;
+                    rotationDegrees = ocr.rotationDegrees;
+                    ocrMeanConfidence = ocr.meanConfidence;
+                }
+            }
+
+            CGImageRef sourceCG = normalized.CGImage;
+            CGImageRef rotatedCG = NULL;
+            if (strongSelf.options.autoRotate && rotationDegrees != 0) {
+                rotatedCG = [RNImageProcessor cgImageByRotating:sourceCG
+                                                        degrees:rotationDegrees];
+            }
+            CGImageRef encodeCG = rotatedCG ?: sourceCG;
 
             NSError *err = nil;
             // sourceRef is NULL — VisionKit does not expose the original shutter EXIF.
             // RNImageProcessor synthesizes make/model/dateTime from UIDevice in this case.
             RNProcessedImage *processed =
-                [RNImageProcessor processImage:cgImage
+                [RNImageProcessor processImage:encodeCG
                                        quality:strongSelf.options.quality
                                      sourceRef:NULL
                                   includeExif:strongSelf.options.includeExif
                                includeGpsExif:NO
+                               includeRawExif:strongSelf.options.includeRawExif
                                         error:&err];
+            if (rotatedCG) CGImageRelease(rotatedCG);
             if (!processed) continue;
-
-            NSString *ocrText = nil;
-            if (strongSelf.options.ocr) {
-                NSError *ocrErr = nil;
-                ocrText = [RNOcrProcessor recognizeTextInImage:normalized error:&ocrErr];
-            }
 
             NSMutableDictionary *img = [@{
                 // absoluteString gives a properly percent-encoded file:// URI; manually
@@ -73,7 +94,13 @@
                 @"fileSize":    @(processed.fileSize),
                 @"imageOrigin": @"camera",
             } mutableCopy];
-            if (ocrText)             img[@"ocrText"] = ocrText;
+            if (ocrText) {
+                img[@"ocrText"] = ocrText;
+                // Surface the iOS-computed mean per-line confidence so the JS
+                // layer exposes ocrQuality.confidence on both platforms
+                // Reporting only — not used for routing.
+                img[@"ocrQuality"] = @{@"confidence": @(ocrMeanConfidence)};
+            }
             if (processed.exifData)  img[@"exif"]    = processed.exifData;
             [images addObject:[img copy]];
         }

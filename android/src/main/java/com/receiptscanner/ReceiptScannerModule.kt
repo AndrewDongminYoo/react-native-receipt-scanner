@@ -3,6 +3,7 @@ package com.receiptscanner
 import android.app.Activity
 import android.content.Intent
 import android.net.Uri
+import android.util.Log
 import androidx.core.net.toUri
 import com.facebook.react.bridge.ActivityEventListener
 import com.facebook.react.bridge.Promise
@@ -12,8 +13,24 @@ import com.google.mlkit.vision.documentscanner.GmsDocumentScanner
 import com.google.mlkit.vision.documentscanner.GmsDocumentScannerOptions
 import com.google.mlkit.vision.documentscanner.GmsDocumentScanning
 import com.google.mlkit.vision.documentscanner.GmsDocumentScanningResult
+import java.io.File
 import java.util.concurrent.Executors
 
+/**
+ * Android TurboModule entry for the `ReceiptScanner` package.
+ *
+ * Routes `source: "camera"` to the GMS Document Scanner via
+ * `startIntentSenderForResult`, and `source: "gallery"` to
+ * [CropEditorActivity]. Both paths funnel through [ImageProcessor] for
+ * recompression / EXIF handling and optionally [OcrProcessor] for text
+ * recognition + rotation detection. All heavy work runs on a single-thread
+ * [Executors.newSingleThreadExecutor]; the React thread only holds the
+ * `pendingPromise` while the native UI is on screen.
+ *
+ * @see com.receiptscanner.ImageProcessor
+ * @see com.receiptscanner.OcrProcessor
+ * @see com.receiptscanner.CropEditorActivity
+ */
 class ReceiptScannerModule(
   reactContext: ReactApplicationContext,
 ) : NativeReceiptScannerSpec(reactContext),
@@ -50,7 +67,9 @@ class ReceiptScannerModule(
     if (scanOptions.source == "gallery") {
       @Suppress("DEPRECATION")
       activity.startActivityForResult(
-        Intent(activity, CropEditorActivity::class.java),
+        Intent(activity, CropEditorActivity::class.java).apply {
+          putExtra(CropEditorActivity.EXTRA_MAX_IMAGES, scanOptions.maxPages)
+        },
         GALLERY_REQUEST_CODE,
       )
       return
@@ -60,7 +79,11 @@ class ReceiptScannerModule(
     val scannerOptions =
       GmsDocumentScannerOptions
         .Builder()
-        .setGalleryImportAllowed(true)
+        // Disable the in-camera "import from gallery" affordance: those imports
+        // go through GMS (EXIF stripped, imageOrigin collapses to "unknown").
+        // The explicit source:"gallery" -> CropEditorActivity path is the only
+        // gallery route. See ADR-005.
+        .setGalleryImportAllowed(false)
         .setPageLimit(scanOptions.maxPages)
         .setResultFormats(GmsDocumentScannerOptions.RESULT_FORMAT_JPEG)
         .setScannerMode(GmsDocumentScannerOptions.SCANNER_MODE_FULL)
@@ -145,23 +168,29 @@ class ReceiptScannerModule(
                 scanOptions.quality,
                 scanOptions.includeExif,
                 scanOptions.includeGpsExif,
+                includeRawExif = scanOptions.includeRawExif,
                 synthesizeDeviceInfo = true,
               )
-            val ocrText =
-              ocrProcessor?.let { ocr ->
-                try {
-                  ocr.recognize(Uri.fromFile(processed.file))
-                } catch (_: Exception) {
-                  null
-                }
-              }
+            val ocr = runOcr(ocrProcessor, processed.file)
+            val finalDims =
+              applyAutoRotateIfNeeded(
+                processed.file,
+                ocr?.rotationDegrees ?: 0,
+                scanOptions.autoRotate,
+                scanOptions.quality,
+              ) ?: Pair(processed.width, processed.height)
+            // Write the parsed EXIF back onto the final JPEG (after any
+            // autoRotate re-compress) so server-side file readers see it on
+            // Android too — parity with iOS.
+            processed.exifData?.let { imageProcessor.writeExifToFile(processed.file, it) }
             ResultBuilder.buildImage(
               file = processed.file,
-              width = processed.width,
-              height = processed.height,
-              ocrText = ocrText,
+              width = finalDims.first,
+              height = finalDims.second,
+              ocrText = ocr?.text,
               exifData = processed.exifData,
               imageOrigin = "camera",
+              confidence = ocr?.confidence?.toDouble(),
             )
           }
 
@@ -182,62 +211,116 @@ class ReceiptScannerModule(
     pendingPromise = null
     pendingOptions = null
 
+    Log.i(
+      "ReceiptScanner.Gallery",
+      "handleGalleryResult resultCode=$resultCode dataNull=${data == null}",
+    )
+
     if (resultCode == Activity.RESULT_CANCELED || data == null) {
       promise.resolve(ResultBuilder.buildCancelled())
       return
     }
 
-    val originalUriStr = data.getStringExtra(CropEditorActivity.EXTRA_ORIGINAL_URI)
-    val corners = data.getFloatArrayExtra(CropEditorActivity.EXTRA_CORNERS)
-    if (resultCode != Activity.RESULT_OK || originalUriStr == null || corners == null) {
+    val originalUriStrs = data.getStringArrayExtra(CropEditorActivity.EXTRA_ORIGINAL_URIS)
+    val allCorners = data.getFloatArrayExtra(CropEditorActivity.EXTRA_ALL_CORNERS)
+    Log.i(
+      "ReceiptScanner.Gallery",
+      "handleGalleryResult uris=${originalUriStrs?.size} corners=${allCorners?.size}",
+    )
+    if (resultCode != Activity.RESULT_OK || originalUriStrs.isNullOrEmpty() || allCorners == null) {
       promise.resolve(ResultBuilder.buildCancelled())
       return
     }
 
-    val originalUri = originalUriStr.toUri()
     executor.execute {
+      val ocrProcessor = if (scanOptions.ocr) OcrProcessor(reactApplicationContext) else null
       try {
-        val processed =
-          imageProcessor.processGallery(
-            originalUri,
-            corners,
-            scanOptions.quality,
-            scanOptions.includeExif,
-            scanOptions.includeGpsExif,
-          )
-        val imageOrigin = imageProcessor.inferOrigin(originalUri, processed.exifData)
-
-        val ocrText =
-          if (scanOptions.ocr) {
-            val ocr = OcrProcessor(reactApplicationContext)
-            try {
-              ocr.recognize(Uri.fromFile(processed.file))
-            } catch (_: Exception) {
-              null
-            } finally {
-              ocr.close()
-            }
-          } else {
-            null
+        val imageResults =
+          originalUriStrs.mapIndexed { i, uriStr ->
+            val originalUri = uriStr.toUri()
+            val corners = allCorners.copyOfRange(i * CropEditorActivity.CORNERS_PER_IMAGE, (i + 1) * CropEditorActivity.CORNERS_PER_IMAGE)
+            val processed =
+              imageProcessor.processGallery(
+                originalUri,
+                corners,
+                scanOptions.quality,
+                scanOptions.includeExif,
+                scanOptions.includeGpsExif,
+                includeRawExif = scanOptions.includeRawExif,
+              )
+            val imageOrigin = imageProcessor.inferOrigin(originalUri, processed.exifData)
+            val ocr = runOcr(ocrProcessor, processed.file)
+            val finalDims =
+              applyAutoRotateIfNeeded(
+                processed.file,
+                ocr?.rotationDegrees ?: 0,
+                scanOptions.autoRotate,
+                scanOptions.quality,
+              ) ?: Pair(processed.width, processed.height)
+            // Write the parsed EXIF back onto the final JPEG (after any
+            // autoRotate re-compress) so server-side file readers see it on
+            // Android too — parity with iOS.
+            processed.exifData?.let { imageProcessor.writeExifToFile(processed.file, it) }
+            ResultBuilder.buildImage(
+              file = processed.file,
+              width = finalDims.first,
+              height = finalDims.second,
+              ocrText = ocr?.text,
+              exifData = processed.exifData,
+              imageOrigin = imageOrigin,
+              confidence = ocr?.confidence?.toDouble(),
+            )
           }
 
-        promise.resolve(
-          ResultBuilder.buildSuccess(
-            listOf(
-              ResultBuilder.buildImage(
-                file = processed.file,
-                width = processed.width,
-                height = processed.height,
-                ocrText = ocrText,
-                exifData = processed.exifData,
-                imageOrigin = imageOrigin,
-              ),
-            ),
-          ),
+        promise.resolve(ResultBuilder.buildSuccess(imageResults))
+      } catch (e: OutOfMemoryError) {
+        // OOM is Error, not Exception — convert to reject instead of killing the executor.
+        promise.reject(
+          "OUT_OF_MEMORY",
+          "Image too large to process: ${e.message ?: "out of memory"}",
+          e,
         )
       } catch (e: Exception) {
         promise.reject("PROCESSING_FAILED", e.message ?: "Gallery processing failed", e)
+      } finally {
+        ocrProcessor?.close()
       }
+    }
+  }
+
+  private fun runOcr(
+    processor: OcrProcessor?,
+    file: File,
+  ): OcrProcessor.OcrResult? =
+    processor?.let {
+      try {
+        it.recognizeWithRotationDetection(file)
+      } catch (e: Exception) {
+        Log.w(NAME, "OCR failed for ${file.name}", e)
+        null
+      }
+    }
+
+  /**
+   * When auto-rotate is enabled and OCR detected a non-zero rotation, rotate the
+   * output JPEG file in place and return the new `(width, height)`.
+   *
+   * @return The new pixel dimensions after rotation, or `null` to signal
+   *         "no rotation applied; caller should keep the original dimensions".
+   *         A `null` return also covers rotation failures (logged, non-fatal).
+   */
+  private fun applyAutoRotateIfNeeded(
+    file: File,
+    rotationDegrees: Int,
+    autoRotate: Boolean,
+    quality: Double,
+  ): Pair<Int, Int>? {
+    if (!autoRotate || rotationDegrees == 0) return null
+    return try {
+      imageProcessor.rotateFileInPlace(file, rotationDegrees, quality)
+    } catch (e: Exception) {
+      Log.w(NAME, "Auto-rotate failed for ${file.name}", e)
+      null
     }
   }
 
@@ -250,8 +333,13 @@ class ReceiptScannerModule(
   }
 
   companion object {
+    /** Module identifier exposed to React Native; must match the JS spec name. */
     const val NAME = NativeReceiptScannerSpec.NAME
+
+    /** `requestCode` for [Activity.startIntentSenderForResult] calls into the GMS scanner. */
     private const val SCAN_REQUEST_CODE = 0x9001
+
+    /** `requestCode` for the [CropEditorActivity] (gallery path) round-trip. */
     private const val GALLERY_REQUEST_CODE = 0x9002
   }
 }
