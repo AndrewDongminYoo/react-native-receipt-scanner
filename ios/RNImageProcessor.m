@@ -1,4 +1,5 @@
 #import "RNImageProcessor.h"
+#import "RNQuadGeometry.h"
 #import <UIKit/UIKit.h>
 #import <CoreImage/CoreImage.h>
 #import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
@@ -26,6 +27,7 @@ static CGImagePropertyOrientation RNOrientationFromUIImageOrientation(UIImageOri
                                   sourceRef:(nullable CGImageSourceRef)sourceRef
                                includeExif:(BOOL)includeExif
                             includeGpsExif:(BOOL)includeGpsExif
+                            includeRawExif:(BOOL)includeRawExif
                                      error:(NSError **)error {
     NSString *uuid = [[[NSUUID UUID] UUIDString] substringToIndex:8];
     NSURL *outputURL = [[self cacheDirURL]
@@ -33,12 +35,7 @@ static CGImagePropertyOrientation RNOrientationFromUIImageOrientation(UIImageOri
                                      (long long)([[NSDate date] timeIntervalSince1970] * 1000),
                                      uuid]];
 
-    NSString *uti;
-    if (@available(iOS 14, *)) {
-        uti = UTTypeJPEG.identifier;
-    } else {
-        uti = @"public.jpeg";
-    }
+    NSString *uti = UTTypeJPEG.identifier;
 
     CGImageDestinationRef dest = CGImageDestinationCreateWithURL(
         (__bridge CFURLRef)outputURL,
@@ -109,7 +106,7 @@ static CGImagePropertyOrientation RNOrientationFromUIImageOrientation(UIImageOri
 
     if (includeExif) {
         result.exifData = sourceProps
-            ? [self buildExifDict:sourceProps includeGps:includeGpsExif]
+            ? [self buildExifDict:sourceProps includeGps:includeGpsExif includeRaw:includeRawExif]
             : [self buildDeviceExifDict];
     }
 
@@ -127,7 +124,9 @@ static CGImagePropertyOrientation RNOrientationFromUIImageOrientation(UIImageOri
     };
 }
 
-+ (nullable NSDictionary *)buildExifDict:(NSDictionary *)sourceProps includeGps:(BOOL)includeGps {
++ (nullable NSDictionary *)buildExifDict:(NSDictionary *)sourceProps
+                              includeGps:(BOOL)includeGps
+                              includeRaw:(BOOL)includeRaw {
     NSMutableDictionary *exif = [NSMutableDictionary new];
 
     NSDictionary *exifDict = sourceProps[(NSString *)kCGImagePropertyExifDictionary];
@@ -135,16 +134,75 @@ static CGImagePropertyOrientation RNOrientationFromUIImageOrientation(UIImageOri
     NSDictionary *gpsDict  = sourceProps[(NSString *)kCGImagePropertyGPSDictionary];
 
     // Output pixels are always orientation-normalized; report 1 (Up) to JS callers.
+    // raw.Orientation (when includeRawExif) preserves the original value.
     exif[@"orientation"] = @(kCGImagePropertyOrientationUp);
 
-    NSString *dateTimeOriginal = exifDict[(NSString *)kCGImagePropertyExifDateTimeOriginal];
-    if (dateTimeOriginal) exif[@"dateTimeOriginal"] = dateTimeOriginal;
+    // ── Timestamps ──
+    NSString *dateTimeOriginal  = exifDict[(NSString *)kCGImagePropertyExifDateTimeOriginal];
+    NSString *dateTimeDigitized = exifDict[(NSString *)kCGImagePropertyExifDateTimeDigitized];
+    NSString *dateTime          = tiffDict[(NSString *)kCGImagePropertyTIFFDateTime];
+    if (dateTimeOriginal)  exif[@"dateTimeOriginal"]  = dateTimeOriginal;
+    if (dateTimeDigitized) exif[@"dateTimeDigitized"] = dateTimeDigitized;
+    if (dateTime)          exif[@"dateTime"]          = dateTime;
 
+    // ── Device + software ──
     NSString *make  = tiffDict[(NSString *)kCGImagePropertyTIFFMake];
     NSString *model = tiffDict[(NSString *)kCGImagePropertyTIFFModel];
     if (make)  exif[@"make"]  = make;
     if (model) exif[@"model"] = model;
 
+    // TIFF Software tag. iOS camera apps populate this with the OS version
+    // (e.g. "17.0", "26.4.2"); Android camera apps may write a vendor / firmware
+    // identifier (e.g. "F741NKSS3CZCS" on Galaxy Z Flip6). Editors and generators
+    // write their own name. Forwarded as-is so the consumer can apply value-based
+    // fraud rules on top of imageOrigin.
+    NSString *software = tiffDict[(NSString *)kCGImagePropertyTIFFSoftware];
+    if (software) exif[@"software"] = software;
+
+    // ── Camera settings (numeric fields normalized to a single number) ──
+    NSNumber *exposureTime = exifDict[(NSString *)kCGImagePropertyExifExposureTime];
+    NSNumber *fNumber      = exifDict[(NSString *)kCGImagePropertyExifFNumber];
+    NSNumber *focalLength  = exifDict[(NSString *)kCGImagePropertyExifFocalLength];
+    NSNumber *flash        = exifDict[(NSString *)kCGImagePropertyExifFlash];
+    NSNumber *whiteBalance = exifDict[(NSString *)kCGImagePropertyExifWhiteBalance];
+    NSNumber *exposureMode    = exifDict[(NSString *)kCGImagePropertyExifExposureMode];
+    NSNumber *exposureProgram = exifDict[(NSString *)kCGImagePropertyExifExposureProgram];
+    NSNumber *meteringMode    = exifDict[(NSString *)kCGImagePropertyExifMeteringMode];
+    NSNumber *colorSpace      = exifDict[(NSString *)kCGImagePropertyExifColorSpace];
+    NSNumber *lightSource     = exifDict[(NSString *)kCGImagePropertyExifLightSource];
+    NSString *exifVersion     = exifDict[(NSString *)kCGImagePropertyExifVersion];
+
+    if (exposureTime)    exif[@"exposureTime"]    = exposureTime;
+    if (fNumber)         exif[@"fNumber"]         = fNumber;
+    if (focalLength)     exif[@"focalLength"]     = focalLength;
+    if (flash)           exif[@"flash"]           = flash;
+    if (whiteBalance)    exif[@"whiteBalance"]    = whiteBalance;
+    if (exposureMode)    exif[@"exposureMode"]    = exposureMode;
+    if (exposureProgram) exif[@"exposureProgram"] = exposureProgram;
+    if (meteringMode)    exif[@"meteringMode"]    = meteringMode;
+    if (colorSpace)      exif[@"colorSpace"]      = colorSpace;
+    if (lightSource)     exif[@"lightSource"]     = lightSource;
+
+    // ISOSpeedRatings is an NSArray on iOS (e.g. @[@50]) but Android exposes a
+    // single string. Normalize to a single number for cross-platform consumers.
+    id isoRaw = exifDict[(NSString *)kCGImagePropertyExifISOSpeedRatings];
+    if ([isoRaw isKindOfClass:[NSArray class]] && [(NSArray *)isoRaw count] > 0) {
+        exif[@"iso"] = [(NSArray *)isoRaw firstObject];
+    } else if ([isoRaw isKindOfClass:[NSNumber class]]) {
+        exif[@"iso"] = isoRaw;
+    }
+
+    // ExifVersion comes as either NSString ("0220") or NSArray of digits — coerce to string.
+    if ([exifVersion isKindOfClass:[NSString class]]) {
+        exif[@"exifVersion"] = exifVersion;
+    } else if ([(id)exifVersion isKindOfClass:[NSArray class]]) {
+        NSArray *parts = (NSArray *)exifVersion;
+        NSMutableString *s = [NSMutableString new];
+        for (id p in parts) [s appendFormat:@"%@", p];
+        if (s.length > 0) exif[@"exifVersion"] = [s copy];
+    }
+
+    // ── GPS (white-list shape) ──
     if (includeGps && gpsDict) {
         NSNumber *lat = gpsDict[(NSString *)kCGImagePropertyGPSLatitude];
         NSNumber *lon = gpsDict[(NSString *)kCGImagePropertyGPSLongitude];
@@ -153,11 +211,80 @@ static CGImagePropertyOrientation RNOrientationFromUIImageOrientation(UIImageOri
         if (lat && lon) {
             double latitude  = [lat doubleValue] * ([latRef isEqualToString:@"S"] ? -1.0 : 1.0);
             double longitude = [lon doubleValue] * ([lonRef isEqualToString:@"W"] ? -1.0 : 1.0);
-            exif[@"gps"] = @{@"latitude": @(latitude), @"longitude": @(longitude)};
+            NSMutableDictionary *gps = [@{@"latitude": @(latitude), @"longitude": @(longitude)} mutableCopy];
+
+            NSNumber *altitude = gpsDict[(NSString *)kCGImagePropertyGPSAltitude];
+            NSNumber *altRef   = gpsDict[(NSString *)kCGImagePropertyGPSAltitudeRef];
+            if (altitude) gps[@"altitude"] = [altRef intValue] == 1
+                ? @(-[altitude doubleValue]) : altitude;
+
+            NSString *timestamp = gpsDict[(NSString *)kCGImagePropertyGPSTimeStamp];
+            if (timestamp) gps[@"timestamp"] = timestamp;
+
+            NSNumber *speed = gpsDict[(NSString *)kCGImagePropertyGPSSpeed];
+            if (speed) gps[@"speed"] = speed;
+
+            NSNumber *heading = gpsDict[(NSString *)kCGImagePropertyGPSImgDirection]
+                ?: gpsDict[(NSString *)kCGImagePropertyGPSDestBearing];
+            if (heading) gps[@"heading"] = heading;
+
+            exif[@"gps"] = [gps copy];
         }
     }
 
+    // ── Raw passthrough (flat map; binary fields excluded) ──
+    if (includeRaw) {
+        NSDictionary *raw = [self flattenRaw:sourceProps includeGps:includeGps];
+        if (raw.count > 0) exif[@"raw"] = raw;
+    }
+
     return exif.count > 0 ? [exif copy] : nil;
+}
+
+/** Build the raw EXIF flat map. Keys are standard EXIF tag names (Make, Software,
+ *  FNumber, GPSLatitude, …). Binary fields and bridge-incompatible types are skipped.
+ *  GPS keys are excluded entirely when includeGps is NO. */
++ (NSDictionary *)flattenRaw:(NSDictionary *)sourceProps includeGps:(BOOL)includeGps {
+    NSMutableDictionary *raw = [NSMutableDictionary new];
+    NSDictionary *tiff = sourceProps[(NSString *)kCGImagePropertyTIFFDictionary];
+    NSDictionary *exif = sourceProps[(NSString *)kCGImagePropertyExifDictionary];
+    NSDictionary *gps  = sourceProps[(NSString *)kCGImagePropertyGPSDictionary];
+
+    // Tag names to skip — large binary blobs that bloat the IPC payload.
+    static NSSet<NSString *> *deny;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        deny = [NSSet setWithArray:@[
+            @"MakerNote",
+            @"UserComment",
+            @"ComponentsConfiguration",
+            @"FileSource",
+            @"SceneType",
+            @"InteroperabilityIndex",
+        ]];
+    });
+
+    void (^addFrom)(NSDictionary *, NSString *) = ^(NSDictionary *src, NSString *prefix) {
+        for (NSString *key in src) {
+            if ([deny containsObject:key]) continue;
+            id value = src[key];
+            // Skip values the bridge can't marshall cleanly (binary, dictionaries).
+            if ([value isKindOfClass:[NSData class]]) continue;
+            if ([value isKindOfClass:[NSDictionary class]]) continue;
+            if (![value isKindOfClass:[NSString class]] &&
+                ![value isKindOfClass:[NSNumber class]] &&
+                ![value isKindOfClass:[NSArray class]]) continue;
+            NSString *outKey = (prefix && ![key hasPrefix:prefix])
+                ? [prefix stringByAppendingString:key]
+                : key;
+            raw[outKey] = value;
+        }
+    };
+    if (tiff) addFrom(tiff, nil);
+    if (exif) addFrom(exif, nil);
+    if (includeGps && gps) addFrom(gps, @"GPS");
+
+    return [raw copy];
 }
 
 + (nullable CGImageRef)perspectiveCorrectedCGImage:(UIImage *)image
@@ -175,6 +302,20 @@ static CGImagePropertyOrientation RNOrientationFromUIImageOrientation(UIImageOri
     if (ext.origin.x != 0 || ext.origin.y != 0) {
         ciInput = [ciInput imageByApplyingTransform:
             CGAffineTransformMakeTranslation(-ext.origin.x, -ext.origin.y)];
+    }
+    if ([RNQuadGeometry isDistorted:corners]) {
+        // Distorted quad → crop the axis-aligned bbox in ciInput space, no warp.
+        CGFloat minX = MIN(MIN(tl.x, tr.x), MIN(br.x, bl.x));
+        CGFloat maxX = MAX(MAX(tl.x, tr.x), MAX(br.x, bl.x));
+        CGFloat minY = MIN(MIN(tl.y, tr.y), MIN(br.y, bl.y));
+        CGFloat maxY = MAX(MAX(tl.y, tr.y), MAX(br.y, bl.y));
+        CGRect bbox = CGRectIntersection(ciInput.extent,
+                                         CGRectMake(minX, minY, maxX - minX, maxY - minY));
+        if (CGRectIsNull(bbox) || bbox.size.width < 1 || bbox.size.height < 1) return NULL;
+        CIImage *croppedCI = [[ciInput imageByCroppingToRect:bbox]
+            imageByApplyingTransform:CGAffineTransformMakeTranslation(-bbox.origin.x, -bbox.origin.y)];
+        CIContext *bboxCtx = [CIContext context];
+        return [bboxCtx createCGImage:croppedCI fromRect:croppedCI.extent];
     }
     CIFilter *filter = [CIFilter filterWithName:@"CIPerspectiveCorrection"];
     [filter setValue:ciInput              forKey:kCIInputImageKey];
@@ -198,6 +339,34 @@ static CGImagePropertyOrientation RNOrientationFromUIImageOrientation(UIImageOri
     return [renderer imageWithActions:^(UIGraphicsImageRendererContext *ctx) {
         [image drawInRect:CGRectMake(0, 0, image.size.width, image.size.height)];
     }];
+}
+
++ (nullable CGImageRef)cgImageByRotating:(CGImageRef)cgImage
+                                 degrees:(NSInteger)degrees
+    CF_RETURNS_RETAINED {
+    if (degrees == 0) {
+        CGImageRetain(cgImage);
+        return cgImage;
+    }
+    CGFloat radians;
+    switch (degrees) {
+        case 90:  radians = M_PI_2;  break;
+        case 180: radians = M_PI;    break;
+        case 270: radians = -M_PI_2; break;
+        default:
+            CGImageRetain(cgImage);
+            return cgImage;
+    }
+    CIImage *ci = [CIImage imageWithCGImage:cgImage];
+    CIImage *rotated = [ci imageByApplyingTransform:CGAffineTransformMakeRotation(radians)];
+    CGRect ext = rotated.extent;
+    if (ext.origin.x != 0 || ext.origin.y != 0) {
+        rotated = [rotated imageByApplyingTransform:
+            CGAffineTransformMakeTranslation(-ext.origin.x, -ext.origin.y)];
+    }
+    // Allocate a fresh CIContext per call so concurrent callers (maxPages > 1) are safe.
+    CIContext *ctx = [CIContext context];
+    return [ctx createCGImage:rotated fromRect:rotated.extent];
 }
 
 + (void)deletePreviousSessionFiles {

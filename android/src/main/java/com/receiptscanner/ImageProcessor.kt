@@ -8,28 +8,92 @@ import android.graphics.Matrix
 import android.graphics.Paint
 import android.net.Uri
 import android.os.Build
+import android.os.ParcelFileDescriptor
 import android.provider.MediaStore
+import android.util.Log
 import androidx.core.graphics.createBitmap
 import androidx.exifinterface.media.ExifInterface
 import java.io.File
 import java.io.FileOutputStream
+import java.io.IOException
+import java.io.InputStream
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import kotlin.math.sqrt
 
+/**
+ * Image post-processing utility used by both the camera and gallery paths.
+ *
+ * Responsibilities:
+ *  - Decode the source URI (content scheme or file path).
+ *  - Recompress to JPEG at the caller's quality target.
+ *  - Read EXIF metadata (white-list + optional raw passthrough) and normalize
+ *    orientation in the output.
+ *  - Apply perspective correction from a four-corner quad (gallery path).
+ *  - Rotate the output file in place when [OcrProcessor] detects rotated content.
+ *  - Heuristically infer [imageOrigin][ResultBuilder.buildImage] from
+ *    `MediaStore` + EXIF signals.
+ *
+ * All public methods write outputs to `context.cacheDir` using the
+ * `receipt_*.jpg` naming scheme — see [deletePreviousSessionFiles] for the
+ * temp file lifecycle.
+ *
+ * @param context Used for `cacheDir` and `contentResolver` access. The
+ *                `ReactApplicationContext` is fine — we don't outlive it.
+ */
 class ImageProcessor(
   private val context: Context,
 ) {
+  /**
+   * Normalised EXIF white-list extracted from the source image. Values map
+   * 1:1 to `ReceiptExif` in `src/types.ts`.
+   *
+   * `orientation` is the *output* orientation (always [ExifInterface.ORIENTATION_NORMAL]
+   * after processing); the original source value is forwarded under [raw]
+   * when raw passthrough is enabled.
+   */
   data class ExifData(
     val orientation: Int?,
+    val dateTime: String?,
     val dateTimeOriginal: String?,
+    val dateTimeDigitized: String?,
     val make: String?,
     val model: String?,
+    val software: String?,
+    val exposureTime: Double?,
+    val fNumber: Double?,
+    val iso: Int?,
+    val focalLength: Double?,
+    val flash: Int?,
+    val whiteBalance: Int?,
+    val exposureMode: Int?,
+    val exposureProgram: Int?,
+    val meteringMode: Int?,
+    val colorSpace: Int?,
+    val lightSource: Int?,
+    val exifVersion: String?,
     val gpsLatitude: Double?,
     val gpsLongitude: Double?,
+    val gpsAltitude: Double?,
+    val gpsTimestamp: String?,
+    val gpsSpeed: Double?,
+    val gpsHeading: Double?,
+    /** Flat raw EXIF map (when includeRawExif is true). Keys are EXIF tag names. */
+    val raw: Map<String, String>?,
   )
 
+  /**
+   * Result of [process] / [processGallery]. Owns a JPEG written to
+   * `context.cacheDir`; callers do not need to delete it explicitly —
+   * [deletePreviousSessionFiles] sweeps the directory at the start of
+   * the next scan.
+   *
+   * @property file The cached JPEG file.
+   * @property width Pixel width of the encoded image.
+   * @property height Pixel height of the encoded image.
+   * @property exifData Parsed EXIF, or `null` when `includeExif` was `false`.
+   */
   data class ProcessedImage(
     val file: File,
     val width: Int,
@@ -37,11 +101,29 @@ class ImageProcessor(
     val exifData: ExifData?,
   )
 
+  /**
+   * Processes a camera-path image — decodes [sourceUri], recompresses at
+   * [quality], and optionally extracts EXIF.
+   *
+   * @param sourceUri URI returned by the GMS Document Scanner (content://
+   *                  or file://).
+   * @param quality JPEG quality in `[0.0, 1.0]`, scaled to `1..100` for
+   *                [Bitmap.compress].
+   * @param includeExif When `true`, populates [ProcessedImage.exifData].
+   * @param includeGpsExif When `true`, includes the GPS dictionary.
+   * @param includeRawExif When `true`, attaches the flat raw EXIF map.
+   * @param synthesizeDeviceInfo When `true`, falls back to [Build.MANUFACTURER]
+   *        / [Build.MODEL] / current time when the source EXIF is empty —
+   *        appropriate for camera captures (GMS strips original EXIF), not
+   *        for gallery imports.
+   * @return The cached [ProcessedImage]. Throws on decode / write failure.
+   */
   fun process(
     sourceUri: Uri,
     quality: Double,
     includeExif: Boolean,
     includeGpsExif: Boolean,
+    includeRawExif: Boolean = false,
     synthesizeDeviceInfo: Boolean = false,
   ): ProcessedImage {
     val bitmap = decodeBitmap(sourceUri)
@@ -58,9 +140,54 @@ class ImageProcessor(
     bitmap.recycle()
 
     val exifData =
-      if (includeExif) readExif(sourceUri, includeGpsExif, synthesizeDeviceInfo) else null
+      if (includeExif) {
+        readExif(sourceUri, includeGpsExif, includeRawExif, synthesizeDeviceInfo)
+      } else {
+        null
+      }
 
     return ProcessedImage(outFile, width, height, exifData)
+  }
+
+  /**
+   * Writes the structured EXIF tags from [exifData] onto the output JPEG at
+   * [file]. Output pixels are always upright, so orientation is
+   * written as `NORMAL` — matching the iOS output-EXIF invariant. Null fields
+   * are skipped; the flat `raw` map and GPS speed/heading/timestamp are not
+   * written back (v1 scope). GPS lat/lng/altitude are written only when present
+   * (already gated by `includeGpsExif` at read time).
+   *
+   * MUST run after the final JPEG compression (i.e. after any
+   * [rotateFileInPlace]); a later re-compress would strip these tags.
+   */
+  fun writeExifToFile(
+    file: File,
+    exifData: ExifData,
+  ) {
+    try {
+      val exif = ExifInterface(file.absolutePath)
+      exif.setAttribute(
+        ExifInterface.TAG_ORIENTATION,
+        ExifInterface.ORIENTATION_NORMAL.toString(),
+      )
+      exifData.make?.let { exif.setAttribute(ExifInterface.TAG_MAKE, it) }
+      exifData.model?.let { exif.setAttribute(ExifInterface.TAG_MODEL, it) }
+      exifData.software?.let { exif.setAttribute(ExifInterface.TAG_SOFTWARE, it) }
+      exifData.dateTime?.let { exif.setAttribute(ExifInterface.TAG_DATETIME, it) }
+      exifData.dateTimeOriginal?.let {
+        exif.setAttribute(ExifInterface.TAG_DATETIME_ORIGINAL, it)
+      }
+      exifData.dateTimeDigitized?.let {
+        exif.setAttribute(ExifInterface.TAG_DATETIME_DIGITIZED, it)
+      }
+      val lat = exifData.gpsLatitude
+      val lng = exifData.gpsLongitude
+      if (lat != null && lng != null) exif.setLatLong(lat, lng)
+      exifData.gpsAltitude?.let { exif.setAltitude(it) }
+      exif.saveAttributes()
+    } catch (e: Exception) {
+      Log.w(LOG_TAG, "Failed to write EXIF to ${file.name}: ${e.message}")
+    }
   }
 
   private fun decodeBitmap(uri: Uri): Bitmap {
@@ -73,18 +200,49 @@ class ImageProcessor(
     return requireNotNull(BitmapFactory.decodeFile(path)) { "Failed to decode image: $path" }
   }
 
+  private fun emptyExifData(): ExifData =
+    ExifData(
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+    )
+
   private fun readExif(
     sourceUri: Uri,
     includeGps: Boolean,
+    includeRawExif: Boolean,
     synthesizeDeviceInfo: Boolean,
   ): ExifData {
     val exif =
       if (sourceUri.scheme == "content") {
         context.contentResolver.openInputStream(sourceUri)?.use { stream ->
           ExifInterface(stream)
-        } ?: return ExifData(null, null, null, null, null, null)
+        } ?: return emptyExifData()
       } else {
-        val path = sourceUri.path ?: return ExifData(null, null, null, null, null, null)
+        val path = sourceUri.path ?: return emptyExifData()
         ExifInterface(path)
       }
 
@@ -119,7 +277,7 @@ class ImageProcessor(
     val model =
       exif.getAttribute(ExifInterface.TAG_MODEL)
         ?: if (synthesizeDeviceInfo) Build.MODEL else null
-    val dateTime =
+    val dateTimeOriginal =
       exif.getAttribute(ExifInterface.TAG_DATETIME_ORIGINAL)
         ?: if (synthesizeDeviceInfo) {
           SimpleDateFormat(
@@ -130,14 +288,98 @@ class ImageProcessor(
           null
         }
 
+    val software = exif.getAttribute(ExifInterface.TAG_SOFTWARE)
+
     return ExifData(
       orientation = rawOrientation.takeIf { it != ExifInterface.ORIENTATION_UNDEFINED },
-      dateTimeOriginal = dateTime,
+      dateTime = exif.getAttribute(ExifInterface.TAG_DATETIME),
+      dateTimeOriginal = dateTimeOriginal,
+      dateTimeDigitized = exif.getAttribute(ExifInterface.TAG_DATETIME_DIGITIZED),
       make = make,
       model = model,
+      software = software,
+      exposureTime = exif.getAttributeDoubleOrNull(ExifInterface.TAG_EXPOSURE_TIME),
+      fNumber = exif.getAttributeDoubleOrNull(ExifInterface.TAG_F_NUMBER),
+      iso =
+        exif.getAttributeIntOrNull(ExifInterface.TAG_ISO_SPEED)
+          ?: exif.getAttributeIntOrNull(ExifInterface.TAG_PHOTOGRAPHIC_SENSITIVITY),
+      focalLength = exif.getAttributeDoubleOrNull(ExifInterface.TAG_FOCAL_LENGTH),
+      flash = exif.getAttributeIntOrNull(ExifInterface.TAG_FLASH),
+      whiteBalance = exif.getAttributeIntOrNull(ExifInterface.TAG_WHITE_BALANCE),
+      exposureMode = exif.getAttributeIntOrNull(ExifInterface.TAG_EXPOSURE_MODE),
+      exposureProgram = exif.getAttributeIntOrNull(ExifInterface.TAG_EXPOSURE_PROGRAM),
+      meteringMode = exif.getAttributeIntOrNull(ExifInterface.TAG_METERING_MODE),
+      colorSpace = exif.getAttributeIntOrNull(ExifInterface.TAG_COLOR_SPACE),
+      lightSource = exif.getAttributeIntOrNull(ExifInterface.TAG_LIGHT_SOURCE),
+      exifVersion = exif.getAttribute(ExifInterface.TAG_EXIF_VERSION),
       gpsLatitude = gps?.first,
       gpsLongitude = gps?.second,
+      gpsAltitude =
+        if (includeGps) {
+          exif.getAltitudeOrNull()
+        } else {
+          null
+        },
+      gpsTimestamp =
+        if (includeGps) {
+          exif.getAttribute(ExifInterface.TAG_GPS_TIMESTAMP)
+        } else {
+          null
+        },
+      gpsSpeed =
+        if (includeGps) {
+          exif.getAttributeDoubleOrNull(ExifInterface.TAG_GPS_SPEED)
+        } else {
+          null
+        },
+      gpsHeading =
+        if (includeGps) {
+          exif.getAttributeDoubleOrNull(ExifInterface.TAG_GPS_IMG_DIRECTION)
+            ?: exif.getAttributeDoubleOrNull(ExifInterface.TAG_GPS_DEST_BEARING)
+        } else {
+          null
+        },
+      raw = if (includeRawExif) buildRawExifMap(exif, includeGps) else null,
     )
+  }
+
+  private fun ExifInterface.getAttributeDoubleOrNull(tag: String): Double? {
+    val sentinel = Double.NaN
+    val value = this.getAttributeDouble(tag, sentinel)
+    return if (value.isNaN()) null else value
+  }
+
+  private fun ExifInterface.getAttributeIntOrNull(tag: String): Int? {
+    val sentinel = Int.MIN_VALUE
+    val value = this.getAttributeInt(tag, sentinel)
+    return if (value == sentinel) null else value
+  }
+
+  private fun ExifInterface.getAltitudeOrNull(): Double? {
+    val sentinel = Double.NaN
+    val value = this.getAltitude(sentinel)
+    return if (value.isNaN()) null else value
+  }
+
+  /**
+   * Build a flat map of every ExifInterface TAG_* attribute that has a non-null value.
+   * Keys are the standard EXIF tag names (e.g. "Make", "FNumber", "GPSLatitude"); values
+   * are forwarded as the raw string ExifInterface returns. Binary fields (Thumbnail*,
+   * MakerNote, UserComment) and bridge-incompatible types are excluded. GPS-prefixed
+   * tags are skipped entirely when [includeGps] is false.
+   */
+  private fun buildRawExifMap(
+    exif: ExifInterface,
+    includeGps: Boolean,
+  ): Map<String, String> {
+    val raw = LinkedHashMap<String, String>(rawTagNames.size)
+    for (tag in rawTagNames) {
+      if (!includeGps && tag.startsWith("GPS")) continue
+      if (rawTagDenyList.contains(tag)) continue
+      val value = exif.getAttribute(tag) ?: continue
+      raw[tag] = value
+    }
+    return raw
   }
 
   /**
@@ -151,13 +393,21 @@ class ImageProcessor(
     quality: Double,
     includeExif: Boolean,
     includeGpsExif: Boolean,
+    includeRawExif: Boolean = false,
   ): ProcessedImage {
     val exifOrientation = readExifOrientation(originalUri)
-    val raw = decodeBitmap(originalUri)
+    val (raw, sample) = decodeBitmapSampled(context, originalUri, GALLERY_MAX_DIM)
     val oriented = applyExifRotation(raw, exifOrientation)
-    // raw is recycled inside applyExifRotation if a new bitmap was produced;
-    // if no rotation happened, oriented === raw and we recycle via oriented.
-    val corrected = perspectiveCorrectedBitmap(oriented, corners)
+    // corners arrive in full-resolution oriented space (CropEditorActivity's
+    // originalWidth/Height); scale by 1/sample to match the decoded bitmap.
+    val scaledCorners =
+      if (sample == 1) {
+        corners
+      } else {
+        val factor = 1f / sample.toFloat()
+        FloatArray(corners.size) { i -> corners[i] * factor }
+      }
+    val corrected = perspectiveCorrectedBitmap(oriented, scaledCorners)
     oriented.recycle()
 
     val width = corrected.width
@@ -177,7 +427,7 @@ class ImageProcessor(
     // kCGImagePropertyOrientationUp (1) in the output.
     val exifData =
       if (includeExif) {
-        readExif(originalUri, includeGpsExif, false)
+        readExif(originalUri, includeGpsExif, includeRawExif, false)
           .copy(orientation = ExifInterface.ORIENTATION_NORMAL)
       } else {
         null
@@ -227,6 +477,40 @@ class ImageProcessor(
       ?.forEach { it.delete() }
   }
 
+  /**
+   * Rotate the JPEG file in place by [degrees] (0 / 90 / 180 / 270 CCW from
+   * the autoRotate detector) and return the new (width, height). The file is
+   * re-encoded at [quality]; EXIF is not written by this path on Android
+   * (see ADR-005), consistent with the rest of `ImageProcessor`.
+   */
+  fun rotateFileInPlace(
+    file: File,
+    degrees: Int,
+    quality: Double,
+  ): Pair<Int, Int> {
+    if (degrees == 0) {
+      val opts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+      BitmapFactory.decodeFile(file.absolutePath, opts)
+      return Pair(opts.outWidth, opts.outHeight)
+    }
+    val src = BitmapFactory.decodeFile(file.absolutePath) ?: return Pair(0, 0)
+    val matrix = android.graphics.Matrix().apply { postRotate(degrees.toFloat()) }
+    val rotated =
+      Bitmap.createBitmap(src, 0, 0, src.width, src.height, matrix, true)
+    if (rotated !== src) src.recycle()
+    FileOutputStream(file).use { out ->
+      rotated.compress(
+        Bitmap.CompressFormat.JPEG,
+        (quality * 100).toInt().coerceIn(1, 100),
+        out,
+      )
+    }
+    val w = rotated.width
+    val h = rotated.height
+    rotated.recycle()
+    return Pair(w, h)
+  }
+
   // Reads EXIF TAG_ORIENTATION without decoding the full bitmap.
   private fun readExifOrientation(uri: Uri): Int =
     try {
@@ -249,6 +533,9 @@ class ImageProcessor(
     corners: FloatArray,
   ): Bitmap {
     require(corners.size == 8) { "corners must have 8 elements" }
+    if (QuadGeometry.isDistorted(corners)) {
+      return boundingBoxCrop(bitmap, corners)
+    }
     val tlX = corners[0]
     val tlY = corners[1]
     val trX = corners[2]
@@ -294,7 +581,152 @@ class ImageProcessor(
     return output
   }
 
+  // Distorted quad → crop the axis-aligned bounding box of the corners instead of
+  // warping. Undistorted, with some extra background. See quad-distortion-backstop.md.
+  private fun boundingBoxCrop(
+    bitmap: Bitmap,
+    corners: FloatArray,
+  ): Bitmap {
+    val xs = floatArrayOf(corners[0], corners[2], corners[4], corners[6])
+    val ys = floatArrayOf(corners[1], corners[3], corners[5], corners[7])
+    val left = xs.min().toInt().coerceIn(0, bitmap.width - 1)
+    val top = ys.min().toInt().coerceIn(0, bitmap.height - 1)
+    val right = xs.max().toInt().coerceIn(left + 1, bitmap.width)
+    val bottom = ys.max().toInt().coerceIn(top + 1, bitmap.height)
+    val cropped = Bitmap.createBitmap(bitmap, left, top, right - left, bottom - top)
+    // createBitmap returns the SAME instance when an immutable source is cropped in full
+    // (left=top=0, full width/height). perspectiveCorrectedBitmap's contract is that the
+    // return is always a new bitmap the caller can recycle independently of [bitmap], so
+    // copy in that case — otherwise the caller's oriented.recycle() also recycles this.
+    return if (cropped === bitmap) {
+      cropped.copy(bitmap.config ?: Bitmap.Config.ARGB_8888, false)
+    } else {
+      cropped
+    }
+  }
+
   companion object {
+    private const val LOG_TAG = "ReceiptScanner.Image"
+
+    /**
+     * Longer-side cap (in pixels) used by [processGallery]'s sampled decode.
+     * At ARGB_8888 the bitmap itself is ≤ 36MB; [applyExifRotation] briefly
+     * doubles that. Lower than 4096 because applyExifRotation's transient peak
+     * (~72MB) is still risky on 2GB-RAM devices; raising it costs visible OCR
+     * accuracy ceiling on Korean receipts only above ~3000 px.
+     */
+    private const val GALLERY_MAX_DIM = 3072
+
+    /** EXIF tag values whose payload is binary or large enough to bloat the IPC bridge. */
+    private val rawTagDenyList: Set<String> =
+      setOf(
+        // Thumbnail blob and its inner offsets/lengths
+        "JPEGInterchangeFormat",
+        "JPEGInterchangeFormatLength",
+        "ThumbnailImageWidth",
+        "ThumbnailImageLength",
+        "ThumbnailImage",
+        // Free-form binary fields
+        "MakerNote",
+        "UserComment",
+      )
+
+    /**
+     * All standard EXIF tag *names* exposed by ExifInterface as TAG_* string constants.
+     * Resolved once via reflection on the class so we don't hand-maintain the list.
+     */
+    private val rawTagNames: List<String> by lazy {
+      ExifInterface::class
+        .java
+        .declaredFields
+        .asSequence()
+        .filter { f ->
+          f.name.startsWith("TAG_") &&
+            java.lang.reflect.Modifier
+              .isStatic(f.modifiers) &&
+            f.type == String::class.java
+        }.mapNotNull { f ->
+          try {
+            f.isAccessible = true
+            f.get(null) as? String
+          } catch (_: Exception) {
+            null
+          }
+        }.toList()
+    }
+
+    /**
+     * Decode [uri] with `inSampleSize` chosen so the result's longer side fits within [maxDim].
+     * Returns the bitmap plus the power-of-two `inSampleSize` applied. Coordinates computed
+     * against the full-resolution source must be scaled by `1 / sample` to map into the
+     * decoded bitmap's space.
+     *
+     * Modern phone cameras emit 50-200MP JPEGs; full-resolution decode allocates 200-800MB
+     * ARGB_8888, and [applyExifRotation] allocates the same again for any non-NORMAL EXIF
+     * orientation. Capping the longer side keeps peak memory bounded against OOM/ANR on
+     * batch gallery scans.
+     */
+    internal fun decodeBitmapSampled(
+      context: Context,
+      uri: Uri,
+      maxDim: Int,
+    ): Pair<Bitmap, Int> {
+      val boundsOpts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+      if (uri.scheme == "content") {
+        openContentStream(context, uri).use {
+          BitmapFactory.decodeStream(it, null, boundsOpts)
+        }
+      } else {
+        val path = requireNotNull(uri.path) { "URI has no path: $uri" }
+        BitmapFactory.decodeFile(path, boundsOpts)
+      }
+
+      var sample = 1
+      var w = boundsOpts.outWidth
+      var h = boundsOpts.outHeight
+      while (w > maxDim || h > maxDim) {
+        sample *= 2
+        w /= 2
+        h /= 2
+      }
+
+      val decodeOpts = BitmapFactory.Options().apply { inSampleSize = sample }
+      val bitmap =
+        if (uri.scheme == "content") {
+          openContentStream(context, uri).use {
+            BitmapFactory.decodeStream(it, null, decodeOpts)
+          }
+        } else {
+          BitmapFactory.decodeFile(requireNotNull(uri.path), decodeOpts)
+        } ?: throw IllegalArgumentException("Failed to decode image: $uri")
+      return Pair(bitmap, sample)
+    }
+
+    /**
+     * Open a `content://` URI as an [InputStream], falling back to
+     * [ContentResolver.openFileDescriptor] when `openInputStream` returns null.
+     *
+     * The Photo Picker provider (`com.android.providers.media.photopicker`) is
+     * known to graceful-null on `openInputStream` for some URIs even when the
+     * underlying file is readable through the FD-based path. Trying both before
+     * giving up avoids a silent `RESULT_CANCELED` cycle in the gallery flow.
+     */
+    private fun openContentStream(
+      context: Context,
+      uri: Uri,
+    ): InputStream {
+      val cr = context.contentResolver
+      cr.openInputStream(uri)?.let { return it }
+      Log.w(
+        LOG_TAG,
+        "openInputStream returned null; falling back to openFileDescriptor uri=$uri",
+      )
+      val pfd =
+        cr.openFileDescriptor(uri, "r")
+          ?: throw IOException("Cannot open content URI: $uri (mimeType=${cr.getType(uri)})")
+      return ParcelFileDescriptor.AutoCloseInputStream(pfd)
+    }
+
     /**
      * Rotates [bitmap] according to [exifOrientation] (an ExifInterface.ORIENTATION_* constant).
      * Recycles [bitmap] and returns the rotated copy if rotation is needed; otherwise returns
