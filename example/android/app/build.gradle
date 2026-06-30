@@ -2,6 +2,25 @@ apply plugin: "com.android.application"
 apply plugin: "org.jetbrains.kotlin.android"
 apply plugin: "com.facebook.react"
 
+def keystorePropertiesFile = file("keystore.properties")
+def keystoreProperties = new Properties()
+
+if (keystorePropertiesFile.exists()) {
+    keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
+}
+
+def requiredKeystoreKeys = [
+    "storeFile",
+    "storePassword",
+    "keyAlias",
+    "keyPassword",
+]
+
+def isKeystorePropertiesComplete = keystorePropertiesFile.exists() && requiredKeystoreKeys.every { key ->
+    def value = keystoreProperties[key]
+    value != null && !value.toString().trim().isEmpty()
+}
+
 /**
  * This is the configuration block to customize your React Native Android app.
  * By default you don't need to apply any configuration, just uncomment the lines you need.
@@ -84,6 +103,11 @@ android {
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
         versionName "1.0"
+        // Allow plaintext HTTP in every build type (incl. release/TestFlight) so the
+        // "API 전송 테스트" page can hit non-HTTPS dev endpoints. RN's gradle plugin
+        // otherwise defaults this placeholder to false for release builds.
+        // This is a developer test harness, not a production app.
+        manifestPlaceholders = [usesCleartextTraffic: "true"]
     }
     signingConfigs {
         debug {
@@ -91,6 +115,17 @@ android {
             storePassword 'android'
             keyAlias 'androiddebugkey'
             keyPassword 'android'
+        }
+        release {
+            // Do not fallback to debug.keystore for release builds.
+            // If keystore.properties is missing or incomplete, production release tasks
+            // are blocked by the taskGraph guard below.
+            if (isKeystorePropertiesComplete) {
+              storeFile file(keystoreProperties["storeFile"])
+              storePassword keystoreProperties["storePassword"]
+              keyAlias keystoreProperties["keyAlias"]
+              keyPassword keystoreProperties["keyPassword"]
+            }
         }
     }
     buildTypes {
@@ -102,7 +137,7 @@ android {
             // see https://reactnative.dev/docs/signed-apk-android.
             signingConfig signingConfigs.debug
             minifyEnabled enableProguardInReleaseBuilds
-            proguardFiles getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro"
+            proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
         }
     }
 }
