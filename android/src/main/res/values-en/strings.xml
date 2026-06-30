@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="RNReceiptScanner_cropInstruction">Drag the corners to frame the document</string>
     <string name="RNReceiptScanner_cancelButton">Cancel</string>
     <string name="RNReceiptScanner_confirmButton">Use Photo</string>
 </resources>

@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="RNReceiptScanner_cropInstruction">문서의 네 모서리를 맞춰 주세요</string>
     <string name="RNReceiptScanner_cancelButton">취소</string>
     <string name="RNReceiptScanner_confirmButton">사진 사용</string>
 </resources>

@@ -10,8 +10,28 @@ import android.graphics.RectF
 import android.util.AttributeSet
 import android.view.MotionEvent
 import android.view.View
+import androidx.core.content.ContextCompat
+import androidx.core.graphics.ColorUtils
 
-// Corner order: topLeft[0], topRight[1], bottomRight[2], bottomLeft[3]
+/**
+ * Custom [View] hosting four draggable corner handles over a fitted image,
+ * used by [CropEditorActivity] to let the user adjust the document quad
+ * before perspective correction.
+ *
+ * Coordinate spaces:
+ *  - On-screen positions in [corners] are in **view** coordinates (pixels
+ *    relative to this view's bounds).
+ *  - [getCornersInImageSpace] converts back to **full-resolution image**
+ *    coordinates so [ImageProcessor.processGallery] can apply the same
+ *    perspective transform on the original pixels.
+ *
+ * Corner order is fixed: `topLeft[0], topRight[1], bottomRight[2], bottomLeft[3]`.
+ * This ordering is implicit contract with [ImageProcessor] and the iOS crop
+ * editor — do not reorder.
+ *
+ * @see CropEditorActivity
+ * @see ImageProcessor.processGallery
+ */
 internal class QuadCropView
   @JvmOverloads
   constructor(
@@ -24,16 +44,17 @@ internal class QuadCropView
     private val imageBounds = RectF()
     private var userHasAdjusted = false
 
-    // Matches iOS CAShapeLayer: fillColor = rgba(0, 0.5, 1, 0.2), strokeColor = rgba(0, 0.5, 1, 0.9)
+    private val accent = ContextCompat.getColor(context, R.color.rn_crop_accent)
+
+    // Matches iOS CAShapeLayer: fillColor = accent @ 0x33 (≈0.2), strokeColor = accent @ 0xE6 (≈0.9)
     private val quadFillPaint =
       Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        // 0x330080FF fits in positive Int (alpha 0x33 < 0x80) — no .toInt() needed.
-        color = 0x330080FF
+        color = ColorUtils.setAlphaComponent(accent, 0x33)
         style = Paint.Style.FILL
       }
     private val quadStrokePaint =
       Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = 0xE60080FF.toInt()
+        color = ColorUtils.setAlphaComponent(accent, 0xE6)
         style = Paint.Style.STROKE
         strokeWidth = 2f * dp
       }
@@ -43,10 +64,10 @@ internal class QuadCropView
         style = Paint.Style.FILL
       }
 
-    // Matches iOS handle.layer.borderColor = UIColor.systemBlueColor, borderWidth = 2
+    // Matches iOS handle.layer.borderColor = [RNAccentColor cropAccent], borderWidth = 2
     private val handleBorderPaint =
       Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = 0xFF007AFF.toInt()
+        color = accent
         style = Paint.Style.STROKE
         strokeWidth = 2f * dp
       }
@@ -65,6 +86,13 @@ internal class QuadCropView
       bottom: Float,
     ) {
       imageBounds.set(left, top, right, bottom)
+    }
+
+    // Clears the userHasAdjusted gate so a subsequent setCorners() will take effect.
+    // Call when transitioning to a new image — the previous image's manual edits
+    // must not suppress the next image's default corners.
+    fun resetUserAdjusted() {
+      userHasAdjusted = false
     }
 
     // Sets corner positions, clamping each to imageBounds.

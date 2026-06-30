@@ -1,6 +1,7 @@
 #import "RNGalleryPickerDelegate.h"
 #import "RNImageProcessor.h"
 #import "RNOcrProcessor.h"
+#import "RNQuadGeometry.h"
 #import <UIKit/UIKit.h>
 #import <PhotosUI/PhotosUI.h>
 #import <Photos/Photos.h>
@@ -13,6 +14,21 @@
 // Below this confidence the user sees the crop editor; above it we apply the
 // detected corners automatically when cropAutoConfirm is enabled.
 static const float kCropAutoConfirmMinConfidence = 0.85f;
+
+// A detected quadrilateral below this confidence is discarded rather than seeded
+// into the crop editor. VNDetectDocumentSegmentationRequest can return a
+// near-zero-confidence quad for hard inputs — e.g. a receipt embedded in a
+// screenshot's UI chrome, where the detector latches onto the thin gap above the
+// receipt (observed confidence ≈ 0.004). Such a quad can look geometrically benign
+// (mild trapezoid), so RNQuadGeometry does NOT catch it — only this floor does.
+// Discarding it lets the editor fall back to its 10% inset default (mirrors Android
+// quadFromTextBlocks → applyDefaultInsetCorners).
+//
+// PROVISIONAL (see docs/specs/threshold-calibration.md). Set low — the observed
+// noise sits at ≈0.004, while real (even imperfect/angled) detections measured far
+// higher — so borderline-but-usable detections still seed the editor; degenerate
+// shapes are caught separately by RNQuadGeometry regardless of confidence.
+static const float kDetectionMinConfidence = 0.1f;
 
 static CGImagePropertyOrientation CIOrientationFromUIOrientation(UIImageOrientation o) {
     switch (o) {
@@ -60,7 +76,11 @@ static VNDetectRectanglesRequest *MakeReceiptRectangleRequest(float minimumConfi
 @property (nonatomic, copy)   RNResolveBlock                      resolve;
 @property (nonatomic, copy)   RNRejectBlock                       reject;
 @property (nonatomic, strong) NSMutableArray<NSDictionary *>     *results;
-@property (nonatomic, assign) NSInteger                           pendingCount;
+// Per-photo pipeline is serialized: only one crop editor presented at a time.
+// See `processNextQueuedItem` and the AGENTS.md anti-pattern entry on
+// concurrent `presentViewController:` calls.
+@property (nonatomic, strong) NSArray<PHPickerResult *>          *queuedItems;
+@property (nonatomic, assign) NSInteger                           queueIndex;
 @end
 
 @implementation RNGalleryPickerDelegate
@@ -78,7 +98,8 @@ static VNDetectRectanglesRequest *MakeReceiptRectangleRequest(float minimumConfi
         _resolve           = resolve;
         _reject            = reject;
         _results           = [NSMutableArray new];
-        _pendingCount      = 0;
+        _queuedItems       = @[];
+        _queueIndex        = 0;
     }
     return self;
 }
@@ -95,29 +116,48 @@ didFinishPicking:(NSArray<PHPickerResult *> *)results {
 
     [picker dismissViewControllerAnimated:YES completion:^{
         [RNImageProcessor deletePreviousSessionFiles];
-        self.pendingCount = results.count;
+        // Serial queue — see AGENTS.md anti-pattern: concurrent presentViewController:
+        // on the same presenter is silently rejected by UIKit.
+        self.queuedItems = results;
+        self.queueIndex  = 0;
+        [self processNextQueuedItem];
+    }];
+}
 
-        for (PHPickerResult *result in results) {
-            // PHAsset fetch is synchronous for local identifiers — safe to call on main thread.
-            NSString *earlyOrigin = [self originForPickerResult:result];
-
-            [result.itemProvider loadDataRepresentationForTypeIdentifier:UTTypeImage.identifier
-                                                       completionHandler:^(NSData *data, NSError *err) {
-                if (!data || err) {
-                    [self didFinishOneItem:nil];
-                    return;
-                }
-                CGImageSourceRef rawRef = CGImageSourceCreateWithData((__bridge CFDataRef)data, NULL);
-                // Wrap immediately so ARC handles release even on the early-return paths below.
-                RNCGImageSourceHolder *sourceHolder = rawRef ? [[RNCGImageSourceHolder alloc] initWithRef:rawRef] : nil;
-                UIImage *image = [UIImage imageWithData:data];
-                if (!image || !sourceHolder) {
-                    [self didFinishOneItem:nil];
-                    return;
-                }
-                [self detectRectangleAndCrop:image sourceHolder:sourceHolder earlyOrigin:earlyOrigin];
-            }];
+// FUTURE: `loadDataRepresentation` calls are independent and could be
+// prefetched in parallel; only the editor presentation must serialize.
+// On 6-photo iCloud Photos batches this would save 200-500 ms wall-clock.
+- (void)processNextQueuedItem {
+    if (self.queueIndex >= (NSInteger)self.queuedItems.count) {
+        if (self.results.count > 0) {
+            self.resolve(@{ @"status": @"success",   @"images": [self.results copy] });
+        } else {
+            self.resolve(@{ @"status": @"cancelled", @"images": @[] });
         }
+        return;
+    }
+
+    PHPickerResult *item = self.queuedItems[self.queueIndex];
+    self.queueIndex++;
+
+    // PHAsset fetch is synchronous for local identifiers — safe on main thread.
+    NSString *earlyOrigin = [self originForPickerResult:item];
+
+    [item.itemProvider loadDataRepresentationForTypeIdentifier:UTTypeImage.identifier
+                                             completionHandler:^(NSData *data, NSError *err) {
+        if (!data || err) {
+            [self didFinishOneItem:nil];
+            return;
+        }
+        CGImageSourceRef rawRef = CGImageSourceCreateWithData((__bridge CFDataRef)data, NULL);
+        // Wrap immediately so ARC handles release even on the early-return paths below.
+        RNCGImageSourceHolder *sourceHolder = rawRef ? [[RNCGImageSourceHolder alloc] initWithRef:rawRef] : nil;
+        UIImage *image = [UIImage imageWithData:data];
+        if (!image || !sourceHolder) {
+            [self didFinishOneItem:nil];
+            return;
+        }
+        [self detectRectangleAndCrop:image sourceHolder:sourceHolder earlyOrigin:earlyOrigin];
     }];
 }
 
@@ -238,24 +278,54 @@ static NSString * _Nullable OriginFromExifFields(NSString *make, NSString *model
     VNRectangleObservation *obs = nil;
     float detectedConfidence = 0;
 
-    if ([docRequest.results.firstObject isKindOfClass:[VNRectangleObservation class]]) {
-        obs = (VNRectangleObservation *)docRequest.results.firstObject;
+    // kDetectionMinConfidence gates only the doc-segmentation candidate:
+    // VNDetectDocumentSegmentationRequest exposes no minimumConfidence and can return a
+    // sub-floor quad (e.g. the gap above a receipt in a screenshot) that would otherwise be
+    // seeded into the editor unconditionally. The rectangle detector already enforces its own
+    // floor (MakeReceiptRectangleRequest sets minimumConfidence = 0.5), so a non-nil rectObs
+    // is always above the floor and needs no second check here. When both miss we fall through
+    // to the editor's 10% inset default.
+    id docResult = docRequest.results.firstObject;
+    VNRectangleObservation *docObs =
+        [docResult isKindOfClass:[VNRectangleObservation class]] ? (VNRectangleObservation *)docResult : nil;
+    VNRectangleObservation *rectObs = rectRequest.results.firstObject;
+
+    if (docObs && docObs.confidence >= kDetectionMinConfidence) {
+        obs = docObs;
         detectedConfidence = obs.confidence;
     }
-    if (!obs) {
-        obs = rectRequest.results.firstObject;
-        if (obs) detectedConfidence = obs.confidence;
+    if (!obs && rectObs) {
+        obs = rectObs;
+        detectedConfidence = rectObs.confidence;
     }
+
+#if DEBUG
+    // Calibration diagnostic for kDetectionMinConfidence (docs/specs/threshold-calibration.md).
+    // Logs both detectors' confidence and the decision so the floor can be fitted to the
+    // real-device distribution in the borderline band instead of a guessed value.
+    NSLog(@"[ReceiptScanner] detect confidence doc=%.3f rect=%.3f floor=%.2f -> %@",
+          docObs ? docObs.confidence : -1.0,
+          rectObs ? rectObs.confidence : -1.0,
+          kDetectionMinConfidence,
+          obs ? (obs == docObs ? @"doc" : @"rect") : @"none(inset fallback)");
+#endif
 
     if (confidence) *confidence = detectedConfidence;
     if (!obs) return nil;
 
-    return @[
+    NSArray<NSValue *> *detected = @[
         [NSValue valueWithCGPoint:CGPointMake(obs.topLeft.x     * W, obs.topLeft.y     * H)],
         [NSValue valueWithCGPoint:CGPointMake(obs.topRight.x    * W, obs.topRight.y    * H)],
         [NSValue valueWithCGPoint:CGPointMake(obs.bottomRight.x * W, obs.bottomRight.y * H)],
         [NSValue valueWithCGPoint:CGPointMake(obs.bottomLeft.x  * W, obs.bottomLeft.y  * H)],
     ];
+    // Distorted/degenerate detected quad → discard so the editor uses its inset default.
+    // Reset *confidence to honor the "0 on failure" contract — a discarded quad is a failure.
+    if ([RNQuadGeometry isDistorted:detected]) {
+        if (confidence) *confidence = 0;
+        return nil;
+    }
+    return detected;
 }
 
 // Must be called from a background thread.
@@ -276,24 +346,45 @@ static NSString * _Nullable OriginFromExifFields(NSString *make, NSString *model
 - (void)processAndFinishCGImage:(CGImageRef)cropped
                    sourceHolder:(RNCGImageSourceHolder *)sourceHolder
                     earlyOrigin:(nullable NSString *)earlyOrigin {
+    // OCR + rotation detection runs *before* JPEG encoding so the chosen
+    // rotation can be baked into the output pixels (autoRotate path).
+    NSString *ocrText = nil;
+    NSInteger rotationDegrees = 0;
+    double ocrMeanConfidence = 0.0;
+    if (self.options.ocr) {
+        UIImage *croppedUIImage = [UIImage imageWithCGImage:cropped];
+        RNOcrResult *ocr =
+            [RNOcrProcessor recognizeAndDetectRotationInImage:croppedUIImage
+                                            minimumTextHeight:self.options.minimumTextHeight
+                                                        error:NULL];
+        if (ocr) {
+            ocrText = ocr.text;
+            rotationDegrees = ocr.rotationDegrees;
+            ocrMeanConfidence = ocr.meanConfidence;
+        }
+    }
+
+    CGImageRef encodeCG = cropped;
+    CGImageRef rotatedCG = NULL;
+    if (self.options.autoRotate && rotationDegrees != 0) {
+        rotatedCG = [RNImageProcessor cgImageByRotating:cropped degrees:rotationDegrees];
+        if (rotatedCG) encodeCG = rotatedCG;
+    }
+
     NSError *err = nil;
-    RNProcessedImage *processed = [RNImageProcessor processImage:cropped
+    RNProcessedImage *processed = [RNImageProcessor processImage:encodeCG
                                                          quality:self.options.quality
                                                        sourceRef:sourceHolder.ref
                                                     includeExif:self.options.includeExif
                                                  includeGpsExif:self.options.includeGpsExif
+                                                 includeRawExif:self.options.includeRawExif
                                                           error:&err];
+    if (rotatedCG) CGImageRelease(rotatedCG);
+    CGImageRelease(cropped);
     if (!processed) {
-        CGImageRelease(cropped);
         [self didFinishOneItem:nil];
         return;
     }
-    NSString *ocrText = nil;
-    if (self.options.ocr) {
-        UIImage *croppedUIImage = [UIImage imageWithCGImage:cropped];
-        ocrText = [RNOcrProcessor recognizeTextInImage:croppedUIImage error:NULL];
-    }
-    CGImageRelease(cropped);
 
     // Priority: PHAsset subtype → extracted exifData → raw source properties → "unknown".
     // The source-ref read is gated on exifData being nil so we don't decode the same TIFF/EXIF
@@ -316,22 +407,23 @@ static NSString * _Nullable OriginFromExifFields(NSString *make, NSString *model
         @"imageOrigin": imageOrigin,
     } mutableCopy];
     // length > 0 distinguishes "OCR ran, found text" from "OCR ran, empty result".
-    if (ocrText.length > 0)  img[@"ocrText"] = ocrText;
+    if (ocrText.length > 0) {
+        img[@"ocrText"] = ocrText;
+        // Surface the iOS-computed mean per-line confidence so the JS layer
+        // exposes ocrQuality.confidence on both platforms. Reporting only.
+        img[@"ocrQuality"] = @{@"confidence": @(ocrMeanConfidence)};
+    }
     if (processed.exifData)  img[@"exif"]    = processed.exifData;
     [self didFinishOneItem:[img copy]];
 }
 
+// Called once per queued photo. `imageResult == nil` means the user cancelled
+// that photo's crop editor — skip it and continue the batch, matching the
+// Android CropEditorActivity flow.
 - (void)didFinishOneItem:(nullable NSDictionary *)imageResult {
     dispatch_async(dispatch_get_main_queue(), ^{
         if (imageResult) [self.results addObject:imageResult];
-        self.pendingCount--;
-        if (self.pendingCount == 0) {
-            if (self.results.count > 0) {
-                self.resolve(@{ @"status": @"success", @"images": [self.results copy] });
-            } else {
-                self.resolve(@{ @"status": @"cancelled", @"images": @[] });
-            }
-        }
+        [self processNextQueuedItem];
     });
 }
 

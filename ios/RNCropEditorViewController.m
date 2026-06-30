@@ -1,8 +1,10 @@
 #import "RNCropEditorViewController.h"
+#import "RNAccentColor.h"
 #import "RNImageProcessor.h"
 #import <UIKit/UIKit.h>
 
 static const CGFloat kHandleRadius = 16.0;
+static const CGFloat kDetectedCropExpansionFactor = 1.12;
 static const NSInteger kTopLeft     = 0;
 static const NSInteger kTopRight    = 1;
 static const NSInteger kBottomRight = 2;
@@ -16,6 +18,10 @@ static const NSInteger kBottomLeft  = 3;
 @property (nonatomic, strong) UIImageView          *imageView;
 @property (nonatomic, strong) NSMutableArray<UIView *> *handles;
 @property (nonatomic, strong) CAShapeLayer         *overlayLayer;
+
+- (NSArray<NSValue *> *)expandedDetectedCornersFromCorners:(NSArray<NSValue *> *)corners
+                                                 imageSize:(CGSize)imageSize;
+- (CGPoint)clampedPoint:(CGPoint)point toImageSize:(CGSize)imageSize;
 @end
 
 @implementation RNCropEditorViewController
@@ -32,7 +38,8 @@ static const NSInteger kBottomLeft  = 3;
         CGFloat H = image.size.height;
 
         if (corners && corners.count == 4) {
-            _corners = [corners mutableCopy];
+            _corners = [[self expandedDetectedCornersFromCorners:corners
+                                                       imageSize:image.size] mutableCopy];
         } else {
             // Vision found nothing. A 10% inset is a far better starting point than
             // full-image edges: receipts rarely fill 100% of the frame, so inset
@@ -50,6 +57,36 @@ static const NSInteger kBottomLeft  = 3;
     return self;
 }
 
+- (NSArray<NSValue *> *)expandedDetectedCornersFromCorners:(NSArray<NSValue *> *)corners
+                                                 imageSize:(CGSize)imageSize {
+    CGPoint center = CGPointZero;
+    for (NSValue *value in corners) {
+        CGPoint point = [value CGPointValue];
+        center.x += point.x;
+        center.y += point.y;
+    }
+    center.x /= corners.count;
+    center.y /= corners.count;
+
+    NSMutableArray<NSValue *> *expanded = [NSMutableArray arrayWithCapacity:corners.count];
+    for (NSValue *value in corners) {
+        CGPoint point = [value CGPointValue];
+        CGPoint expandedPoint = CGPointMake(
+            center.x + (point.x - center.x) * kDetectedCropExpansionFactor,
+            center.y + (point.y - center.y) * kDetectedCropExpansionFactor
+        );
+        [expanded addObject:[NSValue valueWithCGPoint:[self clampedPoint:expandedPoint
+                                                              toImageSize:imageSize]]];
+    }
+    return expanded;
+}
+
+- (CGPoint)clampedPoint:(CGPoint)point toImageSize:(CGSize)imageSize {
+    CGFloat x = MAX(0.0, MIN(imageSize.width, point.x));
+    CGFloat y = MAX(0.0, MIN(imageSize.height, point.y));
+    return CGPointMake(x, y);
+}
+
 - (void)viewDidLoad {
     [super viewDidLoad];
     self.view.backgroundColor = UIColor.blackColor;
@@ -59,9 +96,11 @@ static const NSInteger kBottomLeft  = 3;
     _imageView.translatesAutoresizingMaskIntoConstraints = NO;
     [self.view addSubview:_imageView];
 
+    UIColor *accent = [RNAccentColor cropAccent];
+
     _overlayLayer = [CAShapeLayer layer];
-    _overlayLayer.fillColor   = [UIColor colorWithRed:0 green:0.5 blue:1 alpha:0.2].CGColor;
-    _overlayLayer.strokeColor = [UIColor colorWithRed:0 green:0.5 blue:1 alpha:0.9].CGColor;
+    _overlayLayer.fillColor   = [accent colorWithAlphaComponent:0.2].CGColor;
+    _overlayLayer.strokeColor = [accent colorWithAlphaComponent:0.9].CGColor;
     _overlayLayer.lineWidth   = 2.0;
     [self.view.layer addSublayer:_overlayLayer];
 
@@ -73,7 +112,7 @@ static const NSInteger kBottomLeft  = 3;
         UIView *handle = [[UIView alloc] initWithFrame:CGRectMake(0, 0, kHandleRadius*2, kHandleRadius*2)];
         handle.backgroundColor = UIColor.whiteColor;
         handle.layer.cornerRadius = kHandleRadius;
-        handle.layer.borderColor  = UIColor.systemBlueColor.CGColor;
+        handle.layer.borderColor  = accent.CGColor;
         handle.layer.borderWidth  = 2.0;
         handle.tag = i;
         UIPanGestureRecognizer *pan = [[UIPanGestureRecognizer alloc]
@@ -82,6 +121,25 @@ static const NSInteger kBottomLeft  = 3;
         [self.view addSubview:handle];
         [_handles addObject:handle];
     }
+
+    UIView *instructionBubble = [UIView new];
+    instructionBubble.translatesAutoresizingMaskIntoConstraints = NO;
+    instructionBubble.backgroundColor = [UIColor colorWithWhite:0 alpha:0.62];
+    instructionBubble.layer.cornerRadius = 8.0;
+    instructionBubble.layer.masksToBounds = YES;
+    instructionBubble.userInteractionEnabled = NO;
+
+    UILabel *instructionLabel = [UILabel new];
+    instructionLabel.translatesAutoresizingMaskIntoConstraints = NO;
+    instructionLabel.text = NSLocalizedStringWithDefaultValue(@"RNReceiptScanner_cropInstruction",
+        nil, [NSBundle mainBundle], @"Drag the corners to frame the document", @"");
+    instructionLabel.textColor = UIColor.whiteColor;
+    instructionLabel.font = [UIFont systemFontOfSize:15 weight:UIFontWeightSemibold];
+    instructionLabel.textAlignment = NSTextAlignmentCenter;
+    instructionLabel.numberOfLines = 0;
+
+    [instructionBubble addSubview:instructionLabel];
+    [self.view addSubview:instructionBubble];
 
     // Plain UIView + UIButton bar — added LAST for highest hit-test priority.
     // UIToolbar + UIBarButtonItem was replaced here because UIBarButtonItem target-action
@@ -121,6 +179,22 @@ static const NSInteger kBottomLeft  = 3;
         [_imageView.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor],
         [_imageView.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor],
         [_imageView.bottomAnchor constraintEqualToAnchor:buttonBar.topAnchor],
+
+        [instructionBubble.topAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.topAnchor
+                                                    constant:12],
+        [instructionBubble.leadingAnchor constraintGreaterThanOrEqualToAnchor:self.view.leadingAnchor
+                                                                     constant:20],
+        [instructionBubble.trailingAnchor constraintLessThanOrEqualToAnchor:self.view.trailingAnchor
+                                                                   constant:-20],
+        [instructionBubble.centerXAnchor constraintEqualToAnchor:self.view.centerXAnchor],
+
+        [instructionLabel.topAnchor constraintEqualToAnchor:instructionBubble.topAnchor constant:8],
+        [instructionLabel.leadingAnchor constraintEqualToAnchor:instructionBubble.leadingAnchor
+                                                       constant:12],
+        [instructionLabel.trailingAnchor constraintEqualToAnchor:instructionBubble.trailingAnchor
+                                                        constant:-12],
+        [instructionLabel.bottomAnchor constraintEqualToAnchor:instructionBubble.bottomAnchor
+                                                      constant:-8],
 
         [buttonBar.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor],
         [buttonBar.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor],
