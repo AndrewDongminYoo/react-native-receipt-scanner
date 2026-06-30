@@ -1,5 +1,4 @@
 #import "RNCropEditorViewController.h"
-#import "RNAccentColor.h"
 #import "RNImageProcessor.h"
 #import <UIKit/UIKit.h>
 
@@ -96,7 +95,7 @@ static const NSInteger kBottomLeft  = 3;
     _imageView.translatesAutoresizingMaskIntoConstraints = NO;
     [self.view addSubview:_imageView];
 
-    UIColor *accent = [RNAccentColor cropAccent];
+    UIColor *accent = UIColor.systemBlueColor;
 
     _overlayLayer = [CAShapeLayer layer];
     _overlayLayer.fillColor   = [accent colorWithAlphaComponent:0.2].CGColor;

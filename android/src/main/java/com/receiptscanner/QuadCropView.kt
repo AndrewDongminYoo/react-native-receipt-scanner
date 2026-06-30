@@ -10,7 +10,6 @@ import android.graphics.RectF
 import android.util.AttributeSet
 import android.view.MotionEvent
 import android.view.View
-import androidx.core.content.ContextCompat
 import androidx.core.graphics.ColorUtils
 
 /**
@@ -44,7 +43,8 @@ internal class QuadCropView
     private val imageBounds = RectF()
     private var userHasAdjusted = false
 
-    private val accent = ContextCompat.getColor(context, R.color.rn_crop_accent)
+    // iOS systemBlue (0xFF007AFF) — matches the crop editor accent across platforms.
+    private val accent = 0xFF007AFF.toInt()
 
     // Matches iOS CAShapeLayer: fillColor = accent @ 0x33 (≈0.2), strokeColor = accent @ 0xE6 (≈0.9)
     private val quadFillPaint =
@@ -64,7 +64,7 @@ internal class QuadCropView
         style = Paint.Style.FILL
       }
 
-    // Matches iOS handle.layer.borderColor = [RNAccentColor cropAccent], borderWidth = 2
+    // Matches iOS handle.layer.borderColor = systemBlue, borderWidth = 2
     private val handleBorderPaint =
       Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = accent
