@@ -27,3 +27,6 @@ reason = "Transitive dep; fast-xml-builder writes XML and is never fed untrusted
 id = "GHSA-5wm8-gmm8-39j9"
 ignoreUntil = 2026-11-10
 reason = "Transitive dep; same non-exploitable surface as GHSA-45c6-75p6-83cc — no untrusted input flows into fast-xml-builder."
+
+# concurrent-ruby (example app's Ruby/CocoaPods toolchain) is ignored in
+# example/osv-scanner.toml, adjacent to its Gemfile.lock.
