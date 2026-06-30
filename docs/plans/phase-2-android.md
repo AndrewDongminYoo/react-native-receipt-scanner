@@ -3,8 +3,7 @@
 ## Goal
 
 Full Android implementation: camera scan, gallery import, document crop,
-JPEG compression, EXIF extraction, and on-device OCR — all returned as a
-unified `ScanReceiptResult`.
+JPEG compression, EXIF extraction, and on-device OCR — all returned as a unified `ScanReceiptResult`.
 
 ## Dependencies to add
 
@@ -42,9 +41,14 @@ implementation("androidx.exifinterface:exifinterface:1.3.7")
 ### EXIF
 
 - [x] Read EXIF via `ExifInterface(filePath)`:
-  - `TAG_ORIENTATION`, `TAG_DATETIME_ORIGINAL`, `TAG_MAKE`, `TAG_MODEL`
+  - `TAG_ORIENTATION`, `TAG_DATETIME_ORIGINAL`, `TAG_MAKE`, `TAG_MODEL`, `TAG_SOFTWARE`
   - `TAG_GPS_LATITUDE`, `TAG_GPS_LONGITUDE` — include only if `includeGpsExif=true`
-- [x] Strip GPS tags from output file EXIF when `includeGpsExif=false`
+- [x] Surface read EXIF via the JS `exif` field.
+      **Note**:
+      the output JPEG is written via `Bitmap.compress(JPEG, …)` and carries no EXIF.
+      GPS is therefore never present in the output file regardless of `includeGpsExif`.
+      This is asymmetric to iOS, which preserves EXIF on the file.
+      See ADR-005 ("Output JPEG carries no EXIF") and `api-contract.md` "Output JPEG metadata asymmetry".
 
 ### OCR
 
@@ -67,8 +71,8 @@ implementation("androidx.exifinterface:exifinterface:1.3.7")
 - [x] Camera scan → cropped JPEG → `ocrText` returned to JS
 - [x] Gallery image → document crop flow → `ocrText` returned to JS
 - [x] `width`, `height`, `fileSize` correct
-- [x] `exif.orientation`, `exif.dateTimeOriginal` populated when available
-- [x] `exif.gps` absent by default; present when `includeGpsExif=true`
+- [x] `exif.orientation`, `exif.dateTimeOriginal`, `exif.software` populated when available (from source EXIF)
+- [x] `exif.gps` absent by default; present in JS response when `includeGpsExif=true` (output file never carries GPS — see note above)
 - [x] `uri` is a `file://` path — no base64
 - [ ] Tested on a low-end device (≤3 GB RAM): no OOM crash — requires physical device
 - [x] `yarn example android` runs the full flow end-to-end

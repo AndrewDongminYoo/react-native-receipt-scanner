@@ -3,11 +3,9 @@
 ## Goal
 
 Establish a stable public interface before any native implementation work begins.
-The app can import `react-native-receipt-scanner` and call `scan()` — it returns
-a cancelled result for now, but the types and contract are locked in.
+The app can import `react-native-receipt-scanner` and call `scan()` — it returns a cancelled result for now, but the types and contract are locked in.
 
-This makes the library boundary real and prevents external scanner imports from
-leaking into app code.
+This makes the library boundary real and prevents external scanner imports from leaking into app code.
 
 ## Tasks
 

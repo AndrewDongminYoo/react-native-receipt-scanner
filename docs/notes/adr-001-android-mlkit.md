@@ -6,9 +6,7 @@ Accepted
 
 ## Context
 
-Android needs four capabilities in one flow: gallery image import, automatic document
-crop (perspective correction), JPEG output, and an activity-based UI with no custom
-camera implementation.
+Android needs four capabilities in one flow: gallery image import, automatic document crop (perspective correction), JPEG output, and an activity-based UI with no custom camera implementation.
 
 Options considered:
 
@@ -21,8 +19,7 @@ Options considered:
 
 ## Decision
 
-Use **`com.google.android.gms:play-services-mlkit-document-scanner`** directly inside
-the library's `ReceiptScannerModule.kt`.
+Use **`com.google.android.gms:play-services-mlkit-document-scanner`** directly inside the library's `ReceiptScannerModule.kt`.
 
 Configuration:
 
@@ -41,9 +38,8 @@ For OCR: **`com.google.mlkit:text-recognition-korean`** (covers Korean + Latin i
 
 - **Play Services required** — devices without Google Play Services cannot use this library.
   Acceptable for the Korean market.
-- **No OpenCV complexity** — avoids camera permission handling, contour detection, and
-  homography transforms from scratch.
-- **Gallery import native** — `setGalleryImportAllowed(true)` handles the gallery picker
-  inside the ML Kit UI flow; no separate image picker library needed on Android.
-- **Model download on first use** — ML Kit may download the document scanner model on the
-  first run (~10 MB). Subsequent runs use the cached model.
+- **No OpenCV complexity** — avoids camera permission handling, contour detection, and homography transforms from scratch.
+- **Gallery import native** — `setGalleryImportAllowed(true)` keeps the gallery affordance inside the ML Kit camera UI for users who reach the gallery from the camera screen.
+  Note: explicit `source: "gallery"` calls do **not** use GMS; they are routed to the package's own `CropEditorActivity` to preserve EXIF and surface `imageOrigin` classification (see ADR-005).
+- **Model download on first use** — ML Kit may download the document scanner model on the first run (~10 MB).
+  Subsequent runs use the cached model.

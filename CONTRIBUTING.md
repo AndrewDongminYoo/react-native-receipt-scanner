@@ -87,15 +87,28 @@ Remember to add tests for your change if possible. Run the unit tests by:
 yarn test
 ```
 
-### Publishing to npm
+### Trunk (multi-language linters & formatters)
 
-We use [release-it](https://github.com/release-it/release-it) to make it easier to publish new versions. It handles common tasks like bumping version based on semver, creating tags and releases etc.
-
-To publish new versions, run the following:
+The Yarn scripts above only cover the JS/TS surface. The repo additionally uses [Trunk](https://docs.trunk.io/cli) (configured in `.trunk/trunk.yaml`) to lint and format Kotlin (ktlint), shell, YAML, Markdown, and to run security scans (OSV-Scanner, TruffleHog). Pre-commit / pre-push hooks invoke the same tools, so getting them green locally is a prerequisite for committing.
 
 ```sh
-yarn release
+trunk fmt    # auto-format every file the trunk formatters own (run first)
+trunk check  # run every enabled linter on the repo
 ```
+
+### Verification checklist before opening a PR
+
+Run this exact pipeline and confirm it is clean before requesting review. `trunk fmt` rewrites files in place — run it **before** `trunk check` so the formatters don't report unformatted files as failures.
+
+```sh
+yarn typecheck && yarn lint && yarn test && trunk fmt && trunk check
+```
+
+If `trunk check` reports a finding you believe is a false positive, suppress it in the appropriate `.trunk/configs/<linter>.toml` with a written justification (see `.trunk/configs/osv-scanner.toml` for the canonical pattern) — do not silence findings inline.
+
+### Publishing to npm
+
+Releases are managed manually via the Claude Code `/release` skill. The skill bumps `package.json` version, updates `CHANGELOG.md`, runs typecheck + lint + tests, commits with `chore(release): 🔖 vX.Y.Z`, and pushes a git tag.
 
 ### Scripts
 
@@ -103,12 +116,14 @@ The `package.json` file contains various scripts for common tasks:
 
 - `yarn`: setup project by installing dependencies.
 - `yarn typecheck`: type-check files with TypeScript.
-  - `yarn lint`: lint files with [ESLint](https://eslint.org/).
-    - `yarn test`: run unit tests with [Jest](https://jestjs.io/).
-  - `yarn example start`: start the Metro server for the example app.
+- `yarn lint`: lint files with [ESLint](https://eslint.org/).
+- `yarn test`: run unit tests with [Jest](https://jestjs.io/).
+- `trunk check`: run every enabled [Trunk](https://docs.trunk.io/cli) linter (ktlint, shellcheck, yamllint, OSV-Scanner, …).
+- `trunk fmt`: auto-format every file the Trunk formatters own.
+- `yarn example start`: start the Metro server for the example app.
 - `yarn example android`: run the example app on Android.
 - `yarn example ios`: run the example app on iOS.
-  - `yarn example web`: run the example app on Web.
+- `yarn example web`: run the example app on Web.
 - `yarn example build:web`: build the example app for Web.
 
 ### Sending a pull request

@@ -12,7 +12,20 @@ yarn test             # Run Jest test suite
 yarn test --testPathPattern=src/__tests__/index  # Run a single test file
 yarn clean            # Delete all build artifacts (lib/, example/android/build, etc.)
 yarn watchman-reset   # Reset Watchman watch (use after Metro cache issues)
+
+trunk check           # All trunk-managed linters (ktlint, osv-scanner, shellcheck, yamllint, …)
+trunk fmt             # Auto-format every file the trunk formatters own
 ```
+
+### Verification before declaring a job complete
+
+Run these in order before claiming any task is done. The Yarn commands cover the JS/TS surface; `trunk` covers the rest of the repo (Kotlin via ktlint, shell, YAML, Markdown, security advisories, secret scan, etc.) and the pre-commit / pre-push hooks (`.trunk/trunk.yaml`) run the same checks, so passing them locally is a prerequisite for committing.
+
+```bash
+yarn typecheck && yarn lint && yarn test && trunk fmt && trunk check
+```
+
+`trunk fmt` rewrites files in place — run it **before** `trunk check`; otherwise the formatters report unformatted files as failures.
 
 ### Example App
 
@@ -21,6 +34,21 @@ yarn example start          # Start Metro bundler
 yarn example android        # Run on Android emulator
 yarn example ios            # Run on iOS simulator
 ```
+
+## Tooling / Platform Versions
+
+- **Yarn 4.11.0** — pinned via the `packageManager` field in `package.json` (corepack-managed). Do not run `npm install`; it will desync the lockfile.
+- **Node ≥ 22.11.0** — enforced by `example/package.json#engines`.
+- **ESLint flat config** — `eslint.config.mjs` (ESM).
+- **Android** — Kotlin 2.0.21, `minSdk 24`, `targetSdk 36`, `compileSdk 36`. Key deps: `play-services-mlkit-document-scanner` (16.0.0), `text-recognition-korean` (16.0.1), `androidx.exifinterface` (1.4.2).
+- **iOS** — deployment target pinned at **16.0** in `ReceiptScanner.podspec` (Korean OCR via `VNRecognizeTextRequest` requires iOS 16; the package ships no Latin-only fallback — see ADR-006). Linked frameworks: `VisionKit`, `Vision`, `PhotosUI`, `ImageIO`, `CoreImage`, `CoreGraphics`, `UniformTypeIdentifiers`.
+
+### Host App Permissions
+
+The library does not declare runtime permissions for its host. Consuming apps must add:
+
+- iOS `Info.plist` — `NSCameraUsageDescription` and `NSPhotoLibraryUsageDescription`. No location permission is required: `includeGpsExif` only copies the EXIF GPS dictionary already present in the source image; there is no `CLLocationManager` call.
+- Android `AndroidManifest.xml` — only `android.permission.INTERNET`. ML Kit Document Scanner handles camera grant via Play Services, and the custom gallery flow uses the system photo picker (no `READ_MEDIA_IMAGES`).
 
 ## Architecture
 
@@ -31,29 +59,37 @@ This is a **React Native TurboModule library** (new architecture). The root is t
 - `src/NativeReceiptScanner.ts` — TurboModule spec. Defines the `Spec` interface and registers the module as `"ReceiptScanner"`. Uses `Object` for options/result in Phase 1; codegen reads this to generate native base classes.
 - `src/scan.native.tsx` — Native platform entry: merges options with `DEFAULT_SCAN_OPTIONS` and delegates to the TurboModule.
 - `src/scan.tsx` — Web/JS fallback: pure JavaScript implementation.
-- `src/types.ts` — All public types (`ScanReceiptOptions`, `ReceiptImage`, `ScanReceiptResult`) and `DEFAULT_SCAN_OPTIONS`. Source of truth for the API contract.
+- `src/types.ts` — All public types and `DEFAULT_SCAN_OPTIONS`. Source of truth for the API contract. Exports: `ScanReceiptOptions` (`source`, `maxPages`, `quality`, `includeExif`, `includeGpsExif`, `ocr`, `cropAutoConfirm`), `ScanReceiptResult`, `ReceiptImage` (carries an `imageOrigin` field), `ReceiptExif` (`orientation`, `dateTimeOriginal`, `make`, `model`, `software`, `gps`), and `ImageOrigin` (`"camera" | "screenshot" | "download" | "unknown"`).
 - `src/index.tsx` — Public re-exports.
+- `src/__tests__/index.test.tsx` — Jest spec for the JS surface. Mocks `NativeReceiptScanner` and asserts `DEFAULT_SCAN_OPTIONS` propagation through `scan.native.tsx`.
 
 Metro resolves `.native.tsx` over `.tsx` on iOS/Android automatically.
 
 ### Android Layer (`android/src/main/java/com/receiptscanner/`)
 
-- `ReceiptScannerModule.kt` — TurboModule entry. Implements `NativeReceiptScannerSpec`, holds `pendingPromise`/`pendingOptions`, launches ML Kit scanner via `startIntentSenderForResult`, and dispatches `onActivityResult` to the executor thread.
+- `ReceiptScannerModule.kt` — TurboModule entry. Implements `NativeReceiptScannerSpec`, holds `pendingPromise`/`pendingOptions`, launches ML Kit scanner via `startIntentSenderForResult`, and dispatches `onActivityResult` to the executor thread. For `source: "gallery"` it routes to `CropEditorActivity` instead of the GMS scanner.
 - `ImageProcessor.kt` — Orientation normalisation + JPEG recompress + EXIF read/strip. Takes the raw ML Kit URI, writes a processed JPEG to the app cache dir.
 - `OcrProcessor.kt` — Wraps `TextRecognition.getClient(KoreanTextRecognizerOptions())`. Must be `close()`d after use to release the ML Kit client.
 - `ResultBuilder.kt` — Builds the `WritableMap` shapes for `ReceiptImage` and `ScanReceiptResult`.
 - `ScanOptions.kt` — Parses `ReadableMap` from JS into a typed data class.
 - `ReceiptScannerPackage.kt` — Registers the module with `isTurboModule = true`.
+- `CropEditorActivity.kt` — Custom gallery flow Activity. Picks a photo, runs MLKit document/segmentation detection, then hosts `QuadCropView` so the user can adjust corners before perspective correction. Mirrors the iOS `RNGalleryPickerDelegate` + `RNCropEditorViewController` stack.
+- `QuadCropView.kt` — Custom `View` with four draggable corner handles and a confirm/cancel button bar. Handles touch hit-testing, edge clamping, and emits the final quadrilateral back to `CropEditorActivity`.
 
 ### iOS Layer (`ios/`)
 
-- `ReceiptScanner.mm` — TurboModule entry. Routes to camera (`RNDocumentCameraDelegate`) or gallery (`RNGalleryPickerDelegate`) on the main queue. Holds strong references to delegates to keep them alive; clears them in the wrapped resolve/reject blocks.
-- `RNDocumentCameraDelegate` — `VNDocumentCameraViewControllerDelegate`. Writes each scanned page to temp dir and hands off to `RNImageProcessor`.
-- `RNGalleryPickerDelegate` — `PHPickerViewControllerDelegate`. Calls `VNDetectRectanglesRequest` then presents `RNCropEditorViewController`.
-- `RNCropEditorViewController` — Custom crop editor with four draggable corner handles and a confirm/cancel button bar. See ADR-004 for critical implementation constraints.
-- `RNImageProcessor` — Orientation normalize + JPEG recompress + EXIF read via `ImageIO`/`CoreGraphics`. Always writes EXIF orientation as `kCGImagePropertyOrientationUp (1)` in output; `exif.orientation` on the JS side will always be `1`.
-- `RNOcrProcessor` — `VNRecognizeTextRequest` with `recognitionLanguages: ["ko-KR", "en-US"]`. Korean OCR requires iOS 16+; falls back to Latin only on older versions.
-- `RNScanOptions` — Parses the JS options dictionary into a typed Obj-C object.
+Each component lives in a separate `.h` / `.m` pair (only `ReceiptScanner` itself is `.mm` for the C++ TurboModule glue).
+Minimum deployment target is iOS 16 (Korean OCR via `VNRecognizeTextRequest`).
+
+- `ReceiptScanner.{h,mm}` — TurboModule entry. Routes to camera (`RNDocumentCameraDelegate`) or gallery (`RNGalleryPickerDelegate`) on the main queue. Holds strong references to delegates to keep them alive; clears them in the wrapped resolve/reject blocks.
+- `RNDocumentCameraDelegate.{h,m}` — `VNDocumentCameraViewControllerDelegate`. Writes each scanned page to temp dir and hands off to `RNImageProcessor`.
+- `RNGalleryPickerDelegate.{h,m}` — `PHPickerViewControllerDelegate`. Calls `VNDetectRectanglesRequest` (and document-segmentation when available) then presents `RNCropEditorViewController`.
+- `RNCropEditorViewController.{h,m}` — Custom crop editor with four draggable corner handles and a confirm/cancel button bar. See ADR-004 for critical implementation constraints.
+- `RNImageProcessor.{h,m}` — Orientation normalize + JPEG recompress + EXIF read via `ImageIO`/`CoreGraphics`. Always writes EXIF orientation as `kCGImagePropertyOrientationUp (1)` in output; `exif.orientation` on the JS side will always be `1`.
+- `RNOcrProcessor.{h,m}` — `VNRecognizeTextRequest` with `recognitionLanguages: ["ko-KR", "en-US"]`.
+- `RNScanOptions.{h,m}` — Parses the JS options dictionary into a typed Obj-C object.
+
+**Read `ios/AGENTS.md` before modifying any iOS file.** It contains the line-anchored "where to look" map (e.g., `cropAutoConfirm` threshold at `RNGalleryPickerDelegate.m:12, 130-133`), the strong-ref / background-thread / `CIContext`-per-call conventions, and the full anti-pattern list that ADR-004 only summarises.
 
 ### Adding a New Native Method
 
@@ -63,6 +99,21 @@ Metro resolves `.native.tsx` over `.tsx` on iOS/Android automatically.
 4. Run `yarn example android`/`ios` — codegen re-generates native spec files automatically on build.
 
 The module name string `"ReceiptScanner"` must remain identical in `NativeReceiptScanner.ts`, `ReceiptScannerPackage.kt`, and `ReceiptScanner.mm`.
+
+## Architectural Decision Records
+
+Full ADRs live in `docs/notes/`. Read the relevant one before changing the corresponding subsystem.
+
+| ID      | File                                                     | Topic                                                                                                            |
+| ------- | -------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| ADR-001 | `docs/notes/adr-001-android-mlkit.md`                    | Why Android uses GMS ML Kit Document Scanner for the camera path.                                                |
+| ADR-002 | `docs/notes/adr-002-ios-gallery-crop.md`                 | iOS gallery crop strategy (Vision detect → custom 4-handle editor → CIPerspectiveCorrection).                    |
+| ADR-003 | `docs/notes/adr-003-package-boundaries.md`               | Package responsibility boundary — image primitives only, no receipt domain logic. Summarised below.              |
+| ADR-004 | `docs/notes/adr-004-ios-crop-editor-realdevice-fixes.md` | iOS crop editor real-device implementation fixes. Summarised below.                                              |
+| ADR-005 | `docs/notes/adr-005-android-gallery-strategy.md`         | Android `source: "gallery"` uses `CropEditorActivity`, not GMS gallery import. EXIF + origin notes.              |
+| ADR-006 | `docs/notes/adr-006-design-audit-and-ios16-baseline.md`  | 2026-05-09 design audit outcomes — iOS 16 baseline, `exif.software`, dropped `AndroidCameraOptions`, OCR intent. |
+
+**Cross-cutting reference.** `docs/notes/platform-asymmetries.md` is a living document tracking every iOS/Android difference (EXIF semantics, OCR rotation invariance, `rotationDegrees` direction, etc.). Read it before designing any feature that spans both platforms.
 
 ## Package Scope Boundary (ADR-003)
 

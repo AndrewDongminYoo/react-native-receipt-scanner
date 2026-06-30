@@ -1,7 +1,7 @@
 # Scan Pipeline
 
-Internal processing pipeline for contributors. Describes what happens between the
-`scan()` call and the resolved `ScanReceiptResult`.
+Internal processing pipeline for contributors.
+Describes what happens between the `scan()` call and the resolved `ScanReceiptResult`.
 
 ## Flow
 
@@ -10,8 +10,8 @@ scan(options)
   │
   ├─ apply default options
   │
-  ├─ [Android] GmsDocumentScanner
-  │    options: setGalleryImportAllowed(source === 'gallery')
+  ├─ [Android] camera: GmsDocumentScanner
+  │    options: setGalleryImportAllowed(false)  // camera only; gallery → CropEditorActivity (ADR-005)
   │             setPageLimit(maxPages)
   │             setResultFormats(RESULT_FORMAT_JPEG)
   │             setScannerMode(SCANNER_MODE_FULL)

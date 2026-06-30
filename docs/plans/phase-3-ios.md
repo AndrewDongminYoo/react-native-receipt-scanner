@@ -2,15 +2,16 @@
 
 ## Goal
 
-iOS parity with Phase 2. Camera scanning uses `VNDocumentCameraViewController`.
-Gallery import uses `PHPickerViewController` with a custom rectangle-detection
-crop editor, because VisionKit has no built-in gallery import.
+iOS parity with Phase 2.
+Camera scanning uses `VNDocumentCameraViewController`.
+Gallery import uses `PHPickerViewController` with a custom rectangle-detection crop editor, because VisionKit has no built-in gallery import.
 
 ## Key Constraints
 
 - `VNDocumentCameraViewController` is camera-only — no gallery import path exists in VisionKit.
 - `PHPickerViewController` requires no user permission prompt on iOS 14+.
 - `VNRecognizeTextRequest` supports `ko-KR` from iOS 16 onwards.
+  The package's deployment target is iOS 16 (see ADR-006); no Latin-only fallback is shipped.
 - All JPEG operations must go through `ImageIO` / `CoreGraphics` to preserve EXIF.
   Do not use `UIImageJPEGRepresentation` — it discards metadata.
 
@@ -56,7 +57,7 @@ crop editor, because VisionKit has no built-in gallery import.
   request.recognitionLanguages = ["ko-KR", "en-US"]
   request.recognitionLevel = .accurate
   ```
-- [x] iOS 16 guard for `ko-KR`; fall back to `["en-US"]` on older versions
+- [x] `recognitionLanguages = ["ko-KR", "en-US"]` (iOS 16 baseline; no Latin-only fallback — ADR-006)
 - [x] Run only when `options.ocr === true`
 
 ### Result & cleanup
@@ -71,5 +72,5 @@ crop editor, because VisionKit has no built-in gallery import.
 - [x] Gallery image → rectangle detection → crop editor → JPEG → `ocrText` returned (iOS)
 - [x] `exif` fields populated; GPS absent by default
 - [x] `uri` is a `file://` path — no base64
-- [x] Korean receipt OCR functional on iOS 16+; graceful fallback on iOS 15
+- [x] Korean receipt OCR functional on iOS 16+ (the package's minimum supported OS)
 - [x] `yarn example ios` runs the full flow end-to-end

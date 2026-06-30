@@ -92,6 +92,9 @@ yarn typecheck                 # tsc --noEmit
 yarn lint                      # ESLint over **/*.{js,ts,tsx}
 yarn test                      # Jest (only src/__tests__/*.test.tsx)
 
+trunk check                    # All trunk-managed linters (ktlint, osv-scanner, shellcheck, yamllint, …)
+trunk fmt                      # Auto-format every file the trunk formatters own
+
 yarn example start             # Metro for the example app
 yarn example android           # Build + run on Android emulator
 yarn example ios               # Build + run on iOS simulator
@@ -101,6 +104,18 @@ yarn release                   # release-it --only-version → npm + GitHub rele
 yarn watchman-reset            # Reset Watchman watch on cache pain
 yarn clean                     # Delete lib/ + example native build dirs
 ```
+
+## VERIFICATION (before declaring a job complete)
+
+Run this exact pipeline before claiming any task is done. Yarn covers the JS/TS surface; `trunk` covers Kotlin (ktlint), shell, YAML, Markdown, secret scan, and OSV-Scanner advisories. The pre-commit / pre-push hooks (`.trunk/trunk.yaml`) run the same checks — passing them locally is a prerequisite for committing.
+
+```bash
+yarn typecheck && yarn lint && yarn test && trunk fmt && trunk check
+```
+
+- `trunk fmt` rewrites files in place — run it **before** `trunk check`; otherwise the formatters are reported as failures.
+- A `trunk check` failure that is genuinely a false positive belongs in `.trunk/configs/<linter>.toml` with a written justification (see `.trunk/configs/osv-scanner.toml` for the canonical pattern). Never silence findings inline.
+- For native (`example/android` / `example/ios`) changes, also run `yarn example android` / `yarn example ios` — the example app is the integration test (no automated E2E).
 
 ## NOTES
 

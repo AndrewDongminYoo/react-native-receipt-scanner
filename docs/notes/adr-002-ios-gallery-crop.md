@@ -50,6 +50,6 @@ be re-evaluated before investing further in the custom path.
   part of Phase 3.
 - **No vendor lock-in** — the implementation can be iterated without licence negotiation.
 - **iOS 16+ for Korean OCR** — `VNRecognizeTextRequest` supports `ko-KR` from iOS 16.
-  Fallback to `en-US` on older versions; Korean text will not be recognized on iOS 15.
+  ADR-006 pins the package's deployment target at iOS 16; no Latin-only fallback ships.
 - **Camera and gallery are different code paths** on iOS but share the same post-processing
   pipeline (recompress → EXIF → OCR → result).
