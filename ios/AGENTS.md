@@ -19,24 +19,25 @@ ios/
 
 ## WHERE TO LOOK
 
-| Task                                                   | File:Lines                              |
-| ------------------------------------------------------ | --------------------------------------- |
-| Module strong-refs the delegates                       | `ReceiptScanner.mm:11-13, 28-38`        |
-| Camera vs gallery routing on main queue                | `ReceiptScanner.mm:40-58`               |
-| `cropAutoConfirm` threshold                            | `RNGalleryPickerDelegate.m:12, 130-133` |
-| Vision rectangle detection (with explicit orientation) | `RNGalleryPickerDelegate.m:159-210`     |
-| Document segmentation mask path (preferred)            | `RNGalleryPickerDelegate.m:184-225`     |
-| Crop editor handles + button bar + hit-test order      | `RNCropEditorViewController.m:53-138`   |
-| EXIF synthesis on camera scans                         | `RNImageProcessor.m:119-128`            |
-| Perspective correction (orientation baked first)       | `RNImageProcessor.m:163-192`            |
-| Localizable string keys                                | `RNCropEditorViewController.m:94-110`   |
-| Korean OCR availability gating                         | `RNOcrProcessor.m:18-23`                |
+| Task                                                   | File:Lines                                          |
+| ------------------------------------------------------ | --------------------------------------------------- |
+| Module strong-refs the delegates                       | `ReceiptScanner.mm:11-13, 28-38`                    |
+| Camera vs gallery routing on main queue                | `ReceiptScanner.mm:40-58`                           |
+| `cropAutoConfirm` threshold                            | `RNGalleryPickerDelegate.m:15, 212`                 |
+| Multi-photo serial queue (avoids modal race)           | `RNGalleryPickerDelegate.m:60-67, 116-148, 366-376` |
+| Vision rectangle detection (with explicit orientation) | `RNGalleryPickerDelegate.m:240-285`                 |
+| Document segmentation mask path (preferred)            | `RNGalleryPickerDelegate.m:243, 263-273`            |
+| Crop editor handles + button bar + hit-test order      | `RNCropEditorViewController.m:53-138`               |
+| EXIF synthesis on camera scans                         | `RNImageProcessor.m:119-128`                        |
+| Perspective correction (orientation baked first)       | `RNImageProcessor.m:163-192`                        |
+| Localizable string keys                                | `RNCropEditorViewController.m:94-110`               |
+| Korean OCR availability gating                         | `RNOcrProcessor.m:18-23`                            |
 
 ## CONVENTIONS
 
 - **Strong refs on the module**: `cameraDelegate`/`galleryDelegate` are retained on `ReceiptScanner` until `wrappedResolve`/`wrappedReject` clears them. Weak references on UIKit views WILL crash mid-flow.
 - **Background thread for image work**: `dispatch_async(dispatch_get_global_queue(...))` in both delegates; resolve/reject hops back to the main queue.
-- **Localization**: Read via `NSLocalizedStringWithDefaultValue(..., [NSBundle mainBundle], ...)`. Host apps add `RNReceiptScanner_cancelButton` / `RNReceiptScanner_confirmButton` to their own `Localizable.strings`. Defaults are `"Cancel"` / `"Use Photo"`.
+- **Localization**: Read via `NSLocalizedStringWithDefaultValue(..., [NSBundle mainBundle], ...)`. Host apps add `RNReceiptScanner_cropInstruction` / `RNReceiptScanner_cancelButton` / `RNReceiptScanner_confirmButton` to their own `Localizable.strings`. Defaults are `"Drag the corners to frame the document"` / `"Cancel"` / `"Use Photo"`.
 - **Output orientation is always `1` (Up)**: `RNImageProcessor.processImage:` writes both `kCGImagePropertyOrientation` and TIFF `Orientation` = `kCGImagePropertyOrientationUp`. JS receives `exif.orientation === 1` always.
 - **ARC-managed `CGImageSourceRef`**: `RNCGImageSourceHolder` wraps the source so all early-return paths in the gallery delegate release it. Don't introduce raw `CGImageSourceRef` locals.
 - **Per-call `CIContext`**: `RNImageProcessor.perspectiveCorrectedCGImage:` allocates `[CIContext context]` per call because `CIContext` is not thread-safe under `maxPages > 1`.
@@ -55,3 +56,4 @@ ios/
 - ❌ **Static / shared `CIContext`** — race under `maxPages > 1`. Allocate per call.
 - ❌ Using `-34` as a generic offset somewhere else — it's specifically the Face-ID home-indicator zone height; document the source if you reuse it.
 - ❌ Removing the `RNCGImageSourceHolder` wrapper — every early-return path then leaks a `CGImageSourceRef`.
+- ❌ **Concurrent `presentViewController:` on the same presenter** for `maxPages > 1` gallery scans. After PHPicker dismisses, fanning out N `loadDataRepresentation` → `present` chains in a single for-loop issues N main-queue presentations near-simultaneously; UIKit silently rejects all but the first, and the rejected editors' completion blocks are never invoked → Promise hangs forever. `RNGalleryPickerDelegate` serializes via `queuedItems` + `queueIndex` + `processNextQueuedItem`; chain the next photo from inside `didFinishOneItem:`. Do NOT reintroduce a parallel for-loop here.
