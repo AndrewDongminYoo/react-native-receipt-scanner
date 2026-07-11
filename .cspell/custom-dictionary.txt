@@ -1,6 +1,7 @@
 # Custom Dictionary Words
 agentic
 androidx
+anonymization
 AOSP
 APPL
 appname

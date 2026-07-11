@@ -1,11 +1,13 @@
 import { useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   Image,
   Platform,
   Pressable,
   SafeAreaView,
   ScrollView,
+  Share,
   StatusBar,
   StyleSheet,
   Text,
@@ -14,33 +16,80 @@ import {
 import {
   scan,
   type ImageOrigin,
+  type OcrQuality,
+  type ReceiptExif,
   type ReceiptImage,
   type ScanReceiptOptions,
   type ScanReceiptResult,
 } from "react-native-receipt-scanner";
 
-// ─── Design tokens ────────────────────────────────────────────────────────────
-const C = {
-  bg: "#F4F3EF",
-  surface: "#FFFFFF",
-  surfaceAlt: "#F9F9F7",
-  primary: "#007AFF",
-  primaryFg: "#FFFFFF",
-  primaryMuted: "#E6F0FF",
-  ink900: "#1C1917",
-  ink600: "#57534E",
-  ink400: "#A8A29E",
-  border: "#E7E5E4",
-  successBg: "#ECFDF5",
-  successFg: "#065F46",
-  errorBg: "#FEF2F2",
-  errorFg: "#991B1B",
-  warnBg: "#FFFBEB",
-  warnFg: "#92400E",
+import { ANDROID_STATUS_BAR_INSET, C, R, S } from "./theme";
+
+// ─── Scan options state ─────────────────────────────────────────────────────--
+//
+// Every ScanReceiptOptions field is surfaced as a demo control. The state is a
+// single object (with a generic `set` updater) rather than ~14 individual
+// useState hooks threaded as props — the option set is the whole point of this
+// screen, so one bag keeps ScanPage's signature flat.
+
+type ScanOptionsState = {
+  source: "camera" | "gallery";
+  ocr: boolean;
+  includeExif: boolean;
+  maxPages: number;
+  quality: number;
+  includeGpsExif: boolean;
+  includeRawExif: boolean;
+  autoRotate: boolean;
+  cropAutoConfirm: boolean;
+  minimumTextHeight: number;
+  // ocrFloor is `OcrFloor | false`; modelled here as an on/off flag plus the
+  // three sub-thresholds, recombined in `buildOptions`.
+  ocrFloorEnabled: boolean;
+  floorMinTextLength: number;
+  floorMinLines: number;
+  floorMinConfidence: number;
 };
 
-const R = { sm: 8, md: 12, lg: 16, xl: 20, full: 999 };
-const S = { "xs": 4, "sm": 8, "md": 12, "lg": 16, "xl": 20, "2xl": 28, "3xl": 40 };
+const INITIAL_OPTIONS: ScanOptionsState = {
+  source: "camera",
+  ocr: true,
+  includeExif: true,
+  maxPages: 1,
+  quality: 0.82,
+  includeGpsExif: false,
+  includeRawExif: false,
+  autoRotate: true,
+  cropAutoConfirm: false,
+  minimumTextHeight: 0,
+  ocrFloorEnabled: true,
+  floorMinTextLength: 12,
+  floorMinLines: 2,
+  floorMinConfidence: 0,
+};
+
+// Recombine the flattened demo state into the package's option shape.
+function buildOptions(o: ScanOptionsState): ScanReceiptOptions {
+  return {
+    source: o.source,
+    ocr: o.ocr,
+    includeExif: o.includeExif,
+    includeGpsExif: o.includeGpsExif,
+    includeRawExif: o.includeRawExif,
+    maxPages: o.maxPages,
+    quality: o.quality,
+    autoRotate: o.autoRotate,
+    cropAutoConfirm: o.cropAutoConfirm,
+    minimumTextHeight: o.minimumTextHeight,
+    ocrFloor: o.ocrFloorEnabled
+      ? {
+          minTextLength: o.floorMinTextLength,
+          minLines: o.floorMinLines,
+          minConfidence: o.floorMinConfidence,
+        }
+      : false,
+  };
+}
 
 // ─── Shared components ────────────────────────────────────────────────────────
 
@@ -57,22 +106,134 @@ function Card({ children, style }: { children: React.ReactNode; style?: object }
   return <View style={[styles.card, style]}>{children}</View>;
 }
 
+function Badge({ text }: { text: string }) {
+  return (
+    <View style={styles.platformBadge}>
+      <Text style={styles.platformBadgeText}>{text}</Text>
+    </View>
+  );
+}
+
 function ToggleRow({
   label,
   value,
   onToggle,
+  disabled = false,
+  hint,
+  badge,
 }: {
   label: string;
   value: boolean;
   onToggle: () => void;
+  disabled?: boolean;
+  hint?: string;
+  badge?: string;
 }) {
   return (
-    <Pressable style={styles.toggleRow} onPress={onToggle}>
-      <Text style={styles.toggleLabel}>{label}</Text>
-      <View style={[styles.toggleTrack, value && styles.toggleTrackOn]}>
+    <Pressable
+      style={styles.toggleRow}
+      onPress={disabled ? undefined : onToggle}
+      disabled={disabled}
+    >
+      <View style={styles.controlLabelCol}>
+        <View style={styles.controlLabelRow}>
+          <Text style={[styles.toggleLabel, disabled && styles.controlDisabled]}>{label}</Text>
+          {badge && <Badge text={badge} />}
+        </View>
+        {hint && <Text style={styles.controlHint}>{hint}</Text>}
+      </View>
+      <View
+        style={[styles.toggleTrack, value && styles.toggleTrackOn, disabled && styles.toggleDimmed]}
+      >
         <View style={[styles.toggleThumb, value && styles.toggleThumbOn]} />
       </View>
     </Pressable>
+  );
+}
+
+function ChipRow({
+  label,
+  values,
+  value,
+  onChange,
+  format,
+  disabled = false,
+  hint,
+  badge,
+}: {
+  label: string;
+  values: number[];
+  value: number;
+  onChange: (v: number) => void;
+  format?: (v: number) => string;
+  disabled?: boolean;
+  hint?: string;
+  badge?: string;
+}) {
+  return (
+    <View style={[styles.chipRow, disabled && styles.toggleDimmed]}>
+      <View style={styles.controlLabelRow}>
+        <Text style={[styles.toggleLabel, disabled && styles.controlDisabled]}>{label}</Text>
+        {badge && <Badge text={badge} />}
+      </View>
+      {hint && <Text style={styles.controlHint}>{hint}</Text>}
+      <View style={styles.chips}>
+        {values.map((v) => {
+          const selected = v === value;
+          return (
+            <Pressable
+              key={v}
+              style={[styles.chip, selected && styles.chipSelected]}
+              onPress={disabled ? undefined : () => onChange(v)}
+              disabled={disabled}
+            >
+              <Text style={[styles.chipText, selected && styles.chipTextSelected]}>
+                {format ? format(v) : String(v)}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
+    </View>
+  );
+}
+
+function StepperRow({
+  label,
+  value,
+  onChange,
+  min,
+  max,
+  disabled = false,
+}: {
+  label: string;
+  value: number;
+  onChange: (v: number) => void;
+  min: number;
+  max: number;
+  disabled?: boolean;
+}) {
+  return (
+    <View style={styles.stepperRow}>
+      <Text style={[styles.toggleLabel, disabled && styles.controlDisabled]}>{label}</Text>
+      <View style={[styles.stepper, disabled && styles.toggleDimmed]}>
+        <Pressable
+          style={styles.stepBtn}
+          onPress={disabled ? undefined : () => value > min && onChange(value - 1)}
+          disabled={disabled}
+        >
+          <Text style={styles.stepBtnText}>−</Text>
+        </Pressable>
+        <Text style={styles.stepValue}>{value}</Text>
+        <Pressable
+          style={styles.stepBtn}
+          onPress={disabled ? undefined : () => value < max && onChange(value + 1)}
+          disabled={disabled}
+        >
+          <Text style={styles.stepBtnText}>+</Text>
+        </Pressable>
+      </View>
+    </View>
   );
 }
 
@@ -131,6 +292,156 @@ function OriginBadge({ origin }: { origin: ImageOrigin }) {
   );
 }
 
+// ─── Fixture dump (Phase 5 Step 0) ────────────────────────────────────────────
+//
+// Collects real-device OCR output and shares it as a JSON blob matching
+// `src/__tests__/fixtures/ocr/types.ts#OcrFixture`. The user labels each
+// dump as "normal" or "mirrored"; the resulting file goes into
+// `src/__tests__/fixtures/ocr/` after anonymization (see that folder's
+// README for redaction rules).
+
+type FixtureCategory = "normal" | "mirrored";
+
+function tokenize(text: string): string[] {
+  return text
+    .split(/\s+/)
+    .map((t) => t.trim())
+    .filter(Boolean);
+}
+
+function splitLines(text: string): string[] {
+  return text
+    .split(/\n+/)
+    .map((l) => l.trim())
+    .filter(Boolean);
+}
+
+function buildFixture(
+  image: ReceiptImage,
+  source: "camera" | "gallery",
+  category: FixtureCategory,
+  sequenceTag: string
+) {
+  const text = image.ocrText ?? "";
+  const platform: "ios" | "android" = Platform.OS === "ios" ? "ios" : "android";
+  return {
+    id: `${category}-${sequenceTag}`,
+    platform,
+    source,
+    transform: category === "mirrored" ? "horizontalFlip" : "none",
+    tokens: tokenize(text),
+    lines: splitLines(text),
+    confidence: image.ocrQuality?.confidence ?? null,
+    notes: "TODO — redact PII per src/__tests__/fixtures/ocr/README.md before committing",
+  };
+}
+
+async function dumpFixture(
+  image: ReceiptImage,
+  source: "camera" | "gallery",
+  category: FixtureCategory
+) {
+  const tag = new Date()
+    .toISOString()
+    .replace(/[-:.TZ]/g, "")
+    .slice(0, 14);
+  const fixture = buildFixture(image, source, category, tag);
+  try {
+    await Share.share({
+      title: `${fixture.id}.json`,
+      message: JSON.stringify(fixture, null, 2),
+    });
+  } catch (e) {
+    console.warn("[fixture-dump] share failed", e);
+  }
+}
+
+// Human checklist gate. Auto-redaction would risk false negatives on
+// region-specific name/address shapes; the gate forces the contributor to
+// confirm review before the JSON leaves the app.
+function confirmRedactionAndDump(
+  image: ReceiptImage,
+  source: "camera" | "gallery",
+  category: FixtureCategory
+) {
+  Alert.alert(
+    "PII 검토 필수",
+    "공유 후 외부 편집기에서 다음 항목을 redact 한 뒤 " +
+      "src/__tests__/fixtures/ocr/ 로 저장하세요:\n\n" +
+      "• 점원/대표자 이름 → XXX\n" +
+      "• 전화번호 → XX-XXXX-XXXX\n" +
+      "• 카드번호 → ****-****-****-XXXX\n" +
+      "• 사업자등록번호 → XXX-XX-XXXXX\n" +
+      '• 거래번호/영수증번호 → 끝자리 "X"\n' +
+      '• 주소 번지수 이하 → "…XXX"\n' +
+      '• 매장 분점명 → "XXX점"\n\n' +
+      "익명화 완료 후 notes 필드에 처리 내역을 기록하세요.",
+    [
+      { text: "취소", style: "cancel" },
+      { text: "확인 — 공유", onPress: () => dumpFixture(image, source, category) },
+    ]
+  );
+}
+
+function promptFixtureCategory(image: ReceiptImage, source: "camera" | "gallery") {
+  Alert.alert("Fixture로 저장", "이 영수증의 OCR 출력을 어느 카테고리로 dump 할까요?", [
+    {
+      text: "정상 영수증",
+      onPress: () => confirmRedactionAndDump(image, source, "normal"),
+    },
+    {
+      text: "좌우반전 영수증",
+      onPress: () => confirmRedactionAndDump(image, source, "mirrored"),
+    },
+    { text: "취소", style: "cancel" },
+  ]);
+}
+
+// ─── OCR quality + EXIF detail ─────────────────────────────────────────────---
+
+function OcrQualityPart({ quality }: { quality: OcrQuality }) {
+  const confidence =
+    quality.confidence === undefined ? "—" : `${(quality.confidence * 100).toFixed(1)}%`;
+  return (
+    <Collapsible title="OCR 품질" defaultOpen>
+      <MetaRow label="글자 수" value={String(quality.textLength)} />
+      <MetaRow label="줄 수" value={String(quality.lineCount)} />
+      <MetaRow label="신뢰도" value={confidence} />
+    </Collapsible>
+  );
+}
+
+function ExifPart({ exif, origin }: { exif: ReceiptExif; origin: ImageOrigin }) {
+  const { dateTimeOriginal, make, model, software, orientation, gps, raw, ...rest } = exif;
+  const hasRest = Object.keys(rest).length > 0;
+  const emptyNote =
+    origin === "camera"
+      ? "스캐너가 원본 EXIF를 내보내지 않아 기기 정보만 합성해 제공합니다."
+      : "추가 EXIF 필드 없음";
+  return (
+    <View style={{ marginVertical: S.sm }}>
+      {dateTimeOriginal && <MetaRow label="촬영일시" value={dateTimeOriginal} />}
+      {make && <MetaRow label="제조사" value={make} />}
+      {model && <MetaRow label="기기 모델" value={model} />}
+      {software && <MetaRow label="소프트웨어" value={software} />}
+      {orientation !== undefined && <MetaRow label="방향 태그" value={String(orientation)} />}
+      {gps && (
+        <MetaRow label="GPS" value={`${gps.latitude.toFixed(5)}, ${gps.longitude.toFixed(5)}`} />
+      )}
+      {hasRest ? (
+        <Text style={[styles.metaValue, styles.exifRawJson]}>{JSON.stringify(rest, null, 2)}</Text>
+      ) : (
+        !raw && <Text style={styles.exifNote}>{emptyNote}</Text>
+      )}
+      {raw && (
+        <Collapsible title={`원본 EXIF (raw · ${Object.keys(raw).length} keys)`}>
+          <Text style={[styles.metaValue, styles.exifRawJson]}>{JSON.stringify(raw, null, 2)}</Text>
+        </Collapsible>
+      )}
+    </View>
+  );
+}
+
 // ─── Image detail card ────────────────────────────────────────────────────────
 
 function ImageDetailCard({ image, index }: { image: ReceiptImage; index: number }) {
@@ -153,6 +464,8 @@ function ImageDetailCard({ image, index }: { image: ReceiptImage; index: number 
         <MetaRow label="형식" value={image.mimeType} />
       </Collapsible>
 
+      {image.ocrQuality && <OcrQualityPart quality={image.ocrQuality} />}
+
       {image.ocrText !== undefined && (
         <Collapsible title="OCR 텍스트" defaultOpen>
           <ScrollView style={styles.ocrScroll} nestedScrollEnabled>
@@ -161,24 +474,7 @@ function ImageDetailCard({ image, index }: { image: ReceiptImage; index: number 
         </Collapsible>
       )}
 
-      {image.exif && (
-        <Collapsible title="EXIF 메타데이터">
-          {image.exif.dateTimeOriginal && (
-            <MetaRow label="촬영일시" value={image.exif.dateTimeOriginal} />
-          )}
-          {image.exif.make && <MetaRow label="제조사" value={image.exif.make} />}
-          {image.exif.model && <MetaRow label="기기 모델" value={image.exif.model} />}
-          {image.exif.orientation !== undefined && (
-            <MetaRow label="방향 태그" value={String(image.exif.orientation)} />
-          )}
-          {image.exif.gps && (
-            <MetaRow
-              label="GPS"
-              value={`${image.exif.gps.latitude.toFixed(5)}, ${image.exif.gps.longitude.toFixed(5)}`}
-            />
-          )}
-        </Collapsible>
-      )}
+      {image.exif && <ExifPart exif={image.exif} origin={image.imageOrigin} />}
     </Card>
   );
 }
@@ -186,34 +482,16 @@ function ImageDetailCard({ image, index }: { image: ReceiptImage; index: number 
 // ─── Scan page ────────────────────────────────────────────────────────────────
 
 type ScanPageProps = {
-  source: "camera" | "gallery";
-  setSource: (v: "camera" | "gallery") => void;
-  ocrEnabled: boolean;
-  setOcrEnabled: (v: boolean) => void;
-  exifEnabled: boolean;
-  setExifEnabled: (v: boolean) => void;
-  maxPages: number;
-  setMaxPages: (v: number) => void;
+  opts: ScanOptionsState;
+  set: <K extends keyof ScanOptionsState>(key: K, value: ScanOptionsState[K]) => void;
   scanning: boolean;
   error: { code: string; message: string } | null;
   lastResult: ScanReceiptResult | null;
   onScan: () => void;
 };
 
-function ScanPage({
-  source,
-  setSource,
-  ocrEnabled,
-  setOcrEnabled,
-  exifEnabled,
-  setExifEnabled,
-  maxPages,
-  setMaxPages,
-  scanning,
-  error,
-  lastResult,
-  onScan,
-}: ScanPageProps) {
+function ScanPage({ opts, set, scanning, error, lastResult, onScan }: ScanPageProps) {
+  const isIOS = Platform.OS === "ios";
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="dark-content" backgroundColor={C.bg} />
@@ -234,23 +512,28 @@ function ScanPage({
           />
           <View style={styles.sourceRow}>
             <Pressable
-              style={[styles.sourceCard, source === "camera" && styles.sourceCardSelected]}
-              onPress={() => setSource("camera")}
+              style={[styles.sourceCard, opts.source === "camera" && styles.sourceCardSelected]}
+              onPress={() => set("source", "camera")}
             >
               <Text style={styles.sourceIcon}>📷</Text>
-              <Text style={[styles.sourceLabel, source === "camera" && styles.sourceLabelSelected]}>
+              <Text
+                style={[styles.sourceLabel, opts.source === "camera" && styles.sourceLabelSelected]}
+              >
                 카메라
               </Text>
               <Text style={styles.sourceSublabel}>문서 스캐너</Text>
             </Pressable>
 
             <Pressable
-              style={[styles.sourceCard, source === "gallery" && styles.sourceCardSelected]}
-              onPress={() => setSource("gallery")}
+              style={[styles.sourceCard, opts.source === "gallery" && styles.sourceCardSelected]}
+              onPress={() => set("source", "gallery")}
             >
               <Text style={styles.sourceIcon}>🖼️</Text>
               <Text
-                style={[styles.sourceLabel, source === "gallery" && styles.sourceLabelSelected]}
+                style={[
+                  styles.sourceLabel,
+                  opts.source === "gallery" && styles.sourceLabelSelected,
+                ]}
               >
                 갤러리
               </Text>
@@ -258,10 +541,10 @@ function ScanPage({
             </Pressable>
           </View>
 
-          {source === "gallery" && (
+          {opts.source === "gallery" && (
             <View style={styles.infoBadge}>
               <Text style={styles.infoText}>
-                {Platform.OS === "ios"
+                {isIOS
                   ? "📐 iOS: VNDetectRectangles가 문서 모서리를 자동 감지하고 드래그 핸들로 원근 보정이 가능합니다"
                   : "📷 Android: 갤러리에서 영수증 사진을 직접 선택합니다. 문서 모서리를 드래그 핸들로 보정해주세요."}
               </Text>
@@ -269,40 +552,151 @@ function ScanPage({
           )}
         </View>
 
-        {/* 섹션 2 — 스캔 옵션 */}
+        {/* 섹션 2 — 기본 옵션 */}
         <View style={styles.section}>
           <SectionHeader title="스캔 옵션" description="처리할 데이터와 품질을 설정하세요" />
           <Card>
             <ToggleRow
               label="OCR — 한국어 + 라틴 텍스트 인식"
-              value={ocrEnabled}
-              onToggle={() => setOcrEnabled(!ocrEnabled)}
+              value={opts.ocr}
+              onToggle={() => set("ocr", !opts.ocr)}
             />
             <View style={styles.divider} />
             <ToggleRow
               label="EXIF 메타데이터 포함"
-              value={exifEnabled}
-              onToggle={() => setExifEnabled(!exifEnabled)}
+              value={opts.includeExif}
+              onToggle={() => set("includeExif", !opts.includeExif)}
             />
             <View style={styles.divider} />
-            <View style={styles.stepperRow}>
-              <Text style={styles.toggleLabel}>최대 페이지 수</Text>
-              <View style={styles.stepper}>
-                <Pressable
-                  style={styles.stepBtn}
-                  onPress={() => maxPages > 1 && setMaxPages(maxPages - 1)}
-                >
-                  <Text style={styles.stepBtnText}>−</Text>
-                </Pressable>
-                <Text style={styles.stepValue}>{maxPages}</Text>
-                <Pressable
-                  style={styles.stepBtn}
-                  onPress={() => maxPages < 10 && setMaxPages(maxPages + 1)}
-                >
-                  <Text style={styles.stepBtnText}>+</Text>
-                </Pressable>
+            <StepperRow
+              label="최대 페이지 수"
+              value={opts.maxPages}
+              onChange={(v) => set("maxPages", v)}
+              min={1}
+              max={10}
+            />
+            <View style={styles.divider} />
+            <ChipRow
+              label="JPEG 품질 (quality)"
+              values={[0.5, 0.7, 0.82, 0.95, 1.0]}
+              value={opts.quality}
+              onChange={(v) => set("quality", v)}
+              format={(v) => (v === 0.82 ? "0.82·기본" : v.toFixed(2))}
+            />
+          </Card>
+        </View>
+
+        {/* 섹션 3 — OCR 정밀도 */}
+        <View style={styles.section}>
+          <SectionHeader
+            title="OCR 정밀도"
+            description="회전 보정 · 작은 글자 인식 · 인식 결과 게이트"
+          />
+          <Card>
+            <ToggleRow
+              label="자동 회전 보정 (autoRotate)"
+              value={opts.autoRotate}
+              onToggle={() => set("autoRotate", !opts.autoRotate)}
+              disabled={!opts.ocr}
+              hint={opts.ocr ? undefined : "OCR이 켜져 있어야 적용됩니다"}
+            />
+            <View style={styles.divider} />
+            <ChipRow
+              label="최소 텍스트 높이 (minimumTextHeight)"
+              values={[0, 0.02, 0.05, 0.1]}
+              value={opts.minimumTextHeight}
+              onChange={(v) => set("minimumTextHeight", v)}
+              format={(v) => (v === 0 ? "기본(1/32)" : v.toFixed(2))}
+              badge="iOS"
+              disabled={!isIOS || !opts.ocr}
+              hint={
+                !isIOS
+                  ? "Android(ML Kit)에는 대응 항목이 없어 무시됩니다"
+                  : !opts.ocr
+                    ? "OCR이 켜져 있어야 적용됩니다"
+                    : "값을 낮추면 작은 항목 텍스트 인식률이 올라갑니다 (노이즈 증가)"
+              }
+            />
+            <View style={styles.divider} />
+            <ToggleRow
+              label="OCR 최소 기준 (ocrFloor)"
+              value={opts.ocrFloorEnabled}
+              onToggle={() => set("ocrFloorEnabled", !opts.ocrFloorEnabled)}
+              disabled={!opts.ocr}
+              hint={
+                opts.ocr
+                  ? "기준 미달 이미지는 rejectedImages로 분류됩니다"
+                  : "OCR이 켜져 있어야 적용됩니다"
+              }
+            />
+            {opts.ocr && opts.ocrFloorEnabled && (
+              <View style={styles.nested}>
+                <StepperRow
+                  label="minTextLength"
+                  value={opts.floorMinTextLength}
+                  onChange={(v) => set("floorMinTextLength", v)}
+                  min={0}
+                  max={200}
+                />
+                <StepperRow
+                  label="minLines"
+                  value={opts.floorMinLines}
+                  onChange={(v) => set("floorMinLines", v)}
+                  min={0}
+                  max={50}
+                />
+                <ChipRow
+                  label="minConfidence"
+                  values={[0, 0.3, 0.5, 0.7]}
+                  value={opts.floorMinConfidence}
+                  onChange={(v) => set("floorMinConfidence", v)}
+                  format={(v) => (v === 0 ? "0·off" : v.toFixed(1))}
+                />
               </View>
-            </View>
+            )}
+          </Card>
+        </View>
+
+        {/* 섹션 4 — EXIF & 크롭 */}
+        <View style={styles.section}>
+          <SectionHeader title="EXIF & 크롭" description="메타데이터 범위와 크롭 동작" />
+          <Card>
+            <ToggleRow
+              label="GPS EXIF 포함 (includeGpsExif)"
+              value={opts.includeGpsExif}
+              onToggle={() => set("includeGpsExif", !opts.includeGpsExif)}
+              disabled={!opts.includeExif}
+              hint={
+                opts.includeExif
+                  ? "원본 이미지에 박힌 GPS만 복사 — 위치 권한 요청 없음"
+                  : "EXIF 포함이 켜져 있어야 적용됩니다"
+              }
+            />
+            <View style={styles.divider} />
+            <ToggleRow
+              label="원본 raw EXIF 포함 (includeRawExif)"
+              value={opts.includeRawExif}
+              onToggle={() => set("includeRawExif", !opts.includeRawExif)}
+              disabled={!opts.includeExif}
+              hint={
+                opts.includeExif
+                  ? "화이트리스트 밖 태그까지 exif.raw로 노출 (IPC 페이로드 증가)"
+                  : "EXIF 포함이 켜져 있어야 적용됩니다"
+              }
+            />
+            <View style={styles.divider} />
+            <ToggleRow
+              label="크롭 자동 확정 (cropAutoConfirm)"
+              value={opts.cropAutoConfirm}
+              onToggle={() => set("cropAutoConfirm", !opts.cropAutoConfirm)}
+              badge="iOS 갤러리"
+              disabled={opts.source !== "gallery"}
+              hint={
+                opts.source === "gallery"
+                  ? "문서 감지 신뢰도가 높으면 크롭 편집기를 건너뜁니다 (iOS 전용)"
+                  : "source가 gallery일 때만 적용됩니다"
+              }
+            />
           </Card>
         </View>
 
@@ -317,7 +711,7 @@ function ScanPage({
               <ActivityIndicator color={C.primaryFg} />
             ) : (
               <Text style={styles.scanBtnText}>
-                {source === "camera" ? "📷 카메라로 스캔" : "🖼️ 갤러리에서 가져오기"}
+                {opts.source === "camera" ? "📷 카메라로 스캔" : "🖼️ 갤러리에서 가져오기"}
               </Text>
             )}
           </Pressable>
@@ -351,9 +745,7 @@ function ScanPage({
                     : styles.statusBadgeTextWarn,
                 ]}
               >
-                {lastResult.status === "success"
-                  ? `✅ 스캔 성공 — ${lastResult.images.length}페이지`
-                  : "⚪ 스캔 취소됨"}
+                {statusSummary(lastResult)}
               </Text>
             </View>
           </View>
@@ -364,6 +756,18 @@ function ScanPage({
 }
 
 // ─── Result page ──────────────────────────────────────────────────────────────
+
+function statusSummary(result: ScanReceiptResult): string {
+  switch (result.status) {
+    case "success":
+      return `✅ 스캔 성공 — ${result.images.length}페이지`;
+    case "rejected":
+      return `⚠️ OCR 기준 미달 — ${result.rejectedImages.length}페이지 거부됨`;
+    case "cancelled":
+    default:
+      return "⚪ 스캔 취소됨";
+  }
+}
 
 function ResultPage({
   result,
@@ -376,9 +780,9 @@ function ResultPage({
   onBack: () => void;
   onRescan: () => void;
 }) {
-  const hasImages = result.status === "success" && result.images.length > 0;
+  const hasImages = result.images.length > 0;
   const hasOcr = hasImages && result.images.some((img) => img.ocrText);
-  const hasExif = hasImages && result.images.some((img) => img.exif);
+  const isWarn = result.status !== "success";
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -399,27 +803,23 @@ function ResultPage({
           <View
             style={[
               styles.statusBadge,
-              result.status === "success" ? styles.statusBadgeSuccess : styles.statusBadgeWarn,
+              isWarn ? styles.statusBadgeWarn : styles.statusBadgeSuccess,
             ]}
           >
             <Text
               style={[
                 styles.statusBadgeText,
-                result.status === "success"
-                  ? styles.statusBadgeTextSuccess
-                  : styles.statusBadgeTextWarn,
+                isWarn ? styles.statusBadgeTextWarn : styles.statusBadgeTextSuccess,
               ]}
             >
-              {result.status === "success"
-                ? `✅ 스캔 성공 — ${result.images.length}페이지`
-                : "⚪ 사용자가 스캔을 취소했습니다"}
+              {statusSummary(result)}
             </Text>
           </View>
         </View>
 
         {hasImages && (
           <>
-            {/* 섹션 A — 갤러리에서 영수증 사진 가져오기 */}
+            {/* 섹션 A — 영수증 이미지 */}
             <View style={styles.section}>
               <SectionHeader
                 title="영수증 이미지"
@@ -434,57 +834,42 @@ function ResultPage({
               ))}
             </View>
 
-            {/* 섹션 B — 영수증 내용 확인하기 */}
+            {/* 섹션 B — 페이지별 fixture dump */}
             {hasOcr && (
               <View style={styles.section}>
                 <SectionHeader
-                  title="영수증 내용 확인"
-                  description="온디바이스 OCR로 추출한 텍스트입니다 (한국어 + 라틴 문자, 네트워크 불필요)"
+                  title="Fixture 입력"
+                  description="OCR 출력을 회귀 테스트 fixture로 dump 합니다"
                 />
                 {result.images.map((img, i) =>
                   img.ocrText ? (
-                    <Card key={i} style={{ marginBottom: S.md }}>
-                      <Text style={styles.imageCardTitle}>페이지 {i + 1} — OCR 전문</Text>
-                      <ScrollView style={styles.ocrFullScroll} nestedScrollEnabled>
-                        <Text style={styles.ocrFullText}>{img.ocrText.trim()}</Text>
-                      </ScrollView>
-                    </Card>
-                  ) : null
-                )}
-              </View>
-            )}
-
-            {/* 섹션 C — EXIF 메타데이터 */}
-            {hasExif && (
-              <View style={styles.section}>
-                <SectionHeader
-                  title="EXIF 메타데이터"
-                  description="원본 이미지에서 추출한 카메라 및 기기 정보입니다"
-                />
-                {result.images.map((img, i) =>
-                  img.exif ? (
-                    <Card key={i} style={{ marginBottom: S.md }}>
+                    <Card key={`detail-${i}`} style={{ marginVertical: S.md }}>
                       <Text style={styles.imageCardTitle}>페이지 {i + 1}</Text>
-                      {img.exif.dateTimeOriginal && (
-                        <MetaRow label="촬영일시" value={img.exif.dateTimeOriginal} />
-                      )}
-                      {img.exif.make && <MetaRow label="제조사" value={img.exif.make} />}
-                      {img.exif.model && <MetaRow label="기기 모델" value={img.exif.model} />}
-                      {img.exif.orientation !== undefined && (
-                        <MetaRow label="방향 태그" value={String(img.exif.orientation)} />
-                      )}
-                      {img.exif.gps && (
-                        <MetaRow
-                          label="GPS"
-                          value={`${img.exif.gps.latitude.toFixed(5)}, ${img.exif.gps.longitude.toFixed(5)}`}
-                        />
-                      )}
+                      <Pressable
+                        style={styles.fixtureBtn}
+                        onPress={() => promptFixtureCategory(img, source)}
+                      >
+                        <Text style={styles.fixtureBtnText}>📋 Fixture로 저장</Text>
+                      </Pressable>
                     </Card>
                   ) : null
                 )}
               </View>
             )}
           </>
+        )}
+
+        {/* 섹션 C — OCR 기준 미달로 거부된 이미지 */}
+        {result.rejectedImages.length > 0 && (
+          <View style={styles.section}>
+            <SectionHeader
+              title="거부된 이미지 (rejectedImages)"
+              description="ocrFloor 기준을 충족하지 못해 images에서 제외된 캡처입니다"
+            />
+            {result.rejectedImages.map((img, i) => (
+              <ImageDetailCard key={`rejected-${i}`} image={img} index={i} />
+            ))}
+          </View>
         )}
 
         {/* 다시 스캔 버튼 */}
@@ -509,24 +894,20 @@ export default function App() {
     message: string;
   } | null>(null);
 
-  const [source, setSource] = useState<"camera" | "gallery">("camera");
-  const [ocrEnabled, setOcrEnabled] = useState(true);
-  const [exifEnabled, setExifEnabled] = useState(true);
-  const [maxPages, setMaxPages] = useState(1);
+  const [opts, setOpts] = useState<ScanOptionsState>(INITIAL_OPTIONS);
+  const set = <K extends keyof ScanOptionsState>(key: K, value: ScanOptionsState[K]) =>
+    setOpts((prev) => ({ ...prev, [key]: value }));
 
   async function handleScan() {
     setError(null);
     setScanning(true);
     try {
-      const options: ScanReceiptOptions = {
-        source,
-        ocr: ocrEnabled,
-        includeExif: exifEnabled,
-        maxPages,
-      };
-      const scanResult = await scan(options);
+      const scanResult = await scan(buildOptions(opts));
+      console.debug("[🧾] Scanned Result:", scanResult);
       setResult(scanResult);
-      if (scanResult.status === "success") {
+      // Navigate to the result screen for both success and rejected so the
+      // rejectedImages (ocrFloor effect) are visible; stay on scan for cancel.
+      if (scanResult.status !== "cancelled") {
         setPage("result");
       }
     } catch (e: unknown) {
@@ -544,7 +925,7 @@ export default function App() {
     return (
       <ResultPage
         result={result}
-        source={source}
+        source={opts.source}
         onBack={() => setPage("scan")}
         onRescan={() => {
           setResult(null);
@@ -557,14 +938,8 @@ export default function App() {
 
   return (
     <ScanPage
-      source={source}
-      setSource={setSource}
-      ocrEnabled={ocrEnabled}
-      setOcrEnabled={setOcrEnabled}
-      exifEnabled={exifEnabled}
-      setExifEnabled={setExifEnabled}
-      maxPages={maxPages}
-      setMaxPages={setMaxPages}
+      opts={opts}
+      set={set}
       scanning={scanning}
       error={error}
       lastResult={result}
@@ -582,6 +957,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: S["2xl"],
+    paddingTop: S["2xl"] + ANDROID_STATUS_BAR_INSET,
     paddingBottom: S["3xl"],
   },
 
@@ -677,6 +1053,27 @@ const styles = StyleSheet.create({
     lineHeight: 17,
   },
 
+  // Control label column (toggle / chip shared)
+  controlLabelCol: {
+    flex: 1,
+    paddingRight: S.md,
+  },
+  controlLabelRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: S.sm,
+    flexWrap: "wrap",
+  },
+  controlHint: {
+    fontSize: 11,
+    color: C.ink400,
+    marginTop: 3,
+    lineHeight: 15,
+  },
+  controlDisabled: {
+    color: C.ink400,
+  },
+
   // Toggle
   toggleRow: {
     flexDirection: "row",
@@ -687,7 +1084,6 @@ const styles = StyleSheet.create({
   toggleLabel: {
     fontSize: 14,
     color: C.ink900,
-    flex: 1,
   },
   toggleTrack: {
     width: 44,
@@ -714,10 +1110,66 @@ const styles = StyleSheet.create({
   toggleThumbOn: {
     alignSelf: "flex-end",
   },
+  toggleDimmed: {
+    opacity: 0.4,
+  },
   divider: {
     height: 1,
     backgroundColor: C.border,
     marginVertical: 2,
+  },
+  nested: {
+    marginTop: S.sm,
+    marginLeft: S.md,
+    paddingLeft: S.md,
+    borderLeftWidth: 2,
+    borderLeftColor: C.border,
+  },
+
+  // Platform / scope badge
+  platformBadge: {
+    backgroundColor: C.surfaceAlt,
+    borderRadius: R.sm,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderWidth: 1,
+    borderColor: C.border,
+  },
+  platformBadgeText: {
+    fontSize: 10,
+    fontWeight: "600",
+    color: C.ink600,
+  },
+
+  // Chips
+  chipRow: {
+    paddingVertical: S.sm,
+  },
+  chips: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: S.sm,
+    marginTop: S.sm,
+  },
+  chip: {
+    paddingHorizontal: S.md,
+    paddingVertical: 6,
+    borderRadius: R.full,
+    borderWidth: 1,
+    borderColor: C.border,
+    backgroundColor: C.surfaceAlt,
+  },
+  chipSelected: {
+    borderColor: C.primary,
+    backgroundColor: C.primaryMuted,
+  },
+  chipText: {
+    fontSize: 13,
+    color: C.ink600,
+    fontWeight: "600",
+  },
+  chipTextSelected: {
+    color: C.primary,
   },
 
   // Stepper
@@ -771,6 +1223,21 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: C.primaryFg,
     letterSpacing: 0.2,
+  },
+
+  // Fixture dump button
+  fixtureBtn: {
+    backgroundColor: C.surfaceAlt,
+    borderRadius: R.md,
+    paddingVertical: S.md,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: C.border,
+  },
+  fixtureBtnText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: C.ink600,
   },
 
   // Rescan button
@@ -847,6 +1314,7 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     paddingHorizontal: S.lg,
     paddingVertical: S.md,
+    paddingTop: S.md + ANDROID_STATUS_BAR_INSET,
     backgroundColor: C.surface,
     borderBottomWidth: 1,
     borderBottomColor: C.border,
@@ -958,12 +1426,15 @@ const styles = StyleSheet.create({
     lineHeight: 19,
     fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
   },
-  ocrFullScroll: {
-    maxHeight: 280,
+  exifRawJson: {
+    backgroundColor: C.surfaceAlt,
+    borderRadius: R.md,
+    padding: S.md,
   },
-  ocrFullText: {
-    fontSize: 14,
-    color: C.ink900,
-    lineHeight: 24,
+  exifNote: {
+    fontSize: 12,
+    color: C.ink400,
+    fontStyle: "italic",
+    lineHeight: 18,
   },
 });
