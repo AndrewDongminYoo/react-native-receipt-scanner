@@ -51,7 +51,7 @@ static const double kRotateCommitRatio = 1.3;            // probe must find >= r
 + (NSArray<NSNumber *> *)clockwiseAnglesFromResults:(NSArray<VNRecognizedTextObservation *> *)results;
 
 /** Runs an accurate pass on `ciImage` rotated `ccwDegrees` and packages it as a
- *  result. Falls back to `fallbackResults` (already-recognised observations for
+ *  result. Falls back to `fallbackResults` (already-recognized observations for
  *  the same rotation) when the accurate pass fails, so a failure degrades to
  *  coarser text rather than losing the rotation. */
 + (RNOcrResult *)resultByRotating:(CIImage *)ciImage

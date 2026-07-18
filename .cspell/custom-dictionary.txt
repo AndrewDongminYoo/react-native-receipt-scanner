@@ -60,5 +60,6 @@ Sublabel
 Sublayer
 Subview
 Subviews
+trimmable
 turborepo
 xcassets

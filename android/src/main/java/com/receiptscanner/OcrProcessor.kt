@@ -14,9 +14,9 @@ import java.io.File
 import java.util.Locale
 
 /**
- * Wraps ML Kit's Korean text recogniser plus a single-pass content-rotation
+ * Wraps ML Kit's Korean text recognizer plus a single-pass content-rotation
  * heuristic. ML Kit Korean covers Latin too, so we don't ship a separate
- * Latin recogniser — see ADR-006 for the language strategy.
+ * Latin recognizer — see ADR-006 for the language strategy.
  *
  * Lifecycle: callers must invoke [close] to release the underlying ML Kit
  * client. [ReceiptScannerModule] does this once per scan, after iterating
@@ -36,7 +36,7 @@ class OcrProcessor(
     )
 
   /**
-   * One recognised line with the box it occupies, in the coordinates of the
+   * One recognized line with the box it occupies, in the coordinates of the
    * image handed to [recognizeWithRotationDetection] — i.e. the processed JPEG
    * *before* any [ImageProcessor.rotateFileInPlace] auto-rotate. Callers that
    * rotate the pixels afterwards must remap via [OcrGeometry.rotateClockwise].
@@ -52,7 +52,7 @@ class OcrProcessor(
   /**
    * Result of [recognizeWithRotationDetection].
    *
-   * @property text Joined OCR text (newline-separated lines). Recognised on the
+   * @property text Joined OCR text (newline-separated lines). Recognized on the
    *                image *as handed in* — this class never re-runs OCR after
    *                choosing a rotation, so when the caller bakes
    *                [rotationDegrees] into the pixels the line *order* still
@@ -61,12 +61,12 @@ class OcrProcessor(
    *                iOS differs here — see docs/notes/platform-asymmetries.md §4.2.
    * @property rotationDegrees Detected rotation in degrees (0 / 90 / 180 / 270).
    *                           Caller is expected to bake this into the output pixels.
-   * @property lineCount Number of recognised lines — used by the JS-side
+   * @property lineCount Number of recognized lines — used by the JS-side
    *                     `OcrFloor` gate.
    * @property confidence Mean per-line OCR confidence in [0, 1], or null when
    *                      no line reported a finite value. Reporting only.
    * @property lines Per-line geometry, always collected; the module only
-   *                 serialises it when `options.ocrGeometry` is set.
+   *                 serializes it when `options.ocrGeometry` is set.
    */
   data class OcrResult(
     val text: String,
@@ -78,7 +78,7 @@ class OcrProcessor(
 
   /**
    * Internal aggregate for one recognition pass. `lineAspect` is the trimmed
-   * mean width/height of recognised line bounding boxes — see [lineAspectOf].
+   * mean width/height of recognized line bounding boxes — see [lineAspectOf].
    */
   private data class PassMetrics(
     val text: String,
@@ -240,10 +240,10 @@ class OcrProcessor(
   }
 
   /**
-   * Every recognised line's clockwise text angle. ML Kit documents `getAngle`
+   * Every recognized line's clockwise text angle. ML Kit documents `getAngle`
    * as "the angle (in degrees, clockwise is positive, range is [-180, 180]) of
    * the rotation of the recognized line" — which is already the clockwise
-   * convention this package canonicalised on (see
+   * convention this package canonicalized on (see
    * docs/notes/platform-asymmetries.md §3.1), so no sign conversion is needed.
    *
    * Unlike [linesOf] this keeps lines with no bounding box: the angle is usable
@@ -261,7 +261,7 @@ class OcrProcessor(
   }
 
   /**
-   * Per-line text + bounding box, in the recognised image's pixel space.
+   * Per-line text + bounding box, in the recognized image's pixel space.
    * Lines without usable text or geometry are dropped — `boundingBox` is
    * nullable in ML Kit, so this list does not line up index-wise with the
    * newline-joined [OcrResult.text].
@@ -289,13 +289,13 @@ class OcrProcessor(
   }
 
   /**
-   * Mean of ML Kit's per-line confidence ([0, 1]) over all recognised lines, or
+   * Mean of ML Kit's per-line confidence ([0, 1]) over all recognized lines, or
    * null when no line reports a finite value. Mirrors the iOS per-observation
    * mean; reporting only, never used for routing.
    *
-   * The bundled Korean recogniser reports confidence; the *unbundled* library on
+   * The bundled Korean recognizer reports confidence; the *unbundled* library on
    * Play Services < 22.30 returns 0 (indistinguishable here) — this package ships
-   * the bundled recogniser, so values are real.
+   * the bundled recognizer, so values are real.
    */
   private fun meanLineConfidence(result: Text): Float? {
     var sum = 0f
@@ -386,7 +386,7 @@ class OcrProcessor(
   }
 
   /**
-   * Releases the underlying ML Kit recogniser. Idempotent on the ML Kit
+   * Releases the underlying ML Kit recognizer. Idempotent on the ML Kit
    * side; safe to call once per [OcrProcessor] instance.
    */
   fun close() {

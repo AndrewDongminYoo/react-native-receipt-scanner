@@ -64,7 +64,7 @@ object ResultBuilder {
       }
     }
 
-  /** Serialises [OcrProcessor.Line] into the JS `OcrLine[]` shape. */
+  /** Serializes [OcrProcessor.Line] into the JS `OcrLine[]` shape. */
   private fun buildOcrLinesArray(lines: List<OcrProcessor.Line>): WritableArray =
     Arguments.createArray().apply {
       for (line in lines) {
