@@ -71,12 +71,14 @@
 
 ### 2.2 per-line confidence 노출
 
-| 플랫폼                | per-line confidence                   |
-| --------------------- | ------------------------------------- |
-| iOS Vision            | ✅ `VNRecognizedText.confidence` 노출 |
-| Android ML Kit Korean | ❌ 미노출                             |
+| 플랫폼                | per-line confidence                                                                                   |
+| --------------------- | ----------------------------------------------------------------------------------------------------- |
+| iOS Vision            | ✅ `VNRecognizedText.confidence` 노출                                                                 |
+| Android ML Kit Korean | ✅ `Text.Line.getConfidence()` 노출 (**번들** 인식기 기준. unbundled 라이브러리는 0을 반환할 수 있음) |
 
-**Resolution path.** 비범위. `OcrQuality.confidence?: number` 필드는 **iOS에서만 채워지고 Android에서는 항상 absent**. `ocrFloor.minConfidence`는 absent 시 satisfied로 간주(per ADR-006 D6) — Android가 임계값에 부정적 영향 안 받음.
+**Resolution path.** 해소됨 (0.5.0). 이 표는 원래 "Android 미노출"로 기록돼 있었으나 0.5.0이 `meanLineConfidence`로 양 플랫폼 모두 `ocrQuality.confidence`를 채우도록 바꿨고, 표만 갱신되지 않았다 (2026-07-18 정정). `ocrFloor.minConfidence`는 여전히 absent 시 satisfied로 간주한다(ADR-006 D6) — OCR 미실행이나 무텍스트에서는 양 플랫폼 모두 absent이기 때문.
+
+⚠️ 다만 두 값의 **분포는 비교 가능하다고 검증되지 않았다**. `api-contract.md`가 명시한 대로 confidence는 reporting-only이며, cross-platform 임계값으로 쓰지 말 것.
 
 ### 2.3 `Line.boundingBox` 좌표계
 

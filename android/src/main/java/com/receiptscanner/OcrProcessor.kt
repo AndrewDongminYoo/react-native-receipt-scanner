@@ -180,7 +180,7 @@ class OcrProcessor(
 
     // Aspect-matched (portrait + horizontal lines OR landscape + horizontal lines).
     logDecision(fileName, 0, "aspect-matched", pass0)
-    return OcrResult(pass0.text, 0, pass0.lineCount, lines = pass0.lines)
+    return OcrResult(pass0.text, 0, pass0.lineCount, pass0.confidence, pass0.lines)
   }
 
   private fun measureAt(
