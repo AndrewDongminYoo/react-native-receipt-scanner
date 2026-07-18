@@ -14,7 +14,7 @@
     "draft": false
   },
   "npm": {
-    "publish": true,
+    "publish": false,
     "ignoreVersion": false
   },
   "plugins": {

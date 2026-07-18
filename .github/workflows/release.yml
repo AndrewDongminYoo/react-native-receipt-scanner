@@ -23,6 +23,30 @@ jobs:
       - name: Build package
         run: yarn prepare
 
+  publish-npm:
+    name: Publish to npm
+    needs: build-library
+    if: github.event_name == 'release'
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      # OIDC trusted publishing (configured on npmjs.com; no NPM_TOKEN secret)
+      id-token: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+
+      - name: Setup
+        uses: ./.github/actions/setup
+
+      - name: Update npm (trusted publishing requires npm >= 11.5.1)
+        run: npm install -g npm@latest
+
+      - name: Publish to npm
+        run: npm publish
+
   build-android:
     name: Build Android
     runs-on: ubuntu-latest
