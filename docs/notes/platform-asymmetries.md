@@ -195,9 +195,17 @@ v1.3부터 있던 동작이나 회전이 한 분기에서만 발동해 드물었
 
 **사용자 영향.** ADR-006 D5의 keyword 매칭 용도에는 무해하다 — 전체 string 검색은 순서 불변. 라인 순서에 의존하는 소비자(예: "첫 줄 = 상점명" 같은 위치 기반 파싱)는 깨지지만, 그건 ADR-003이 패키지 밖으로 밀어낸 도메인 로직이며 `api-contract.md`도 `ocrText`의 라인 순서를 계약하지 않는다.
 
-**대응 선택지.** (1) 회전 후 재인식 — iOS와 동작이 같아지고 KDoc이 참이 되지만 회전 시 OCR 1패스(~150 ms) 추가. (2) 리매핑된 박스의 위치로 라인을 정렬해 텍스트 재조립 — 패스 비용은 없으나 `linesOf`가 `boundingBox` 없는 라인을 버리므로 텍스트가 유실된다. (3) 계약대로 두고 문서화만. 미결정 — 실사용 요구가 나오면 결정한다.
+**해소 (2026-07-19): 선택지 (1) 회전 후 재인식을 채택했다.**
 
-`OcrProcessor.OcrResult.text`의 KDoc이 "for the chosen rotation"이라고 단언하는 것은 Android에서 부정확하므로, 어느 선택지든 그 문구는 정정해야 한다.
+`ReceiptScannerModule.runOcrAndAutoRotate`가 회전을 적용한 뒤 `OcrProcessor.recognizeInFinalFrame`으로 **출력 파일을 다시 인식**한다. 이제 양 플랫폼 모두 `ocrText` 순서가 실제로 출하되는 이미지 기준이다.
+
+부수 효과가 셋 있다.
+
+- **박스 리매핑이 성공 경로에서 사라진다.** 재인식이 출력 프레임에서 박스를 직접 재므로 `remapDegrees = 0`이다. `OcrGeometry.rotateClockwise`는 재인식 실패 경로 전용으로 남는다 — 그 경우 첫 패스 결과를 유지하고 박스만 돌린다. 회전 보정을 잃는 것이 텍스트 전체를 잃는 것보다 싸기 때문이다.
+- **`lineCount` / `confidence`가 재인식 패스 값이 된다.** `lineCount`는 JS `OcrFloor` 게이트의 입력이므로 회전 경로에서 게이트가 보는 숫자가 바뀐다. ML Kit이 rotation-invariant라 값은 거의 같고, 정방향 이미지 기준이라는 점에서 더 정직한 숫자다.
+- **회전 시 OCR 1패스(~150 ms) 추가.** 회전이 실제로 일어날 때만 발생한다.
+
+`OcrProcessor.OcrResult.text`의 KDoc도 이에 맞춰 정정했다 — 회전하는 호출자는 `recognizeInFinalFrame`을 이어서 호출해야 한다고 명시한다.
 
 ## 5. ImageOrigin 분류
 

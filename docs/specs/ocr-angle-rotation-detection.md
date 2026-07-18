@@ -180,6 +180,7 @@ iOS는 DEBUG 빌드에서 같은 필드를 `logDiagnostics:`가 찍는다.
 - [x] CW 270°로 눕힌 영수증 → 출력 이미지 정방향 (2026-07-19, 양 플랫폼) — **v1.3이 180° 뒤집던 케이스**
 - [x] 양 플랫폼 모두 `ocrLines` 오버레이가 회전 후 이미지에서 텍스트에 정합 (2026-07-19, 4캡처 전부)
 - [ ] 180° 뒤집은 영수증 → 출력 이미지 정방향 (v1.3 비범위였던 신규 케이스, 미측정)
+- [ ] 회전 적용 케이스에서 `ocrText` 라인 순서가 출력 이미지와 일치 (회전 후 재인식, 2026-07-19 추가 — 미측정)
 - [ ] 정상 portrait → 회전 미적용, 회귀 없음
 - [ ] `angleBins` 로그 수집 → `ANGLE_MIN_LINES` / `ANGLE_MAJORITY` PROVISIONAL 해제
 - [ ] 라인 부족(`lineCount < 5`) 입력 → 폴백 하강, 회귀 없음
@@ -187,7 +188,7 @@ iOS는 DEBUG 빌드에서 같은 필드를 `logDiagnostics:`가 찍는다.
 ### 실측으로 열린 후속 항목
 
 - **폴백 삭제 검토.** 신호가 입증됐으므로 §폴백 배선이 예고한 "다음 변경"의 조건이 충족됐다. 다만 Android `lineAspect`와 iOS probe 루프는 각각 라인이 적은 입력과 iOS 16/17을 여전히 덮으므로, 삭제 전에 그 두 케이스의 실측이 필요하다.
-- **`ocrText` 라인 순서 (Android).** 아래 별도 절 참조.
+- **`ocrText` 라인 순서 (Android)** — 회전 후 재인식으로 수정함. 아래 별도 절 참조. 미검증(아래 DoD).
 
 ## 관측: 회전 시 Android `ocrText` 라인 순서가 뒤집힌다 (2026-07-19)
 
@@ -208,8 +209,21 @@ iOS에는 이 현상이 없다 — `resultByRotating:`이 회전된 프레임에
 
 **이 스펙이 만든 문제는 아니다.** v1.3도 회전할 때 같은 동작이었으나 회전이 `landscape-vertical-lines` 한 분기에서만 발동했다. 각도 라우팅이 90/270/180을 모두 잡으면서 노출 빈도가 늘어난 것이다.
 
-`OcrProcessor.OcrResult.text`의 KDoc은 "for the chosen rotation"이라고 적고 있는데, Android에서는 정확하지 않다 — 수정 대상.
-사용자 영향 평가와 대응 선택지는 [`../notes/platform-asymmetries.md`](../notes/platform-asymmetries.md) §4.2에 기록한다.
+### 해소 (2026-07-19) — 회전 후 재인식
+
+`ReceiptScannerModule.runOcrAndAutoRotate`가 회전을 적용한 직후 `OcrProcessor.recognizeInFinalFrame`으로 출력 파일을 다시 인식한다.
+재인식 패스는 회전 검출을 돌리지 않는다 — 이미 정방향이므로 낭비이고, 헛된 0 판정으로 폴백을 건드릴 여지만 생긴다.
+
+성공 경로에서는 박스가 출력 프레임에서 직접 측정되므로 리매핑이 `0`이 된다.
+`OcrGeometry.rotateClockwise`는 **재인식이 실패했을 때만** 쓰인다 (방금 쓴 파일을 디코드하지 못하는 드문 경우) — 그때는 첫 패스 결과를 유지하고 박스만 돌린다. 회전 보정을 잃는 편이 텍스트 전체를 잃는 것보다 싸기 때문이다.
+
+`lineCount` / `confidence`도 재인식 패스 값이 된다. `lineCount`가 JS `OcrFloor` 게이트의 입력이므로 회전 경로에서 게이트가 보는 숫자가 바뀌지만, ML Kit이 rotation-invariant라 값은 거의 같고 정방향 이미지 기준이라 더 정직하다.
+
+비용은 **회전이 실제로 일어날 때만** OCR 1패스(~150 ms)다.
+
+⚠️ 이 변경은 컴파일과 순수 헬퍼 유닛 테스트까지만 검증됐다 — 둘 다 라인 *순서*를 건드리지 않는다. 순서가 실제로 교정됐는지는 `example/data/RECEIPT-90.jpg` / `RECEIPT-270.jpg`로 디바이스 QA를 한 번 더 돌려야 확정된다.
+
+사용자 영향 평가는 [`../notes/platform-asymmetries.md`](../notes/platform-asymmetries.md) §4.2.
 
 ## 비범위 (Non-Goals)
 
