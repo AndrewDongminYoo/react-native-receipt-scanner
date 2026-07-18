@@ -81,6 +81,8 @@ class OcrProcessor(
     val textLength: Int,
     val confidence: Float?,
     val lines: List<Line>,
+    /** Per-line clockwise text angles, straight from ML Kit. May contain NaN. */
+    val angles: List<Float>,
   )
 
   /**
@@ -94,16 +96,23 @@ class OcrProcessor(
    * - v1.1 made portrait inputs always probe 90/180/270. The probe cost was
    *   not justified for natural-orientation scans.
    * - v1.2 deferred the work and kept the v2.0 fast-path.
-   * - v1.3 (current) drops the multi-pass probe entirely. Field data showed
+   * - v1.3 dropped the multi-pass probe entirely. Field data showed
    *   ML Kit Korean's results are *rotation-invariant* — every probe in a
    *   four-pass loop returned identical lineCount/lineAspect/textLength.
    *   Instead a single Pass 0 measures lineAspect, and rotation is decided
    *   by comparing the *direction* of the image-aspect against the
    *   line-aspect: when they disagree, the content is rotated. The 90 vs
-   *   270 ambiguity is resolved by a default heuristic (270° CW), since
-   *   field data is too small to learn from yet.
+   *   270 ambiguity was resolved by a default heuristic (270° CW).
+   * - v2.0 (current) replaces that heuristic default with ML Kit's own
+   *   per-line `getAngle`. 2026-07-18 field data showed the fixed 270°
+   *   default is right exactly half the time — both lie directions occur —
+   *   and lineAspect cannot tell them apart because it measures line *shape*,
+   *   which is identical at 90 and 270. The angle carries direction, so it
+   *   separates the two and detects a plain 180 flip as well. lineAspect
+   *   stays as the fallback for samples too small or too split to judge.
    *
-   * See `docs/specs/portrait-rotation-detection.md` v1.3.
+   * See `docs/specs/ocr-angle-rotation-detection.md` v1.0, which supersedes
+   * `docs/specs/portrait-rotation-detection.md` v1.3.
    */
   fun recognizeWithRotationDetection(file: File): OcrResult {
     val bitmap =
@@ -137,18 +146,42 @@ class OcrProcessor(
       return OcrResult(pass0.text, 0, pass0.lineCount, pass0.confidence, pass0.lines)
     }
 
-    // Decide rotation by comparing image and line aspect *directions*.
+    // Fallback signal (v1.3): compare image and line aspect *directions*.
     // - imageAspect > 1 → landscape image
     // - lineAspect > LINE_HORIZONTAL_THRESHOLD → text lines lay out horizontally
     // - lineAspect < LINE_VERTICAL_THRESHOLD   → text lines lay out vertically
     // Mismatch (e.g. landscape image with vertical lines) signals a rotated
-    // portrait receipt that the user held sideways.
+    // portrait receipt that the user held sideways. Computed up front because
+    // the angle path below uses it as a corroborating check.
     val imageIsLandscape = imageAspect > 1f
     val lineIsHorizontal = pass0.lineAspect > LINE_HORIZONTAL_THRESHOLD
     val lineIsVertical = pass0.lineAspect < LINE_VERTICAL_THRESHOLD
+    val hasEnoughLinesForAspect = pass0.lineCount >= MISMATCH_MIN_LINES
+    val aspectSuggestsRotation = imageIsLandscape && lineIsVertical && hasEnoughLinesForAspect
+
+    // Primary signal: the angle ML Kit reports for the text itself. Unlike
+    // lineAspect this carries *direction*, so it separates 90 from 270 and
+    // detects a plain 180 flip — the two cases 2026-07-18 field data proved
+    // lineAspect cannot reach. A confirmed 0 counts as an answer, not an
+    // abstention: it is what stops the lineAspect fallback from firing on a
+    // genuinely upright receipt.
+    // See docs/specs/ocr-angle-rotation-detection.md.
+    val textAngle = OcrGeometry.dominantQuarterTurn(pass0.angles)
+    // ...except when lineAspect independently says the content is sideways. If
+    // ML Kit reports angles in its own reading frame rather than in image space
+    // — the one assumption this design rests on and cannot verify from source —
+    // the symptom is exactly "every line upright" on a visibly rotated receipt.
+    // Treating that 0 as truth would newly refuse to rotate images v1.3 does
+    // rotate, so defer to the fallback instead and let the QA log settle it.
+    val angleContradictsAspect = textAngle == 0 && aspectSuggestsRotation
+    if (textAngle != null && !angleContradictsAspect) {
+      val correction = OcrGeometry.correctionForTextAngle(textAngle)
+      logDecision(fileName, correction, "text-angle-$textAngle", pass0)
+      return OcrResult(pass0.text, correction, pass0.lineCount, pass0.confidence, pass0.lines)
+    }
 
     // Need enough lines for the lineAspect mean to be reliable.
-    if (pass0.lineCount < MISMATCH_MIN_LINES) {
+    if (!hasEnoughLinesForAspect) {
       logDecision(fileName, 0, "low-line-count-skip-mismatch", pass0)
       return OcrResult(pass0.text, 0, pass0.lineCount, pass0.confidence, pass0.lines)
     }
@@ -196,7 +229,29 @@ class OcrProcessor(
       textLength = result.text.length,
       confidence = meanLineConfidence(result),
       lines = linesOf(result),
+      angles = anglesOf(result),
     )
+  }
+
+  /**
+   * Every recognised line's clockwise text angle. ML Kit documents `getAngle`
+   * as "the angle (in degrees, clockwise is positive, range is [-180, 180]) of
+   * the rotation of the recognized line" — which is already the clockwise
+   * convention this package canonicalised on (see
+   * docs/notes/platform-asymmetries.md §3.1), so no sign conversion is needed.
+   *
+   * Unlike [linesOf] this keeps lines with no bounding box: the angle is usable
+   * on its own, and dropping them would shrink the sample the mode is taken over.
+   */
+  private fun anglesOf(result: Text): List<Float> {
+    val angles = mutableListOf<Float>()
+    for (block in result.textBlocks) {
+      for (line in block.lines) {
+        if (line.text.isBlank()) continue
+        angles.add(line.angle)
+      }
+    }
+    return angles
   }
 
   /**
@@ -296,11 +351,18 @@ class OcrProcessor(
     aspect: Float?,
   ) {
     val aspectStr = aspect?.let { String.format(Locale.US, " imageAspect=%.3f", it) } ?: ""
+    // Full histogram rather than just the winner: calibrating ANGLE_MAJORITY
+    // needs the spread, and a [n,0,0,0] shape on an image lineAspect calls
+    // rotated is the fingerprint of ML Kit reporting angles in its own reading
+    // frame instead of image space (docs/specs/ocr-angle-rotation-detection.md).
+    val bins = OcrGeometry.quarterTurnHistogram(m.angles)
     Log.i(
       LOG_TAG,
       "probe deg=$label file=$fileName lineCount=${m.lineCount} lineAspect=${
         String.format(Locale.US, "%.2f", m.lineAspect)
-      } textLength=${m.textLength}$aspectStr",
+      } textLength=${m.textLength}$aspectStr angleBins=${
+        bins.joinToString(",", "[", "]")
+      } angleN=${bins.sum()}",
     )
   }
 
