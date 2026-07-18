@@ -7,7 +7,9 @@
 **관련 결정:** ADR-006 D14
 **플랫폼:** Android only (iOS는 v2.0 그대로)
 
-## 현재 상태 (v1.3): Active
+## 현재 상태 (v1.3): Active — 90/270 기본값이 field data로 반증됨 (2026-07-18)
+
+알고리즘 자체는 동작하지만, §회전 방향(90 vs 270) 결정의 한계가 예고한 실패가 실측에서 확인됐다. 그 절의 "field 데이터 추가 수집 후 결정"은 이제 답이 나왔고, **답은 "둘 중 하나를 고르는 문제가 아니다"**이다 — 상세는 해당 절에 기록.
 
 Android에서 ML Kit Korean Text Recognizer가 입력 회전에 *invariant*하다는 사실이 실측에서 확인됨. 즉 4-pass probe loop가 모든 회전에서 동일한 lineCount/lineAspect/textLength를 반환 — probe 자체가 무용 비용. v1.3은 multi-pass를 단일 Pass 0로 단순화하고, 회전 검출은 image-aspect와 line-aspect의 *방향 일치 여부*로 결정한다.
 
@@ -95,6 +97,20 @@ Android `Matrix.postRotate`는 시계 방향(CW). `270°`는 _시계 방향 270�
 
 field 데이터 추가 수집 후 결정. 만약 1번 케이스가 잘못 회전되면 commit message가 안내하는 대로 `ROTATED_DEFAULT_DEGREES = 90`으로 변경.
 
+### field data (2026-07-18) — 두 가설이 모두 실재함
+
+같은 영수증을 두 방향으로 눕혀 갤러리 경로에 넣은 결과:
+
+| 입력 콘텐츠 방향 | 적용된 회전       | 출력 이미지        |
+| ---------------- | ----------------- | ------------------ |
+| CW 90°           | `postRotate(270)` | **정방향** ✅      |
+| CW 270°          | `postRotate(270)` | **180° 뒤집힘** ❌ |
+
+즉 위 두 가설은 배타적이지 않고 **둘 다 실제로 발생한다**. 고정 기본값을 90으로 바꾸면 성공/실패 케이스가 서로 뒤바뀔 뿐, 적중률은 그대로다.
+ML Kit Korean이 rotation-invariant인 이상([`../notes/platform-asymmetries.md`](../notes/platform-asymmetries.md) §2.1) 인식 품질에서는 90과 270을 가르는 신호가 나오지 않으므로, **다른 신호가 필요하다**. 후보는 박스 기하 — 0.7.0에서 노출한 `ocrLines`가 라인 baseline 방향과 문자 진행 방향을 담고 있어, 텍스트가 위에서 아래로 읽히는지 아래에서 위로 읽히는지를 판별할 여지가 있다.
+
+재설계는 별도 작업으로 분리한다. 이 절의 기본값 변경 안내는 **적용하지 말 것** — 문제를 옮길 뿐이다.
+
 ## 진단 로그
 
 ```bash
@@ -139,10 +155,10 @@ v2.0 대비:
 - [ ] 진단 로그 (`adb logcat -s ReceiptScanner.Ocr:I`)로 decision reason 확인
 - [ ] lineCount < 3 케이스 → 빠른 종료
 - [ ] 모호 lineAspect (0.7 ≤ x ≤ 1.5) → 0° 통과 (false positive 방지)
-- [ ] 1번 케이스의 회전 방향이 잘못된 경우 → `ROTATED_DEFAULT_DEGREES`를 90으로 변경
+- [x] ~~1번 케이스의 회전 방향이 잘못된 경우 → `ROTATED_DEFAULT_DEGREES`를 90으로 변경~~ — 2026-07-18 field data로 무효. 두 방향이 모두 발생하므로 기본값 교체는 실패 케이스를 맞바꿀 뿐이다 (§field data 참조)
 
 ## 비범위 (Non-Goals)
 
-- iOS 동등 보강 — Vision은 confidence 기반 알고리즘이 다르고 회전 검출이 가능. ADR-006 D7 v2.0 그대로 유지
-- 90° vs 270° 자동 결정 (textBlock 위치 분석 등) — field 데이터 부족, 단순 default로 충분할 가능성. 만약 두 방향이 모두 자주 발생하면 추후 spec
+- ~~iOS 동등 보강 — Vision은 confidence 기반 알고리즘이 다르고 회전 검출이 가능. ADR-006 D7 v2.0 그대로 유지~~ — 2026-07-18 무효: iOS 26.5에서는 Vision도 회전 검출이 되지 않는다 ([`ocr-orientation-correction.md`](./ocr-orientation-correction.md) 상단 상태 블록)
+- ~~90° vs 270° 자동 결정 (textBlock 위치 분석 등) — field 데이터 부족, 단순 default로 충분할 가능성~~ — 2026-07-18 무효: 두 방향이 모두 발생함이 확인됐으므로 단순 default로는 불충분하다. 박스 기하 기반 판별이 다음 후보이며 별도 작업으로 분리
 - 180° 단독 회전 검출 — lineAspect 신호는 180°에서 정상 분포와 같음. 따로 처리 안 함

@@ -69,6 +69,12 @@
 
 **Resolution path.** 비범위 (ML Kit 동작). 두 플랫폼이 _동일한 회전 검출 알고리즘을 공유할 수 없음_. iOS는 confidence 기반 multi-pass(ADR-006 D7), Android는 단일-pass + lineAspect 기반(ADR-006 D14 v1.3).
 
+⚠️ **2026-07-18 갱신 — 이 비대칭은 더 이상 성립하지 않는다.** iOS 26.5 실기기 측정에서 Vision도 회전된 한글·영문을 거의 동등하게 읽어냈다: 180° 뒤집힌 영수증에서 0° 패스가 62줄/신뢰도 76%, 90°·270°로 누운 영수증에서 52~54줄/84%. 즉 **양 플랫폼 모두 사실상 rotation-robust**가 되었다.
+
+이건 단순한 표 갱신이 아니라 두 플랫폼의 회전 검출 설계 근거가 동시에 사라졌다는 뜻이다. iOS의 multi-pass는 "회전된 입력은 못 읽힌다"는 격차를 전제로 하고(그래서 `kRotateCommitRatio = 1.3`이 영원히 미달), Android의 lineAspect 방식은 애초에 rotation-invariance를 전제로 설계됐으나 90/270을 가를 신호가 없다. 결과적으로 iOS `autoRotate`는 어떤 회전도 보정하지 못하고, Android는 가로 콘텐츠에 항상 270°만 적용해 절반만 맞는다.
+
+관측 가능한 사용자 증상은 양 플랫폼 공통이다 — **OCR 텍스트는 정방향으로 정상 출력되는데 결과 이미지는 돌아간 채로 남는다.** 상세와 재설계 방향은 [`../specs/ocr-orientation-correction.md`](../specs/ocr-orientation-correction.md) 상단 상태 블록, [`../specs/portrait-rotation-detection.md`](../specs/portrait-rotation-detection.md) §field data (2026-07-18).
+
 ### 2.2 per-line confidence 노출
 
 | 플랫폼                | per-line confidence                                                                                   |
