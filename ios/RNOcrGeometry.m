@@ -1,5 +1,9 @@
 #import "RNOcrGeometry.h"
 
+const NSInteger RNOcrGeometryQuarterTurnUnknown = -1;
+const NSInteger RNOcrGeometryAngleMinLines = 5;
+const double RNOcrGeometryAngleMajority = 0.7;
+
 @implementation RNOcrGeometry
 
 + (CGRect)rectFromNormalizedBox:(CGRect)box pixelSize:(CGSize)pixelSize {
@@ -65,6 +69,53 @@
         [placed addObject:[out copy]];
     }
     return [placed copy];
+}
+
+#pragma mark - Text angle rotation detection
+
++ (CGFloat)clockwiseAngleFromTopLeft:(CGPoint)topLeft topRight:(CGPoint)topRight {
+    CGFloat dx = topRight.x - topLeft.x;
+    CGFloat dy = topRight.y - topLeft.y;
+    // Negate dy: Vision's y grows upward, the canonical top-left frame's grows
+    // downward, and in that frame a clockwise angle from +x is atan2(dy, dx).
+    // Upright text gives dy == 0 -> 0; text running down the image gives
+    // dy < 0 in Vision space -> +90, i.e. the receipt was laid down clockwise.
+    return (CGFloat)(atan2(-dy, dx) * 180.0 / M_PI);
+}
+
++ (NSInteger)quantizeQuarterTurn:(CGFloat)degrees {
+    NSInteger quarters = (NSInteger)lround(degrees / 90.0);
+    return ((quarters * 90) % 360 + 360) % 360;
+}
+
++ (NSInteger)correctionForTextAngle:(NSInteger)quarterTurn {
+    return (360 - (((quarterTurn % 360) + 360) % 360)) % 360;
+}
+
++ (NSArray<NSNumber *> *)quarterTurnHistogramFromAngles:(NSArray<NSNumber *> *)angles {
+    NSInteger bins[4] = {0, 0, 0, 0};
+    for (NSNumber *angle in angles) {
+        double value = angle.doubleValue;
+        if (!isfinite(value)) continue;
+        bins[[self quantizeQuarterTurn:(CGFloat)value] / 90]++;
+    }
+    return @[@(bins[0]), @(bins[1]), @(bins[2]), @(bins[3])];
+}
+
++ (NSInteger)dominantQuarterTurnFromAngles:(NSArray<NSNumber *> *)angles {
+    NSArray<NSNumber *> *bins = [self quarterTurnHistogramFromAngles:angles];
+    NSInteger total = 0;
+    for (NSNumber *bin in bins) total += bin.integerValue;
+    if (total < RNOcrGeometryAngleMinLines) return RNOcrGeometryQuarterTurnUnknown;
+
+    NSUInteger best = 0;
+    for (NSUInteger i = 1; i < bins.count; i++) {
+        if (bins[i].integerValue > bins[best].integerValue) best = i;
+    }
+    if ((double)bins[best].integerValue / (double)total < RNOcrGeometryAngleMajority) {
+        return RNOcrGeometryQuarterTurnUnknown;
+    }
+    return (NSInteger)best * 90;
 }
 
 @end

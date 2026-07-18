@@ -45,6 +45,21 @@ static const double kRotateCommitRatio = 1.3;            // probe must find >= r
 /** Rotate ciImage by 90 / 180 / 270 degrees CCW and translate to a non-negative origin. */
 + (CIImage *)rotate:(CIImage *)ciImage byDegrees:(NSInteger)degrees;
 
+/** Per-observation clockwise text angles, read off the observation quad. This is
+ *  the iOS counterpart of ML Kit's `Text.Line.getAngle`, which Android gets for
+ *  free. See docs/specs/ocr-angle-rotation-detection.md. */
++ (NSArray<NSNumber *> *)clockwiseAnglesFromResults:(NSArray<VNRecognizedTextObservation *> *)results;
+
+/** Runs an accurate pass on `ciImage` rotated `ccwDegrees` and packages it as a
+ *  result. Falls back to `fallbackResults` (already-recognised observations for
+ *  the same rotation) when the accurate pass fails, so a failure degrades to
+ *  coarser text rather than losing the rotation. */
++ (RNOcrResult *)resultByRotating:(CIImage *)ciImage
+                       ccwDegrees:(NSInteger)ccwDegrees
+                minimumTextHeight:(double)minimumTextHeight
+                  fallbackResults:(NSArray<VNRecognizedTextObservation *> *)fallbackResults
+                            error:(NSError **)error;
+
 /** DEBUG-only diagnostics: logs observation count, mean confidence, and
  *  candidate-spread (top1 - top2 confidence) for one OCR pass. Compiled to a
  *  no-op in release builds. Used to calibrate confidence thresholds against a
@@ -101,6 +116,41 @@ static const double kRotateCommitRatio = 1.3;            // probe must find >= r
         return result;
     }
 
+    // ---- Primary signal: the angle of the text itself ----
+    // Read off the observation quad, which carries direction the line *count*
+    // cannot. This deliberately runs ahead of the fast paths below: those return
+    // on line count alone, which is precisely why a 180°-flipped portrait
+    // receipt — plenty of lines, every one upside down — was never detected.
+    // See docs/specs/ocr-angle-rotation-detection.md.
+    NSInteger textAngle =
+        [RNOcrGeometry dominantQuarterTurnFromAngles:[self clockwiseAnglesFromResults:r0]];
+    if (textAngle != RNOcrGeometryQuarterTurnUnknown) {
+        NSInteger correction = [RNOcrGeometry correctionForTextAngle:textAngle];
+        // Only a quarter turn is acted on, never a confirmed 0. The probe loop
+        // below is still the live path on iOS 16/17, where Vision is *not*
+        // rotation-robust, so letting a 0 short-circuit it would regress those
+        // versions if the angle turns out to be reported in Vision's own reading
+        // frame rather than in image space — the one assumption this design
+        // rests on that cannot be checked from source. Android can afford the
+        // stricter reading because its fallback false-positives; this one does not.
+        if (correction != 0) {
+            // `correction` is clockwise (the canonical direction, §3.1); this
+            // rotate: is counter-clockwise, so hand it the complement.
+            // No fallback observations: r0 was measured on the *unrotated*
+            // frame, so reusing it here would place boxes in the wrong frame.
+            NSError *rotateErr = nil;
+            RNOcrResult *rotatedResult = [self resultByRotating:ciImage
+                                                     ccwDegrees:(360 - correction) % 360
+                                              minimumTextHeight:minimumTextHeight
+                                                fallbackResults:nil
+                                                          error:&rotateErr];
+            if (rotatedResult) return rotatedResult;
+            // Re-reading the rotated frame failed. Ship the upright 0° result
+            // rather than a rotation whose boxes we cannot place.
+            return result;
+        }
+    }
+
     // Portrait fast path: a 0° read that already yields many lines is almost
     // certainly upright (Vision recovers far fewer lines from sideways text),
     // so skip probing. Count-only — no confidence gate.
@@ -152,34 +202,58 @@ static const double kRotateCommitRatio = 1.3;            // probe must find >= r
         return result;
     }
 
-    // Pass 3 — accurate on the chosen rotation
-    CIImage *rotated = [self rotate:ciImage byDegrees:bestDegrees];
+    // Pass 3 — accurate on the chosen rotation. bestResults were measured on
+    // that same rotated frame, so they are a usable fallback.
+    RNOcrResult *rotatedResult = [self resultByRotating:ciImage
+                                             ccwDegrees:bestDegrees
+                                      minimumTextHeight:minimumTextHeight
+                                        fallbackResults:bestResults
+                                                  error:error];
+    return rotatedResult ?: result;
+}
+
+#pragma mark - Private helpers
+
++ (RNOcrResult *)resultByRotating:(CIImage *)ciImage
+                       ccwDegrees:(NSInteger)ccwDegrees
+                minimumTextHeight:(double)minimumTextHeight
+                  fallbackResults:(NSArray<VNRecognizedTextObservation *> *)fallbackResults
+                            error:(NSError **)error {
+    CIImage *rotated = [self rotate:ciImage byDegrees:ccwDegrees];
     NSMutableArray<VNRecognizedTextObservation *> *r3 = [NSMutableArray new];
     NSString *t3 = [self runOcrOnCIImage:rotated
                                    level:VNRequestTextRecognitionLevelAccurate
                        minimumTextHeight:minimumTextHeight
                               outResults:r3
                                    error:error];
-    if (!t3) {
-        // Pass 3 failed — fall back to the fast-probe text we already have.
-        result.text = [self joinObservationsToText:bestResults];
-        result.rotationDegrees = bestDegrees;
-        result.meanConfidence = [self meanConfidenceFromResults:bestResults];
-        result.passSize = rotated.extent.size;
-        result.lines = [self linesFromResults:bestResults pixelSize:result.passSize];
-        return result;
-    }
 
-    result.text = t3;
-    result.rotationDegrees = bestDegrees;
-    result.meanConfidence = [self meanConfidenceFromResults:r3];
+    // The accurate pass failed. Only the caller that already has observations
+    // for *this* rotation can degrade gracefully; without them there is nothing
+    // to place boxes against, so report the failure and let the caller keep its
+    // own 0° result.
+    NSArray<VNRecognizedTextObservation *> *chosen = t3 ? r3 : fallbackResults;
+    if (!chosen) return nil;
+
+    RNOcrResult *result = [RNOcrResult new];
+    result.text = t3 ?: [self joinObservationsToText:chosen];
+    result.rotationDegrees = ccwDegrees;
+    result.meanConfidence = [self meanConfidenceFromResults:chosen];
     result.passSize = rotated.extent.size;
-    result.lines = [self linesFromResults:r3 pixelSize:result.passSize];
-    [self logDiagnostics:@"pass3 chosen accurate" results:r3];
+    result.lines = [self linesFromResults:chosen pixelSize:result.passSize];
+    if (t3) [self logDiagnostics:@"pass3 chosen accurate" results:r3];
     return result;
 }
 
-#pragma mark - Private helpers
++ (NSArray<NSNumber *> *)clockwiseAnglesFromResults:(NSArray<VNRecognizedTextObservation *> *)results {
+    NSMutableArray<NSNumber *> *angles = [NSMutableArray arrayWithCapacity:results.count];
+    for (VNRecognizedTextObservation *obs in results) {
+        VNRecognizedText *top = [[obs topCandidates:1] firstObject];
+        if (top.string.length == 0) continue;
+        [angles addObject:@([RNOcrGeometry clockwiseAngleFromTopLeft:obs.topLeft
+                                                            topRight:obs.topRight])];
+    }
+    return [angles copy];
+}
 
 + (nullable NSString *)runOcrOnCIImage:(CIImage *)ciImage
                                   level:(VNRequestTextRecognitionLevel)level
@@ -302,8 +376,17 @@ static const double kRotateCommitRatio = 1.3;            // probe must find >= r
     // calibration (future work). Reporting-only; see
     // docs/specs/ios-geometry-rotation-routing.md.
     double meanBoxAspect = [self meanBoxAspectFromResults:results];
-    NSLog(@"[ReceiptScanner.Ocr] %@ count=%lu meanConf=%.3f candidateSpread=%.3f boxAspect=%.3f",
-          label, (unsigned long)results.count, meanConf, meanSpread, meanBoxAspect);
+    // Full quarter-turn histogram, not just the winner: calibrating
+    // RNOcrGeometryAngleMajority needs the spread, and an [n,0,0,0] shape on an
+    // image boxAspect calls sideways is the fingerprint of Vision reporting the
+    // quad in its own reading frame rather than in image space — the assumption
+    // this routing rests on. See docs/specs/ocr-angle-rotation-detection.md.
+    NSArray<NSNumber *> *bins =
+        [RNOcrGeometry quarterTurnHistogramFromAngles:[self clockwiseAnglesFromResults:results]];
+    NSLog(@"[ReceiptScanner.Ocr] %@ count=%lu meanConf=%.3f candidateSpread=%.3f boxAspect=%.3f "
+          @"angleBins=[%@,%@,%@,%@]",
+          label, (unsigned long)results.count, meanConf, meanSpread, meanBoxAspect,
+          bins[0], bins[1], bins[2], bins[3]);
 #endif
 }
 

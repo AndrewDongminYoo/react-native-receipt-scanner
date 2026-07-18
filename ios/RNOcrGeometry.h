@@ -41,6 +41,49 @@ NS_ASSUME_NONNULL_BEGIN
                             clockwiseDegrees:(NSInteger)degrees
                                   outputSize:(CGSize)outputSize;
 
+#pragma mark - Text angle rotation detection
+
+/// Returned by `dominantQuarterTurnFromAngles:` when the sample is too small or
+/// too split to judge; the caller falls back to its own routing.
+extern const NSInteger RNOcrGeometryQuarterTurnUnknown;
+
+/// Minimum lines carrying a finite angle before the mode is trusted.
+/// PROVISIONAL. Mirrors Android `OcrGeometry.ANGLE_MIN_LINES`.
+extern const NSInteger RNOcrGeometryAngleMinLines;
+
+/// Fraction of lines the winning quarter turn must hold. PROVISIONAL.
+/// Mirrors Android `OcrGeometry.ANGLE_MAJORITY`.
+extern const double RNOcrGeometryAngleMajority;
+
+/// Clockwise angle in degrees of the text running from `topLeft` to `topRight`.
+///
+/// Both points come from `VNRectangleObservation`: normalised, **bottom-left**
+/// origin. Moving to the top-left origin the rest of this package uses flips the
+/// sign of the y component, and that flip is what turns Vision's convention into
+/// the clockwise one Android's `Text.Line.getAngle` already reports. Getting it
+/// wrong silently swaps 90 and 270 — the exact bug this redesign exists to fix.
+/// See docs/specs/ocr-angle-rotation-detection.md.
++ (CGFloat)clockwiseAngleFromTopLeft:(CGPoint)topLeft topRight:(CGPoint)topRight;
+
+/// Rounds a clockwise text angle to the nearest quarter turn, normalised into
+/// `[0, 360)`. Mirrors Android `OcrGeometry.quantizeQuarterTurn`.
++ (NSInteger)quantizeQuarterTurn:(CGFloat)degrees;
+
+/// The clockwise rotation that puts text sitting at `quarterTurn` back upright.
+/// Mirrors Android `OcrGeometry.correctionForTextAngle`.
++ (NSInteger)correctionForTextAngle:(NSInteger)quarterTurn;
+
+/// Counts of finite angles per quarter-turn bin, indexed `turn / 90`. Non-finite
+/// entries are dropped, so the sum is the usable sample size rather than
+/// `angles.count`. Mirrors Android `OcrGeometry.quarterTurnHistogram`.
++ (NSArray<NSNumber *> *)quarterTurnHistogramFromAngles:(NSArray<NSNumber *> *)angles;
+
+/// Dominant quarter turn across per-line text angles, or
+/// `RNOcrGeometryQuarterTurnUnknown`. Angles are binned before counting rather
+/// than averaged: a linear mean of -179 and +179 is 0, the opposite of the
+/// truth. Mirrors Android `OcrGeometry.dominantQuarterTurn`.
++ (NSInteger)dominantQuarterTurnFromAngles:(NSArray<NSNumber *> *)angles;
+
 @end
 
 NS_ASSUME_NONNULL_END
