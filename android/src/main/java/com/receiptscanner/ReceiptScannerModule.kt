@@ -172,13 +172,14 @@ class ReceiptScannerModule(
                 synthesizeDeviceInfo = true,
               )
             val ocr = runOcr(ocrProcessor, processed.file)
-            val finalDims =
+            val rotatedDims =
               applyAutoRotateIfNeeded(
                 processed.file,
                 ocr?.rotationDegrees ?: 0,
                 scanOptions.autoRotate,
                 scanOptions.quality,
-              ) ?: Pair(processed.width, processed.height)
+              )
+            val finalDims = rotatedDims ?: Pair(processed.width, processed.height)
             // Write the parsed EXIF back onto the final JPEG (after any
             // autoRotate re-compress) so server-side file readers see it on
             // Android too — parity with iOS.
@@ -191,6 +192,8 @@ class ReceiptScannerModule(
               exifData = processed.exifData,
               imageOrigin = "camera",
               confidence = ocr?.confidence?.toDouble(),
+              ocrLines =
+                ocrLinesFor(scanOptions, ocr, processed.width, processed.height, rotatedDims),
             )
           }
 
@@ -250,13 +253,14 @@ class ReceiptScannerModule(
               )
             val imageOrigin = imageProcessor.inferOrigin(originalUri, processed.exifData)
             val ocr = runOcr(ocrProcessor, processed.file)
-            val finalDims =
+            val rotatedDims =
               applyAutoRotateIfNeeded(
                 processed.file,
                 ocr?.rotationDegrees ?: 0,
                 scanOptions.autoRotate,
                 scanOptions.quality,
-              ) ?: Pair(processed.width, processed.height)
+              )
+            val finalDims = rotatedDims ?: Pair(processed.width, processed.height)
             // Write the parsed EXIF back onto the final JPEG (after any
             // autoRotate re-compress) so server-side file readers see it on
             // Android too — parity with iOS.
@@ -269,6 +273,8 @@ class ReceiptScannerModule(
               exifData = processed.exifData,
               imageOrigin = imageOrigin,
               confidence = ocr?.confidence?.toDouble(),
+              ocrLines =
+                ocrLinesFor(scanOptions, ocr, processed.width, processed.height, rotatedDims),
             )
           }
 
@@ -309,6 +315,36 @@ class ReceiptScannerModule(
    *         "no rotation applied; caller should keep the original dimensions".
    *         A `null` return also covers rotation failures (logged, non-fatal).
    */
+
+  /**
+   * OCR line boxes expressed in the *output* JPEG's frame, or null when the
+   * caller didn't ask for geometry.
+   *
+   * OCR measures its boxes on the pre-autoRotate JPEG, so whenever the pixels
+   * were subsequently turned each box needs the same clockwise turn. A non-null
+   * [rotatedDims] is exactly the signal that they were: [applyAutoRotateIfNeeded]
+   * returns null for "autoRotate off", "nothing to rotate", and "rotate failed"
+   * alike, and in all three the boxes already match the output.
+   *
+   * Boxes that fall outside the output frame are clamped, and any that clamp to
+   * nothing are dropped — see docs/specs/ocr-line-geometry.md.
+   */
+  private fun ocrLinesFor(
+    options: ScanOptions,
+    ocr: OcrProcessor.OcrResult?,
+    sourceWidth: Int,
+    sourceHeight: Int,
+    rotatedDims: Pair<Int, Int>?,
+  ): List<OcrProcessor.Line>? {
+    if (!options.ocrGeometry || ocr == null) return null
+    val degrees = if (rotatedDims != null) ocr.rotationDegrees else 0
+    val (frameWidth, frameHeight) = rotatedDims ?: Pair(sourceWidth, sourceHeight)
+    return ocr.lines.mapNotNull { line ->
+      val turned = OcrGeometry.rotateClockwise(line.box, sourceWidth, sourceHeight, degrees)
+      OcrGeometry.clamp(turned, frameWidth, frameHeight)?.let { line.copy(box = it) }
+    }
+  }
+
   private fun applyAutoRotateIfNeeded(
     file: File,
     rotationDegrees: Int,

@@ -17,6 +17,7 @@ import com.facebook.react.bridge.ReadableMap
  * @property ocr Whether to run on-device OCR.
  * @property autoRotate Whether to bake OCR-detected rotation into output pixels.
  * @property includeRawExif Whether to attach the flat raw EXIF map under `exif.raw`.
+ * @property ocrGeometry Whether to attach per-line OCR boxes under `ocrLines`.
  */
 data class ScanOptions(
   val source: String,
@@ -27,6 +28,7 @@ data class ScanOptions(
   val ocr: Boolean,
   val autoRotate: Boolean,
   val includeRawExif: Boolean,
+  val ocrGeometry: Boolean,
 ) {
   companion object {
     /**
@@ -55,6 +57,7 @@ data class ScanOptions(
         ocr = if (map.hasKey("ocr")) map.getBoolean("ocr") else true,
         autoRotate = if (map.hasKey("autoRotate")) map.getBoolean("autoRotate") else true,
         includeRawExif = if (map.hasKey("includeRawExif")) map.getBoolean("includeRawExif") else false,
+        ocrGeometry = if (map.hasKey("ocrGeometry")) map.getBoolean("ocrGeometry") else false,
       )
   }
 }

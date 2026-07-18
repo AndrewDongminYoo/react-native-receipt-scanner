@@ -36,6 +36,20 @@ class OcrProcessor(
     )
 
   /**
+   * One recognised line with the box it occupies, in the coordinates of the
+   * image handed to [recognizeWithRotationDetection] — i.e. the processed JPEG
+   * *before* any [ImageProcessor.rotateFileInPlace] auto-rotate. Callers that
+   * rotate the pixels afterwards must remap via [OcrGeometry.rotateClockwise].
+   *
+   * @property confidence ML Kit's per-line confidence, or null when it reported NaN.
+   */
+  data class Line(
+    val text: String,
+    val box: OcrGeometry.Box,
+    val confidence: Float?,
+  )
+
+  /**
    * Result of [recognizeWithRotationDetection].
    *
    * @property text Joined OCR text (newline-separated lines) for the chosen rotation.
@@ -45,12 +59,15 @@ class OcrProcessor(
    *                     `OcrFloor` gate.
    * @property confidence Mean per-line OCR confidence in [0, 1], or null when
    *                      no line reported a finite value. Reporting only.
+   * @property lines Per-line geometry, always collected; the module only
+   *                 serialises it when `options.ocrGeometry` is set.
    */
   data class OcrResult(
     val text: String,
     val rotationDegrees: Int,
     val lineCount: Int,
     val confidence: Float? = null,
+    val lines: List<Line> = emptyList(),
   )
 
   /**
@@ -63,6 +80,7 @@ class OcrProcessor(
     val lineAspect: Float,
     val textLength: Int,
     val confidence: Float?,
+    val lines: List<Line>,
   )
 
   /**
@@ -116,7 +134,7 @@ class OcrProcessor(
 
     if (pass0.lineCount < 3) {
       logDecision(fileName, 0, "too-few-lines", pass0)
-      return OcrResult(pass0.text, 0, pass0.lineCount, pass0.confidence)
+      return OcrResult(pass0.text, 0, pass0.lineCount, pass0.confidence, pass0.lines)
     }
 
     // Decide rotation by comparing image and line aspect *directions*.
@@ -132,14 +150,20 @@ class OcrProcessor(
     // Need enough lines for the lineAspect mean to be reliable.
     if (pass0.lineCount < MISMATCH_MIN_LINES) {
       logDecision(fileName, 0, "low-line-count-skip-mismatch", pass0)
-      return OcrResult(pass0.text, 0, pass0.lineCount, pass0.confidence)
+      return OcrResult(pass0.text, 0, pass0.lineCount, pass0.confidence, pass0.lines)
     }
 
     // Most common rotated case: user held a portrait receipt sideways → image
     // is landscape, lines are vertical (lineAspect < 0.7).
     if (imageIsLandscape && lineIsVertical) {
       logDecision(fileName, ROTATED_DEFAULT_DEGREES, "landscape-vertical-lines", pass0)
-      return OcrResult(pass0.text, ROTATED_DEFAULT_DEGREES, pass0.lineCount, pass0.confidence)
+      return OcrResult(
+        pass0.text,
+        ROTATED_DEFAULT_DEGREES,
+        pass0.lineCount,
+        pass0.confidence,
+        pass0.lines,
+      )
     }
 
     // Mirror case (rare for Korean receipts): portrait image with horizontal
@@ -151,12 +175,12 @@ class OcrProcessor(
     // Ambiguous middle band (LINE_VERTICAL_THRESHOLD ≤ lineAspect ≤ LINE_HORIZONTAL_THRESHOLD).
     if (!lineIsHorizontal && !lineIsVertical) {
       logDecision(fileName, 0, "line-aspect-ambiguous", pass0)
-      return OcrResult(pass0.text, 0, pass0.lineCount, pass0.confidence)
+      return OcrResult(pass0.text, 0, pass0.lineCount, pass0.confidence, pass0.lines)
     }
 
     // Aspect-matched (portrait + horizontal lines OR landscape + horizontal lines).
     logDecision(fileName, 0, "aspect-matched", pass0)
-    return OcrResult(pass0.text, 0, pass0.lineCount)
+    return OcrResult(pass0.text, 0, pass0.lineCount, lines = pass0.lines)
   }
 
   private fun measureAt(
@@ -171,7 +195,36 @@ class OcrProcessor(
       lineAspect = lineAspectOf(result, rotationDegrees),
       textLength = result.text.length,
       confidence = meanLineConfidence(result),
+      lines = linesOf(result),
     )
+  }
+
+  /**
+   * Per-line text + bounding box, in the recognised image's pixel space.
+   * Lines without usable text or geometry are dropped — `boundingBox` is
+   * nullable in ML Kit, so this list does not line up index-wise with the
+   * newline-joined [OcrResult.text].
+   */
+  private fun linesOf(result: Text): List<Line> {
+    val lines = mutableListOf<Line>()
+    for (block in result.textBlocks) {
+      for (line in block.lines) {
+        if (line.text.isBlank()) continue
+        val box = line.boundingBox ?: continue
+        val w = box.width()
+        val h = box.height()
+        if (w <= 0 || h <= 0) continue
+        val c = line.confidence
+        lines.add(
+          Line(
+            text = line.text,
+            box = OcrGeometry.Box(box.left, box.top, w, h),
+            confidence = if (c.isNaN()) null else c,
+          ),
+        )
+      }
+    }
+    return lines
   }
 
   /**
