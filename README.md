@@ -248,6 +248,7 @@ if (result.status === "success") {
 | `autoRotate`        | `boolean`               | `true`                                    | Detect 90° / 180° / 270° content rotation via OCR confidence and rotate the output JPEG to upright. Only applies when `ocr: true`.                                                                                                          |
 | `includeRawExif`    | `boolean`               | `false`                                   | Include the full raw EXIF / TIFF / GPS dictionary on `exif.raw`. Off by default to keep IPC payloads small. GPS keys excluded when `includeGpsExif: false`.                                                                                 |
 | `minimumTextHeight` | `number` (0.0–1.0)      | `0`                                       | iOS only: minimum text height as a fraction of image height for Vision OCR (`0` = platform default ≈ 1/32). Lower it to recover small receipt line items; Android (ML Kit) has no equivalent and ignores it. Only applies when `ocr: true`. |
+| `ocrGeometry`       | `boolean`               | `false`                                   | Attach per-line text boxes to `ocrLines`, in output-image pixels. Enable it to draw text-region overlays. Off by default because a long receipt can carry hundreds of lines. Only applies when `ocr: true`.                                 |
 
 ### Result types
 
@@ -268,7 +269,14 @@ type ReceiptImage = {
   imageOrigin: ImageOrigin; // always present; classifies how the source image was produced
   ocrText?: string; // present when options.ocr === true
   ocrQuality?: OcrQuality; // present when options.ocr === true
+  ocrLines?: OcrLine[]; // present when options.ocrGeometry === true
   exif?: ReceiptExif; // present when options.includeExif === true
+};
+
+type OcrLine = {
+  text: string; // this line's recognized text
+  frame: { x: number; y: number; width: number; height: number }; // output-image pixels, top-left origin
+  confidence?: number; // 0–1, when the platform reports one
 };
 
 type ImageOrigin = "camera" | "screenshot" | "download" | "unknown";

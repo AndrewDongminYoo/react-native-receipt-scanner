@@ -8,7 +8,11 @@
 **플랫폼:** iOS + Android
 **목표 릴리스:** 0.7.0
 
-## 현재 상태: Proposed
+## 현재 상태: Implemented (0.7.0) — 회전 경로는 기기 QA 대기
+
+JS 계약과 양 플랫폼 구현이 들어갔고, CW 리매핑 공식은 `OcrGeometryTest`(JUnit 10케이스)가 고정한다.
+아직 검증되지 않은 것은 **실제 기기에서 회전된 캡처의 오버레이 정합**이다 (아래 검증 계획 ③). iOS는 유닛 테스트 타깃이 없어 "어느 프레임 · 어느 분기" 배선이 코드 리뷰로만 확인된 상태다.
+다만 iOS에서 리매핑이 도는 경로는 `autoRotate: false` + 회전된 콘텐츠뿐이며, `autoRotate` 기본값이 `true`이므로 기본 설정에서는 항상 항등 경로를 탄다.
 
 ## 목적
 
@@ -16,7 +20,7 @@
 패키지는 **라인 단위 텍스트 영역 좌표(geometry)라는 이미지 프리미티브만** 반환한다.
 스캔라인 애니메이션·박스 리빌·"Copy All" 같은 연출과 인터랙션은 전부 소비 앱 JS 레이어의 몫이다 — ADR-003의 "image primitives only" 경계를 그대로 유지한다.
 
-기반 사실: 양 플랫폼 OCR 프로세서는 이미 라인 bounding box를 내부적으로 순회하고 있다 (`RNOcrProcessor.m:233`의 `obs.boundingBox`, `OcrProcessor.kt:215`의 `line.boundingBox`).
+기반 사실: 양 플랫폼 OCR 프로세서는 이미 라인 bounding box를 내부적으로 순회하고 있었다 (`RNOcrProcessor`의 `meanBoxAspectFromResults:`가 `obs.boundingBox`를, `OcrProcessor.lineAspectOf`가 `line.boundingBox`를 aspect 계산에 사용).
 이 스펙은 그 데이터를 버리지 않고 브리지 너머로 직렬화하는 additive 변경이다.
 
 ## API 계약 (`src/types.ts`)
@@ -76,7 +80,7 @@ export type ReceiptImage = {
 
 ### Android (`OcrProcessor.kt`, `ResultBuilder.kt`)
 
-1. **캡처 지점**: Pass 0에서 `line.boundingBox`(px, top-left 원점), `line.text`, `line.confidence`를 읽어 유효한 텍스트와 box가 모두 있는 항목만 `OcrProcessor.Result.lines: List<OcrLineData>`에 담는다. OCR 입력이 processed JPEG 파일이므로 좌표는 **pre-autoRotate 프레임**이다.
+1. **캡처 지점**: Pass 0에서 `line.boundingBox`(px, top-left 원점), `line.text`, `line.confidence`를 읽어 유효한 텍스트와 box가 모두 있는 항목만 `OcrProcessor.OcrResult.lines: List<OcrProcessor.Line>`에 담는다 (`linesOf`). OCR 입력이 processed JPEG 파일이므로 좌표는 **pre-autoRotate 프레임**이다. 옵션과 무관하게 항상 수집하고, 직렬화 여부만 모듈이 `ocrGeometry`로 가른다.
 2. **리매핑**: `applyAutoRotateIfNeeded`가 `rotateFileInPlace(file, rotationDegrees, quality)`로 픽셀을 회전시킨 경우, 각 box에 **픽셀이 받은 것과 동일한 회전**을 적용한 뒤 직렬화한다 (아래 리매핑 테이블). `autoRotate == false`이거나 `rotationDegrees == 0`이면 identity.
 3. ML Kit Korean은 rotation-invariant(v1.3)이므로 회전된 콘텐츠라도 box는 입력 프레임 기준의 실제 레이아웃을 반영한다 — autoRotate 미적용 출력에도 오버레이 정합이 유지된다.
 4. `ResultBuilder.buildImage`에 `ocrLines: WritableArray` 직렬화를 추가한다.
@@ -102,8 +106,17 @@ export type ReceiptImage = {
 | 180° | `W × H`   | `(W − x − w, H − y − h, w, h)` |
 | 270° | `H × W`   | `(y, W − x − w, h, w)`         |
 
-**방향 검증 필수**: `rotateFileInPlace`(Android, `Matrix.postRotate` 기반)와 `cgImageByRotating:`(iOS, CI 좌표계 `CGAffineTransformMakeRotation`)의 실제 회전 방향이 top-left 기준 시계 방향과 일치하는지는 **코드 추론이 아니라 기기 fixture로 확정**한다 (`platform-asymmetries.md`의 rotationDegrees 방향 항목과 대조).
-방향이 반대로 판명되면 90°/270° 행을 서로 교환하면 된다 — 계약(최종 출력 공간 불변식)은 변하지 않는다.
+이 표는 **CW 한 방향만** 정의한다. 구현은 양 플랫폼이 같은 CW 헬퍼를 쓴다 — `OcrGeometry.rotateClockwise`(Android), `+[RNOcrGeometry rectByRotating:frameSize:clockwiseDegrees:]`(iOS) — 그리고 `OcrGeometryTest`가 이 공식을 고정한다.
+
+**플랫폼 방향 차이는 각도가 아니라 "언제 · 어느 프레임에" 적용하느냐로 흡수된다.** `platform-asymmetries.md` §3.1이 기록한 대로 `rotationDegrees=d`는 Android(`Matrix.postRotate`)에서 CW, iOS(`CGAffineTransformMakeRotation`)에서 CCW를 뜻한다. 그 결과:
+
+| 플랫폼  | OCR이 박스를 잰 프레임                  | remap 조건                          | 넘기는 CW 각도 |
+| ------- | --------------------------------------- | ----------------------------------- | -------------- |
+| Android | autoRotate _전_ JPEG (`processed` 치수) | autoRotate가 **실제로 회전했을 때** | `d`            |
+| iOS     | 선택된 pass 프레임 (이미 CCW-`d` 상태)  | autoRotate가 **회전하지 않았을 때** | `d`            |
+
+remap 조건이 두 플랫폼에서 서로 **반대**라는 점이 이 설계의 유일한 반직관 지점이다 — Android는 OCR을 회전 전 파일에 돌리고, iOS는 이미 회전된 pass 결과를 쓰기 때문이다.
+iOS가 `360 − d`가 아니라 `d`를 넘기는 이유는 CCW-`d`를 되돌리는 연산이 곧 CW-`d`이기 때문이며, 이 왕복 항등식은 `OcrGeometryTest`의 round-trip 케이스가 검증한다.
 
 ## Non-goals
 
@@ -114,13 +127,15 @@ export type ReceiptImage = {
 
 ## 검증 계획
 
-1. **JS**: `src/__tests__/`에 `ocrGeometry` 기본값 전파(`DEFAULT_SCAN_OPTIONS` → native 호출 인자) 테스트 추가. → verify: `yarn test`
-2. **타입**: `Required<ScanReceiptOptions>` 컴파일 강제 확인. → verify: `yarn typecheck`
-3. **기기 매트릭스** (수동, [`threshold-calibration.md`](./threshold-calibration.md)의 fixture 활용): 플랫폼(2) × 콘텐츠 회전(0/90/180/270) × `autoRotate`(on/off) — 각 셀에서 example 앱 오버레이가 실제 텍스트 위치와 시각적으로 정합하는지 확인. 90°/270° 셀이 리매핑 방향 검증을 겸한다.
-4. **example 앱**: 결과 화면에 스캔라인 스윕 후 `frame.y` 순 박스 리빌 데모를 추가한다 — 데모이자 3의 검증 도구.
+1. ✅ **JS**: `ocrGeometry` 기본값 전파와 `ocrLines` 통과를 `src/__tests__/index.test.tsx`가 검증. → `yarn test` (21케이스)
+2. ✅ **타입**: `Required<ScanReceiptOptions>` 컴파일 강제 + 루트 `OcrLine` re-export를 테스트의 type-only import가 확인. → `yarn typecheck`
+3. ✅ **CW 공식**: `OcrGeometryTest` 10케이스 — 0/90/180/270 각 행(비대칭 rect로 축 교환 검출), 90→270 왕복 항등, 각도 정규화, clamp 트림·전량 탈락·zero-area 탈락. → `./gradlew :react-native-receipt-scanner:testDebugUnitTest`
+4. ⏳ **기기 매트릭스** (수동, [`threshold-calibration.md`](./threshold-calibration.md)의 fixture 활용): 플랫폼(2) × 콘텐츠 회전(0/90/180/270) × `autoRotate`(on/off) — 각 셀에서 example 앱 오버레이가 실제 텍스트 위치와 시각적으로 정합하는지 확인. 90°/270° 셀이 배선(어느 프레임 · 어느 분기) 검증을 겸한다. 공식 자체는 3이 이미 고정했으므로, 여기서 잡히는 실패는 배선 오류다.
+5. ✅ **example 앱**: 결과 화면에 스캔라인 스윕 후 `frame.y` 순 박스 리빌 데모 (`OcrGeometryPreview`) — 데모이자 4의 검증 도구. `resizeMode="contain"` 레터박싱을 감안해 `containFit`으로 그려진 사각형 기준으로 배치한다.
 
 ## 호환성
 
 - Additive 변경만 있다. 기존 호출·결과 형태 불변, breaking change 없음.
 - web fallback(`src/scan.tsx`)은 `ocrLines`를 반환하지 않는다 (`undefined`).
-- 문서: `README.md` API 표와 `docs/specs/api-contract.md`에 `ocrGeometry` / `OcrLine` 반영, `platform-asymmetries.md`에 좌표 변환 비대칭(정규화 bottom-left vs px top-left) 항목 추가.
+- 좌표 자료형에 잔여 비대칭이 있다: Android는 ML Kit `Rect`에서 온 정수 픽셀, iOS는 정규화 값 × 픽셀 크기라 소수 픽셀. JS `OcrLine.frame`이 `number`이므로 계약 위반이 아니고 오버레이 배치에도 영향이 없어 정규화하지 않는다.
+- 문서: `README.md` API 표와 `docs/specs/api-contract.md`에 `ocrGeometry` / `OcrLine` 반영 완료, `platform-asymmetries.md` §2.3(좌표계 해소) · §3.1(CW 정준화) 갱신 완료.

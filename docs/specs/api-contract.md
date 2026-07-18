@@ -34,6 +34,25 @@ and the system cannot show the rationale dialog).
 | `autoRotate`        | `boolean`               | `true`               | Detect 90° / 180° / 270° content rotation via OCR confidence and rotate the output JPEG to the upright orientation (see "Auto-rotate" below). Effective only when `ocr === true`.                                                                                                                                         |
 | `includeRawExif`    | `boolean`               | `false`              | Include the full raw EXIF / TIFF / GPS dictionary on `exif.raw`. Off by default to keep IPC payloads small (raw maps are typically 30–60 fields). Effective only when `includeExif === true`. GPS keys are excluded from `raw` whenever `includeGpsExif === false`.                                                       |
 | `minimumTextHeight` | `number` (0.0–1.0)      | `0`                  | **iOS only.** Vision `minimumTextHeight` as a fraction of image height; text shorter than this is skipped during recognition. Lowering it (e.g. `0.02`) can recover small receipt line items at the cost of more noise. `0` uses the package default (≈ 1/32). Android (ML Kit) has no equivalent and ignores this field. |
+| `ocrGeometry`       | `boolean`               | `false`              | Attach per-line OCR boxes to `ReceiptImage.ocrLines` (see "OCR line geometry" below). Effective only when `ocr === true`.                                                                                                                                                                                                 |
+
+### OCR line geometry
+
+With `ocrGeometry: true`, each image carries `ocrLines` — one entry per recognized line that the platform could place:
+
+```ts
+type OcrLine = {
+  text: string;
+  frame: { x: number; y: number; width: number; height: number };
+  confidence?: number; // 0–1
+};
+```
+
+`frame` is in the **output JPEG's pixel space** — the same space as `ReceiptImage.width` / `height` — with a top-left origin, and is clamped to the image bounds. A consumer drawing an overlay only needs the displayed-to-actual scale factor.
+
+Lines the platform could not place are omitted: Android's ML Kit `boundingBox` is nullable, and any box that clamps to zero area is dropped. `ocrLines` therefore does **not** correspond index-wise with the newline-joined `ocrText` — read `OcrLine.text` per box instead.
+
+Coordinates are integers on Android (ML Kit reports a pixel `Rect`) and fractional on iOS (Vision reports normalized values scaled by the pixel size). Both satisfy the `number` contract. See `docs/specs/ocr-line-geometry.md` for the coordinate derivation and `docs/notes/platform-asymmetries.md` §2.3 / §3.1 for the underlying platform differences.
 
 ### OCR floor
 

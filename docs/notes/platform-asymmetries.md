@@ -85,7 +85,9 @@
 | iOS Vision     | 정규화된 `[0, 1]` 좌표 |
 | Android ML Kit | 픽셀 좌표 (`Rect`)     |
 
-**Resolution path.** 비범위. 패키지가 양 플랫폼에서 _aspect ratio_(width/height)만 계산해 사용하므로 단위 차이가 외부에 노출되지 않음. raw bbox 자체는 노출 안 함.
+추가로 원점도 다르다 — iOS Vision은 **bottom-left**, Android ML Kit `Rect`는 **top-left**.
+
+**Resolution path.** 해소됨 (0.7.0, `ocrGeometry`). 그전까지는 _aspect ratio_(width/height)만 쓰여 단위 차이가 외부에 노출되지 않았으나, `ReceiptImage.ocrLines`가 bbox를 노출하면서 양 플랫폼 모두 **출력 JPEG 픽셀 · top-left 원점**으로 정규화해서 내보낸다 (iOS는 `+[RNOcrGeometry rectFromNormalizedBox:pixelSize:]`가 `1 - maxY`로 y축을 뒤집어 변환). 잔여 차이 하나: Android는 ML Kit `Rect`에서 온 **정수** 픽셀, iOS는 정규화 값 × 픽셀 크기라 **소수** 픽셀이다. JS `OcrLine.frame`은 `number`이므로 계약 위반은 아니고, 오버레이 배치에도 영향이 없다. 자세한 계약은 `docs/specs/ocr-line-geometry.md`.
 
 ### 2.4 OCR 단계 호출 순서 (autoRotate 흐름)
 
@@ -112,6 +114,14 @@
 - ADR-006 D7 (iOS autoRotate): iOS 자체 알고리즘 안에서 일관됨 — `RNOcrProcessor.rotate:byDegrees:` 도 CCW 기준. iOS에선 OCR 검출과 픽셀 회전이 같은 방향 정의 사용. 자체 일관성은 유지.
 - ADR-006 D14 (Android v1.3): Android 자체 알고리즘 안에서 일관됨 — `Matrix.postRotate` CW 기준. Android에선 OCR 신호로 결정한 회전을 픽셀 회전에 그대로 전달. 자체 일관성은 유지.
 - **그러나 _플랫폼 간_** 의 의미론은 정반대. 향후 cross-platform 신호로 회전 결정을 통일하거나, `rotationDegrees`를 결과 표면에 노출할 일이 생기면 _반드시_ 한쪽으로 정규화해야 한다.
+- **0.7.0 `ocrGeometry`가 이 정규화의 첫 사례다.** OCR 박스를 출력 프레임으로 옮기려면 픽셀에 가해진 회전을 박스에도 가해야 하므로 이 비대칭을 정면으로 만난다. 채택한 규약은 위 "장기 1안"과 같은 **CW 정준화**: `OcrGeometry.rotateClockwise`(Android) / `+[RNOcrGeometry rectByRotating:frameSize:clockwiseDegrees:]`(iOS)가 같은 CW 공식을 쓰고, 방향 차이는 각 플랫폼이 넘기는 인자에 흡수된다.
+
+  | 플랫폼  | OCR이 박스를 잰 프레임            | 출력 프레임                      | remap이 필요한 조건                 | 넘기는 CW 각도 |
+  | ------- | --------------------------------- | -------------------------------- | ----------------------------------- | -------------- |
+  | Android | autoRotate _전_ JPEG              | autoRotate 후                    | autoRotate가 **실제로 회전**했을 때 | `d`            |
+  | iOS     | 선택된 pass 프레임 (이미 CCW-`d`) | autoRotate면 그대로, 아니면 원본 | autoRotate가 **회전하지 않았을 때** | `d`            |
+
+  즉 remap 조건이 두 플랫폼에서 **반대**다 — Android는 회전했을 때, iOS는 회전하지 않았을 때. iOS가 `360 − d`가 아니라 `d`를 넘기는 이유는 CCW-`d`를 되돌리는 것이 CW-`d`이기 때문이다. CW 공식 자체는 `OcrGeometryTest`가 고정한다.
 
 **Resolution path.** 단기: 현재 사용처는 native-internal이므로 외부 영향 없음 — 그대로 유지. 장기:
 
