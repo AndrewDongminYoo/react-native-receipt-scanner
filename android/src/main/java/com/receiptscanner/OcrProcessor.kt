@@ -52,7 +52,13 @@ class OcrProcessor(
   /**
    * Result of [recognizeWithRotationDetection].
    *
-   * @property text Joined OCR text (newline-separated lines) for the chosen rotation.
+   * @property text Joined OCR text (newline-separated lines). Recognised on the
+   *                image *as handed in* — this class never re-runs OCR after
+   *                choosing a rotation, so when the caller bakes
+   *                [rotationDegrees] into the pixels the line *order* still
+   *                reflects the pre-rotation frame and can read bottom-to-top.
+   *                Only the order is affected; [lines] carry remapped boxes.
+   *                iOS differs here — see docs/notes/platform-asymmetries.md §4.2.
    * @property rotationDegrees Detected rotation in degrees (0 / 90 / 180 / 270).
    *                           Caller is expected to bake this into the output pixels.
    * @property lineCount Number of recognised lines — used by the JS-side
