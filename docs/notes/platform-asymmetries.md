@@ -67,13 +67,15 @@
 | iOS Vision (VNRecognizeTextRequest) | 입력 픽셀 회전에 따라 confidence가 다름 → multi-pass 검출 가능                                                                                                                                 |
 | Android ML Kit Korean               | **rotation invariant** — `InputImage.fromBitmap(bitmap, rotationDegrees)` 의 rotation hint와 무관하게 동일 결과 (lineCount/lineAspect/textLength). 2026-05-10 Galaxy Z Flip6 field data로 확인 |
 
-**Resolution path.** 비범위 (ML Kit 동작). 두 플랫폼이 _동일한 회전 검출 알고리즘을 공유할 수 없음_. iOS는 confidence 기반 multi-pass(ADR-006 D7), Android는 단일-pass + lineAspect 기반(ADR-006 D14 v1.3).
+**Resolution path.** ~~비범위 (ML Kit 동작). 두 플랫폼이 _동일한 회전 검출 알고리즘을 공유할 수 없음_. iOS는 confidence 기반 multi-pass(ADR-006 D7), Android는 단일-pass + lineAspect 기반(ADR-006 D14 v1.3).~~ — 2026-07-18 해소. 아래 참조.
 
 ⚠️ **2026-07-18 갱신 — 이 비대칭은 더 이상 성립하지 않는다.** iOS 26.5 실기기 측정에서 Vision도 회전된 한글·영문을 거의 동등하게 읽어냈다: 180° 뒤집힌 영수증에서 0° 패스가 62줄/신뢰도 76%, 90°·270°로 누운 영수증에서 52~54줄/84%. 즉 **양 플랫폼 모두 사실상 rotation-robust**가 되었다.
 
 이건 단순한 표 갱신이 아니라 두 플랫폼의 회전 검출 설계 근거가 동시에 사라졌다는 뜻이다. iOS의 multi-pass는 "회전된 입력은 못 읽힌다"는 격차를 전제로 하고(그래서 `kRotateCommitRatio = 1.3`이 영원히 미달), Android의 lineAspect 방식은 애초에 rotation-invariance를 전제로 설계됐으나 90/270을 가를 신호가 없다. 결과적으로 iOS `autoRotate`는 어떤 회전도 보정하지 못하고, Android는 가로 콘텐츠에 항상 270°만 적용해 절반만 맞는다.
 
-관측 가능한 사용자 증상은 양 플랫폼 공통이다 — **OCR 텍스트는 정방향으로 정상 출력되는데 결과 이미지는 돌아간 채로 남는다.** 상세와 재설계 방향은 [`../specs/ocr-orientation-correction.md`](../specs/ocr-orientation-correction.md) 상단 상태 블록, [`../specs/portrait-rotation-detection.md`](../specs/portrait-rotation-detection.md) §field data (2026-07-18).
+관측 가능한 사용자 증상은 양 플랫폼 공통이었다 — **OCR 텍스트는 정방향으로 정상 출력되는데 결과 이미지는 돌아간 채로 남는다.**
+
+**해소 (2026-07-18): 두 플랫폼이 처음으로 동일한 신호를 공유한다.** "공유할 수 없다"는 원래 판단은 _인식 품질_ 을 신호로 쓴다는 전제에서만 참이었다 — 품질은 엔진마다 회전 반응이 다르므로 공유 불가가 맞다. 그러나 **텍스트 각도**는 엔진과 무관한 기하량이라 양쪽에서 같은 의미를 갖는다. [`../specs/ocr-angle-rotation-detection.md`](../specs/ocr-angle-rotation-detection.md) v1.0이 그 신호로 재설계했고, quantize·최빈값·보정 수학은 양 플랫폼이 같은 공식을 쓴다 (취득 경로 차이는 §2.5). 위 표의 rotation-invariance 차이는 이제 _폴백_ 경로에만 영향을 준다 — 특히 iOS 16/17에서는 Vision이 아직 rotation-variant라 probe 루프가 실제로 동작하므로, 그 폴백은 살려 둔다.
 
 ### 2.2 per-line confidence 노출
 
@@ -105,6 +107,17 @@
 | Android | JPEG 인코딩 _후_ (cache 파일을 디코드하여 OCR, 필요 시 in-place 회전+재인코딩) |
 
 **Resolution path.** 비범위. iOS는 perspective correction 결과가 CGImage이고 `RNImageProcessor`가 모든 인코딩을 담당하므로 OCR-first가 자연스러움. Android는 `ImageProcessor.processGallery`가 perspective correction + 인코딩을 한 흐름으로 처리하므로 OCR이 인코딩 후. 이 순서 차이가 사용자에게 노출되는 결과는 동일.
+
+### 2.5 텍스트 각도 취득 경로
+
+| 플랫폼         | 각도 취득                                                                                                                                     |
+| -------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| Android ML Kit | ✅ `Text.Line.getAngle()`이 직접 제공. 문서상 **시계방향 양수**, `[-180, 180]` — 이 패키지의 CW 정준화와 방향이 그대로 일치                   |
+| iOS Vision     | ❌ 각도 API 없음. `VNRecognizedTextObservation`의 `topLeft`/`topRight`에서 `atan2`로 유도해야 하고, **bottom-left 원점이라 y 부호 반전 필요** |
+
+**Resolution path.** 의도된 비대칭 — 플랫폼이 주는 것이 다르다. 두 경로가 **같은 CW 규약의 값**을 내도록 `+[RNOcrGeometry clockwiseAngleFromTopLeft:topRight:]`가 흡수한다. y 부호를 놓치면 90과 270이 조용히 뒤바뀌므로(이번 재설계가 고치려는 바로 그 증상) 부호 규약은 `OcrGeometryTest`가 Kotlin 쪽에서 고정하고 iOS는 같은 공식을 미러한다. 상세는 [`../specs/ocr-angle-rotation-detection.md`](../specs/ocr-angle-rotation-detection.md).
+
+⚠️ 두 값이 **이미지 공간** 기준인지는 아직 실측 미확인이다. 엔진 내부의 정규화된 리딩 프레임 기준이라면 회전 여부와 무관하게 0이 나오고 신호가 죽는다. 그 경우를 대비한 회귀 가드가 양 플랫폼에 배선돼 있다 (해당 스펙 §회귀 가드).
 
 ## 3. 회전·픽셀 변환
 
