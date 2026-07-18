@@ -27,6 +27,14 @@ yarn typecheck && yarn lint && yarn test && trunk fmt && trunk check
 
 `trunk fmt` rewrites files in place — run it **before** `trunk check`; otherwise the formatters report unformatted files as failures.
 
+### Do not "fix" the iOS `-Wconversion` warnings
+
+`-Wconversion` is **deliberately not enabled** — it appears in no podspec, Podfile, or trunk config. Running clang with it by hand surfaces 17 warnings across five `.m` files (`RNCropEditorViewController`, `RNOcrProcessor`, `RNDocumentCameraDelegate`, `RNGalleryPickerDelegate`, `RNImageProcessor`); `ReceiptScanner.mm` is unmeasured because it needs React Native headers to compile, so the true total is higher.
+
+Every one audited so far is benign: `NSInteger`/`NSUInteger` → `double` on line and array counts (a double holds integers exactly to 2^53), and one `double` → `float` where Vision's `minimumTextHeight` property genuinely is `float` and the value is `1/32`, exactly representable. Adding casts changes no runtime behaviour.
+
+Patching a handful of sites is the worst option — nothing enforces the flag, so the count silently grows back. Either leave them (current decision, 2026-07-19) or, as its own task, fix every site **and** add the flag to `ReceiptScanner.podspec` so it stays enforced. Scope that task off a real build, not a standalone `clang -fsyntax-only` sweep, so `.mm` files are counted.
+
 ### Example App
 
 ```bash
