@@ -14,5 +14,6 @@ export type {
   ImageOrigin,
   OcrFloor,
   OcrQuality,
+  OcrLine,
 } from "./types";
 export { DEFAULT_OCR_FLOOR } from "./types";

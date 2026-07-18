@@ -127,6 +127,18 @@ export type ScanReceiptOptions = {
    * @defaultValue `0` (package default, ≈ 1/32)
    */
   minimumTextHeight?: number;
+  /**
+   * Attach per-line OCR bounding boxes to {@link ReceiptImage.ocrLines}.
+   * Effective only when `ocr === true` — without a recognition pass there is
+   * no geometry to report. Off by default because a long receipt can carry
+   * hundreds of lines and most consumers only need {@link ReceiptImage.ocrText}.
+   *
+   * Enable it to draw text-region overlays on the returned image.
+   *
+   * @see `docs/specs/ocr-line-geometry.md` for the coordinate contract.
+   * @defaultValue `false`
+   */
+  ocrGeometry?: boolean;
 };
 
 /**
@@ -263,6 +275,24 @@ export type OcrQuality = {
 };
 
 /**
+ * One recognized text line and where it sits on the returned image.
+ * Populated only when {@link ScanReceiptOptions.ocrGeometry} is `true`.
+ *
+ * `frame` is expressed in the **output JPEG's pixel space** — the same space
+ * as {@link ReceiptImage.width} / {@link ReceiptImage.height} — with a
+ * top-left origin, so an overlay only needs the displayed-to-actual scale
+ * factor. Frames are clamped to the image bounds by the native layer.
+ */
+export type OcrLine = {
+  /** Recognized text for this line. Never empty — blank lines are dropped. */
+  text: string;
+  /** Axis-aligned bounding box in output-image pixels, top-left origin. */
+  frame: { x: number; y: number; width: number; height: number };
+  /** Per-line confidence in `[0, 1]`, when the platform reports one. */
+  confidence?: number;
+};
+
+/**
  * One image returned by {@link scan}. Backed by a JPEG file in the app
  * cache directory; the `uri` is stable until the next `scan()` call (which
  * deletes prior session files) and does not survive app restarts.
@@ -284,6 +314,14 @@ export type ReceiptImage = {
   ocrText?: string;
   /** Derived OCR quality metrics. Present whenever OCR ran. */
   ocrQuality?: OcrQuality;
+  /**
+   * Per-line OCR geometry in output-image pixel space. Present only when both
+   * {@link ScanReceiptOptions.ocr} and {@link ScanReceiptOptions.ocrGeometry}
+   * are `true`. Lines the platform could not place (no bounding box, or a box
+   * that clamps to zero area) are omitted, so this does not line up index-wise
+   * with `ocrText` — read {@link OcrLine.text} for each box instead.
+   */
+  ocrLines?: OcrLine[];
   /** EXIF white-list. Present only when {@link ScanReceiptOptions.includeExif} is `true`. */
   exif?: ReceiptExif;
   /** Origin classification — see {@link ImageOrigin}. Always present. */
@@ -343,4 +381,5 @@ export const DEFAULT_SCAN_OPTIONS: Required<ScanReceiptOptions> = {
   autoRotate: true,
   includeRawExif: false,
   minimumTextHeight: 0,
+  ocrGeometry: false,
 };
