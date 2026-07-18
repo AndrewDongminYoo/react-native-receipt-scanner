@@ -1,8 +1,10 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Animated,
   Image,
+  type LayoutChangeEvent,
   Platform,
   Pressable,
   SafeAreaView,
@@ -16,6 +18,7 @@ import {
 import {
   scan,
   type ImageOrigin,
+  type OcrLine,
   type OcrQuality,
   type ReceiptExif,
   type ReceiptImage,
@@ -43,6 +46,7 @@ type ScanOptionsState = {
   autoRotate: boolean;
   cropAutoConfirm: boolean;
   minimumTextHeight: number;
+  ocrGeometry: boolean;
   // ocrFloor is `OcrFloor | false`; modelled here as an on/off flag plus the
   // three sub-thresholds, recombined in `buildOptions`.
   ocrFloorEnabled: boolean;
@@ -62,6 +66,7 @@ const INITIAL_OPTIONS: ScanOptionsState = {
   autoRotate: true,
   cropAutoConfirm: false,
   minimumTextHeight: 0,
+  ocrGeometry: true,
   ocrFloorEnabled: true,
   floorMinTextLength: 12,
   floorMinLines: 2,
@@ -81,6 +86,7 @@ function buildOptions(o: ScanOptionsState): ScanReceiptOptions {
     autoRotate: o.autoRotate,
     cropAutoConfirm: o.cropAutoConfirm,
     minimumTextHeight: o.minimumTextHeight,
+    ocrGeometry: o.ocrGeometry,
     ocrFloor: o.ocrFloorEnabled
       ? {
           minTextLength: o.floorMinTextLength,
@@ -442,15 +448,137 @@ function ExifPart({ exif, origin }: { exif: ReceiptExif; origin: ImageOrigin }) 
   );
 }
 
+// ─── OCR geometry overlay ─────────────────────────────────────────────────────
+//
+// Draws `ocrLines` over the preview: a light bar sweeps top-to-bottom and each
+// text box fades in as the bar passes it. The package only returns geometry —
+// this presentation lives entirely in the consuming app (ADR-003).
+
+const SWEEP_DURATION_MS = 1600;
+// How much of the image height a box fades in over, as a fraction. Small enough
+// to read as "the bar revealed it", large enough not to look like a hard cut.
+const REVEAL_FRACTION = 0.04;
+
+/**
+ * `resizeMode="contain"` letterboxes the image inside its container, so line
+ * boxes have to be placed against the *drawn* rect, not the container.
+ */
+function containFit(
+  container: { width: number; height: number },
+  source: { width: number; height: number }
+) {
+  if (source.width <= 0 || source.height <= 0) return null;
+  const scale = Math.min(container.width / source.width, container.height / source.height);
+  const width = source.width * scale;
+  const height = source.height * scale;
+  return {
+    scale,
+    width,
+    height,
+    left: (container.width - width) / 2,
+    top: (container.height - height) / 2,
+  };
+}
+
+function OcrLineBox({
+  line,
+  fit,
+  sweep,
+}: {
+  line: OcrLine;
+  fit: NonNullable<ReturnType<typeof containFit>>;
+  sweep: Animated.Value;
+}) {
+  const topFraction = fit.height > 0 ? (line.frame.y * fit.scale) / fit.height : 0;
+  return (
+    <Animated.View
+      pointerEvents="none"
+      style={[
+        styles.ocrLineBox,
+        {
+          left: fit.left + line.frame.x * fit.scale,
+          top: fit.top + line.frame.y * fit.scale,
+          width: line.frame.width * fit.scale,
+          height: line.frame.height * fit.scale,
+          opacity: sweep.interpolate({
+            inputRange: [topFraction, topFraction + REVEAL_FRACTION],
+            outputRange: [0, 1],
+            extrapolate: "clamp",
+          }),
+        },
+      ]}
+    />
+  );
+}
+
+function OcrGeometryPreview({ image }: { image: ReceiptImage }) {
+  const [container, setContainer] = useState<{ width: number; height: number } | null>(null);
+  const sweep = useRef(new Animated.Value(0)).current;
+  const lines = image.ocrLines ?? [];
+
+  useEffect(() => {
+    sweep.setValue(0);
+    Animated.timing(sweep, {
+      toValue: 1,
+      duration: SWEEP_DURATION_MS,
+      useNativeDriver: true,
+    }).start();
+  }, [sweep, image.uri]);
+
+  const onLayout = (e: LayoutChangeEvent) => setContainer(e.nativeEvent.layout);
+  const fit = container ? containFit(container, image) : null;
+
+  return (
+    <View style={styles.imagePreview} onLayout={onLayout}>
+      <Image source={{ uri: image.uri }} style={StyleSheet.absoluteFill} resizeMode="contain" />
+      {fit && (
+        <>
+          {lines.map((line, i) => (
+            <OcrLineBox key={i} line={line} fit={fit} sweep={sweep} />
+          ))}
+          <Animated.View
+            pointerEvents="none"
+            style={[
+              styles.ocrScanLine,
+              {
+                left: fit.left,
+                top: fit.top,
+                width: fit.width,
+                opacity: sweep.interpolate({
+                  inputRange: [0, 0.9, 1],
+                  outputRange: [1, 1, 0],
+                }),
+                transform: [
+                  {
+                    translateY: sweep.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [0, fit.height],
+                    }),
+                  },
+                ],
+              },
+            ]}
+          />
+        </>
+      )}
+    </View>
+  );
+}
+
 // ─── Image detail card ────────────────────────────────────────────────────────
 
 function ImageDetailCard({ image, index }: { image: ReceiptImage; index: number }) {
   const sizeKb = (image.fileSize / 1024).toFixed(1);
+  const lineCount = image.ocrLines?.length ?? 0;
   return (
     <Card style={{ marginBottom: S.md }}>
       <Text style={styles.imageCardTitle}>페이지 {index + 1}</Text>
 
-      <Image source={{ uri: image.uri }} style={styles.imagePreview} resizeMode="contain" />
+      {lineCount > 0 ? (
+        <OcrGeometryPreview image={image} />
+      ) : (
+        <Image source={{ uri: image.uri }} style={styles.imagePreview} resizeMode="contain" />
+      )}
 
       <View style={styles.originRow}>
         <Text style={styles.originRowLabel}>이미지 출처</Text>
@@ -470,6 +598,20 @@ function ImageDetailCard({ image, index }: { image: ReceiptImage; index: number 
         <Collapsible title="OCR 텍스트" defaultOpen>
           <ScrollView style={styles.ocrScroll} nestedScrollEnabled>
             <Text style={styles.ocrText}>{image.ocrText.trim() || "(인식된 텍스트 없음)"}</Text>
+          </ScrollView>
+        </Collapsible>
+      )}
+
+      {lineCount > 0 && (
+        <Collapsible title={`OCR 영역 좌표 (${lineCount}줄)`}>
+          <ScrollView style={styles.ocrScroll} nestedScrollEnabled>
+            {image.ocrLines?.map((line, i) => (
+              <Text key={i} style={styles.ocrText}>
+                {`[${Math.round(line.frame.x)}, ${Math.round(line.frame.y)}, ` +
+                  `${Math.round(line.frame.width)}×${Math.round(line.frame.height)}]` +
+                  `${line.confidence !== undefined ? ` ${line.confidence.toFixed(2)}` : ""} ${line.text}`}
+              </Text>
+            ))}
           </ScrollView>
         </Collapsible>
       )}
@@ -599,6 +741,18 @@ function ScanPage({ opts, set, scanning, error, lastResult, onScan }: ScanPagePr
               onToggle={() => set("autoRotate", !opts.autoRotate)}
               disabled={!opts.ocr}
               hint={opts.ocr ? undefined : "OCR이 켜져 있어야 적용됩니다"}
+            />
+            <View style={styles.divider} />
+            <ToggleRow
+              label="텍스트 영역 좌표 (ocrGeometry)"
+              value={opts.ocrGeometry}
+              onToggle={() => set("ocrGeometry", !opts.ocrGeometry)}
+              disabled={!opts.ocr}
+              hint={
+                opts.ocr
+                  ? "결과 화면에서 인식된 줄 위치를 이미지 위에 겹쳐 보여줍니다"
+                  : "OCR이 켜져 있어야 적용됩니다"
+              }
             />
             <View style={styles.divider} />
             <ChipRow
@@ -1351,6 +1505,21 @@ const styles = StyleSheet.create({
     backgroundColor: C.surfaceAlt,
     borderRadius: R.md,
     marginBottom: S.md,
+    overflow: "hidden",
+  },
+
+  // OCR geometry overlay
+  ocrLineBox: {
+    position: "absolute",
+    borderWidth: 1,
+    borderColor: C.primary,
+    backgroundColor: "rgba(217, 82, 42, 0.16)",
+    borderRadius: 2,
+  },
+  ocrScanLine: {
+    position: "absolute",
+    height: 2,
+    backgroundColor: C.primary,
   },
 
   // Collapsible
