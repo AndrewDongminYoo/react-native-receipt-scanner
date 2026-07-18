@@ -52,13 +52,14 @@ class OcrProcessor(
   /**
    * Result of [recognizeWithRotationDetection].
    *
-   * @property text Joined OCR text (newline-separated lines). Recognized on the
-   *                image *as handed in* — this class never re-runs OCR after
-   *                choosing a rotation, so when the caller bakes
-   *                [rotationDegrees] into the pixels the line *order* still
-   *                reflects the pre-rotation frame and can read bottom-to-top.
-   *                Only the order is affected; [lines] carry remapped boxes.
-   *                iOS differs here — see docs/notes/platform-asymmetries.md §4.2.
+   * @property text Joined OCR text (newline-separated lines), recognized on the
+   *                image *as handed in*. ML Kit orders lines by their position
+   *                in the frame it was given, so once the caller bakes
+   *                [rotationDegrees] into the pixels this order no longer
+   *                matches the shipped image and can read bottom-to-top.
+   *                Callers that rotate must therefore call
+   *                [recognizeInFinalFrame] afterwards and use its result —
+   *                [ReceiptScannerModule] does.
    * @property rotationDegrees Detected rotation in degrees (0 / 90 / 180 / 270).
    *                           Caller is expected to bake this into the output pixels.
    * @property lineCount Number of recognized lines — used by the JS-side
@@ -136,6 +137,34 @@ class OcrProcessor(
   fun recognize(imageUri: Uri): String {
     val image = InputImage.fromFilePath(context, imageUri)
     return Tasks.await(recognizer.process(image)).text
+  }
+
+  /**
+   * Plain recognition with **no** rotation detection, for the caller that has
+   * already baked a rotation into the pixels and needs the text order and the
+   * boxes to belong to the frame it actually ships.
+   *
+   * Decodes [file] itself rather than taking the post-rotation dimensions on
+   * trust: the re-encoded bytes are authoritative, so the boxes come out
+   * correct by construction. Deliberately not routed through
+   * [recognizeWithRotationDetection] — the image is upright by now, so
+   * re-detecting is wasted work and a needless chance to act on a spurious
+   * reading.
+   *
+   * MUST be called on a background thread — uses [Tasks.await] which blocks.
+   *
+   * @return null when the file cannot be decoded. The caller keeps its earlier
+   *         result and remaps those boxes instead, because losing the rotation
+   *         is cheaper than losing all the text.
+   */
+  fun recognizeInFinalFrame(file: File): OcrResult? {
+    val bitmap = BitmapFactory.decodeFile(file.absolutePath) ?: return null
+    return try {
+      val pass = measureAt(bitmap, 0)
+      OcrResult(pass.text, 0, pass.lineCount, pass.confidence, pass.lines)
+    } finally {
+      bitmap.recycle()
+    }
   }
 
   private fun runDetection(
