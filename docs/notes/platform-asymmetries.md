@@ -117,7 +117,7 @@
 
 **Resolution path.** 의도된 비대칭 — 플랫폼이 주는 것이 다르다. 두 경로가 **같은 CW 규약의 값**을 내도록 `+[RNOcrGeometry clockwiseAngleFromTopLeft:topRight:]`가 흡수한다. y 부호를 놓치면 90과 270이 조용히 뒤바뀌므로(이번 재설계가 고치려는 바로 그 증상) 부호 규약은 `OcrGeometryTest`가 Kotlin 쪽에서 고정하고 iOS는 같은 공식을 미러한다. 상세는 [`../specs/ocr-angle-rotation-detection.md`](../specs/ocr-angle-rotation-detection.md).
 
-⚠️ 두 값이 **이미지 공간** 기준인지는 아직 실측 미확인이다. 엔진 내부의 정규화된 리딩 프레임 기준이라면 회전 여부와 무관하게 0이 나오고 신호가 죽는다. 그 경우를 대비한 회귀 가드가 양 플랫폼에 배선돼 있다 (해당 스펙 §회귀 가드).
+✅ **2026-07-19 실측 확정 — 두 값 모두 이미지 공간 기준이다.** 양 플랫폼에서 90°·270°로 눕힌 영수증이 정방향으로 출력됐다. 리딩 프레임 기준이었다면 회전 여부와 무관하게 0이 나와 신호가 죽고, 회귀 가드가 발동해 v1.3 동작(Android 270 고정 → 한쪽만 정답, iOS 회전 없음)이 유지됐을 것이다. 두 방향이 동시에 맞았다는 것이 곧 방향 정보가 실재한다는 증거다. iOS `atan2` y-반전 부호도 같은 관측으로 확정됐다 — 뒤집혀 있었다면 90과 270이 서로 바뀌었을 것이기 때문. 회귀 가드는 라인이 적은 입력을 위해 유지한다.
 
 ## 3. 회전·픽셀 변환
 
@@ -181,6 +181,23 @@ ADR-006 후속 D 항목으로 추가 추적.
 | Android ML Kit | top-to-bottom (image 좌표계)                 |
 
 **Resolution path.** 비범위. consumer가 `ocrText`를 *전체 string*으로 keyword 매칭에 사용 (ADR-006 D5). reading order의 미세 차이는 keyword 검색에 영향 없음.
+
+⚠️ **2026-07-19 추가 — autoRotate가 회전한 경우 Android는 "미세 차이"가 아니라 순서가 통째로 어긋난다.**
+
+| 플랫폼  | 회전 적용 시 `ocrText` 순서 기준 프레임                                |
+| ------- | ---------------------------------------------------------------------- |
+| iOS     | **회전 후** — `resultByRotating:`이 회전된 프레임에서 재인식           |
+| Android | **회전 전** — `runDetection`이 `pass0.text`를 그대로 반환, 재인식 없음 |
+
+QA 캡처에서 영수증 아래→위로 완전히 뒤집힌 `ocrText`가 관측됐다 (출력 이미지와 `ocrLines` 박스는 정상). 박스는 `OcrGeometry.rotateClockwise`로 리매핑되지만 텍스트 문자열은 리매핑 대상이 아니기 때문이다.
+
+v1.3부터 있던 동작이나 회전이 한 분기에서만 발동해 드물었고, 각도 라우팅([`../specs/ocr-angle-rotation-detection.md`](../specs/ocr-angle-rotation-detection.md))이 90/270/180을 모두 잡으면서 노출 빈도가 올라갔다.
+
+**사용자 영향.** ADR-006 D5의 keyword 매칭 용도에는 무해하다 — 전체 string 검색은 순서 불변. 라인 순서에 의존하는 소비자(예: "첫 줄 = 상점명" 같은 위치 기반 파싱)는 깨지지만, 그건 ADR-003이 패키지 밖으로 밀어낸 도메인 로직이며 `api-contract.md`도 `ocrText`의 라인 순서를 계약하지 않는다.
+
+**대응 선택지.** (1) 회전 후 재인식 — iOS와 동작이 같아지고 KDoc이 참이 되지만 회전 시 OCR 1패스(~150 ms) 추가. (2) 리매핑된 박스의 위치로 라인을 정렬해 텍스트 재조립 — 패스 비용은 없으나 `linesOf`가 `boundingBox` 없는 라인을 버리므로 텍스트가 유실된다. (3) 계약대로 두고 문서화만. 미결정 — 실사용 요구가 나오면 결정한다.
+
+`OcrProcessor.OcrResult.text`의 KDoc이 "for the chosen rotation"이라고 단언하는 것은 Android에서 부정확하므로, 어느 선택지든 그 문구는 정정해야 한다.
 
 ## 5. ImageOrigin 분류
 
