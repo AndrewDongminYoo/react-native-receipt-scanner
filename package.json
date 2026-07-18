@@ -13,7 +13,8 @@
     "./package.json": "./package.json"
   },
   "files": [
-    "src",
+    "src/*.ts",
+    "src/*.tsx",
     "lib",
     "android",
     "ios",
@@ -31,6 +32,7 @@
     "!**/__tests__",
     "!**/__fixtures__",
     "!**/__mocks__",
+    "!**/AGENTS.md",
     "!**/.*"
   ],
   "scripts": {
