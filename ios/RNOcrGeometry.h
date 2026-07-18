@@ -7,7 +7,7 @@ NS_ASSUME_NONNULL_BEGIN
 /// See docs/specs/ocr-line-geometry.md. Mirrors Android `OcrGeometry`.
 @interface RNOcrGeometry : NSObject
 
-/// Converts one Vision bounding box — normalised `[0, 1]`, bottom-left origin —
+/// Converts one Vision bounding box — normalized `[0, 1]`, bottom-left origin —
 /// into top-left-origin pixels of a `pixelSize` frame.
 + (CGRect)rectFromNormalizedBox:(CGRect)box pixelSize:(CGSize)pixelSize;
 
@@ -57,7 +57,7 @@ extern const double RNOcrGeometryAngleMajority;
 
 /// Clockwise angle in degrees of the text running from `topLeft` to `topRight`.
 ///
-/// Both points come from `VNRectangleObservation`: normalised, **bottom-left**
+/// Both points come from `VNRectangleObservation`: normalized, **bottom-left**
 /// origin. Moving to the top-left origin the rest of this package uses flips the
 /// sign of the y component, and that flip is what turns Vision's convention into
 /// the clockwise one Android's `Text.Line.getAngle` already reports. Getting it
@@ -65,7 +65,7 @@ extern const double RNOcrGeometryAngleMajority;
 /// See docs/specs/ocr-angle-rotation-detection.md.
 + (CGFloat)clockwiseAngleFromTopLeft:(CGPoint)topLeft topRight:(CGPoint)topRight;
 
-/// Rounds a clockwise text angle to the nearest quarter turn, normalised into
+/// Rounds a clockwise text angle to the nearest quarter turn, normalized into
 /// `[0, 360)`. Mirrors Android `OcrGeometry.quantizeQuarterTurn`.
 + (NSInteger)quantizeQuarterTurn:(CGFloat)degrees;
 

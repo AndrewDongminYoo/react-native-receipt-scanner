@@ -36,7 +36,7 @@ static const double kRotateCommitRatio = 1.3;            // probe must find >= r
 + (NSArray<NSDictionary *> *)linesFromResults:(NSArray<VNRecognizedTextObservation *> *)results
                                     pixelSize:(CGSize)pixelSize;
 
-/** Trimmed-mean (10% top / 10% bottom) of each observation's normalised
+/** Trimmed-mean (10% top / 10% bottom) of each observation's normalized
  *  bounding-box `width / height`. DEBUG diagnostics only — the iOS mirror of
  *  Android's `lineAspectOf` (see docs/specs/ios-geometry-rotation-routing.md).
  *  Reporting-only: never read by the routing decision path. */
@@ -338,7 +338,7 @@ static const double kRotateCommitRatio = 1.3;            // probe must find >= r
 + (double)meanBoxAspectFromResults:(NSArray<VNRecognizedTextObservation *> *)results {
     NSMutableArray<NSNumber *> *ratios = [NSMutableArray new];
     for (VNRecognizedTextObservation *obs in results) {
-        CGRect box = obs.boundingBox;  // normalised [0, 1], bottom-left origin
+        CGRect box = obs.boundingBox;  // normalized [0, 1], bottom-left origin
         if (box.size.width <= 0.0 || box.size.height <= 0.0) continue;
         [ratios addObject:@(box.size.width / box.size.height)];
     }

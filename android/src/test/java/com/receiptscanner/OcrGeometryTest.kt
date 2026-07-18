@@ -52,7 +52,7 @@ class OcrGeometryTest {
   }
 
   @Test
-  fun `negative and over-360 degrees normalise`() {
+  fun `negative and over-360 degrees normalize`() {
     assertEquals(
       OcrGeometry.rotateClockwise(box, frameWidth, frameHeight, 90),
       OcrGeometry.rotateClockwise(box, frameWidth, frameHeight, -270),
@@ -97,7 +97,7 @@ class OcrGeometryTest {
   }
 
   @Test
-  fun `quantize normalises the negative half of ML Kit's range`() {
+  fun `quantize normalizes the negative half of ML Kit's range`() {
     // getAngle() reports [-180, 180]; the routing code only ever compares
     // against 0/90/180/270, so -90 must land on 270, not stay negative.
     assertEquals(270, OcrGeometry.quantizeQuarterTurn(-90f))

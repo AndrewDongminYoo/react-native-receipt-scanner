@@ -90,7 +90,7 @@ object OcrGeometry {
 
   /**
    * Rounds a clockwise-positive text angle to the nearest quarter turn and
-   * normalises it into `[0, 360)`. ML Kit reports `[-180, 180]`, so -90 lands
+   * normalizes it into `[0, 360)`. ML Kit reports `[-180, 180]`, so -90 lands
    * on 270 rather than staying negative.
    *
    * Caller must pass a finite value; [dominantQuarterTurn] filters NaN.
