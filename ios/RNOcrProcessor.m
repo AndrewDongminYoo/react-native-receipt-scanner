@@ -1,4 +1,5 @@
 #import "RNOcrProcessor.h"
+#import "RNOcrGeometry.h"
 #import <UIKit/UIKit.h>
 #import <Vision/Vision.h>
 
@@ -30,6 +31,10 @@ static const double kRotateCommitRatio = 1.3;            // probe must find >= r
 
 /** Mean per-line confidence in [0, 1]. Used for ocrQuality reporting. */
 + (double)meanConfidenceFromResults:(NSArray<VNRecognizedTextObservation *> *)results;
+
+/** Per-line `OcrLine` dictionaries in top-left pixels of a `pixelSize` frame. */
++ (NSArray<NSDictionary *> *)linesFromResults:(NSArray<VNRecognizedTextObservation *> *)results
+                                    pixelSize:(CGSize)pixelSize;
 
 /** Trimmed-mean (10% top / 10% bottom) of each observation's normalised
  *  bounding-box `width / height`. DEBUG diagnostics only — the iOS mirror of
@@ -82,11 +87,14 @@ static const double kRotateCommitRatio = 1.3;            // probe must find >= r
     NSInteger c0 = [self nonEmptyCountFromResults:r0];
     [self logDiagnostics:@"pass1 0deg accurate" results:r0];
 
-    // Result skeleton — defaults to "0° accepted".
+    // Result skeleton — defaults to "0° accepted". Every early return below
+    // ships these 0° boxes; the Pass-3 branches overwrite them.
     RNOcrResult *result = [RNOcrResult new];
     result.text = t0;
     result.rotationDegrees = 0;
     result.meanConfidence = [self meanConfidenceFromResults:r0];
+    result.passSize = ciImage.extent.size;
+    result.lines = [self linesFromResults:r0 pixelSize:result.passSize];
 
     // Too few recognized lines to judge orientation — return as-is.
     if (c0 < kMinLinesToJudgeOrientation) {
@@ -157,12 +165,16 @@ static const double kRotateCommitRatio = 1.3;            // probe must find >= r
         result.text = [self joinObservationsToText:bestResults];
         result.rotationDegrees = bestDegrees;
         result.meanConfidence = [self meanConfidenceFromResults:bestResults];
+        result.passSize = rotated.extent.size;
+        result.lines = [self linesFromResults:bestResults pixelSize:result.passSize];
         return result;
     }
 
     result.text = t3;
     result.rotationDegrees = bestDegrees;
     result.meanConfidence = [self meanConfidenceFromResults:r3];
+    result.passSize = rotated.extent.size;
+    result.lines = [self linesFromResults:r3 pixelSize:result.passSize];
     [self logDiagnostics:@"pass3 chosen accurate" results:r3];
     return result;
 }
@@ -225,6 +237,28 @@ static const double kRotateCommitRatio = 1.3;            // probe must find >= r
         if (top) sumConf += top.confidence;
     }
     return sumConf / results.count;
+}
+
++ (NSArray<NSDictionary *> *)linesFromResults:(NSArray<VNRecognizedTextObservation *> *)results
+                                    pixelSize:(CGSize)pixelSize {
+    NSMutableArray<NSDictionary *> *lines = [NSMutableArray arrayWithCapacity:results.count];
+    for (VNRecognizedTextObservation *obs in results) {
+        VNRecognizedText *top = [[obs topCandidates:1] firstObject];
+        if (top.string.length == 0) continue;
+        CGRect frame = [RNOcrGeometry rectFromNormalizedBox:obs.boundingBox pixelSize:pixelSize];
+        if (frame.size.width <= 0 || frame.size.height <= 0) continue;
+        [lines addObject:@{
+            @"text": top.string,
+            @"frame": @{
+                @"x":      @(frame.origin.x),
+                @"y":      @(frame.origin.y),
+                @"width":  @(frame.size.width),
+                @"height": @(frame.size.height),
+            },
+            @"confidence": @(top.confidence),
+        }];
+    }
+    return [lines copy];
 }
 
 + (double)meanBoxAspectFromResults:(NSArray<VNRecognizedTextObservation *> *)results {

@@ -20,6 +20,7 @@ static id RNNullToNil(id value) {
         opts.autoRotate       = YES;
         opts.includeRawExif   = NO;
         opts.minimumTextHeight = 0;
+        opts.ocrGeometry      = NO;
         return opts;
     }
 
@@ -38,6 +39,8 @@ static id RNNullToNil(id value) {
     NSNumber *cropAutoConfirmNum = RNNullToNil(dict[@"cropAutoConfirm"])  ?: @NO;
     NSNumber *autoRotateNum      = RNNullToNil(dict[@"autoRotate"])       ?: @YES;
     NSNumber *includeRawExifNum  = RNNullToNil(dict[@"includeRawExif"])   ?: @NO;
+    NSNumber *ocrGeometryNum     = RNNullToNil(dict[@"ocrGeometry"])      ?: @NO;
+    opts.ocrGeometry      = ocrGeometryNum.boolValue;
     opts.includeExif      = includeExifNum.boolValue;
     opts.includeGpsExif   = includeGpsExifNum.boolValue;
     opts.ocr              = ocrNum.boolValue;

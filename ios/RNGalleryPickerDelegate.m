@@ -1,5 +1,6 @@
 #import "RNGalleryPickerDelegate.h"
 #import "RNImageProcessor.h"
+#import "RNOcrGeometry.h"
 #import "RNOcrProcessor.h"
 #import "RNQuadGeometry.h"
 #import <UIKit/UIKit.h>
@@ -351,6 +352,8 @@ static NSString * _Nullable OriginFromExifFields(NSString *make, NSString *model
     NSString *ocrText = nil;
     NSInteger rotationDegrees = 0;
     double ocrMeanConfidence = 0.0;
+    NSArray<NSDictionary *> *ocrLines = nil;
+    CGSize ocrPassSize = CGSizeZero;
     if (self.options.ocr) {
         UIImage *croppedUIImage = [UIImage imageWithCGImage:cropped];
         RNOcrResult *ocr =
@@ -361,6 +364,8 @@ static NSString * _Nullable OriginFromExifFields(NSString *make, NSString *model
             ocrText = ocr.text;
             rotationDegrees = ocr.rotationDegrees;
             ocrMeanConfidence = ocr.meanConfidence;
+            ocrLines = ocr.lines;
+            ocrPassSize = ocr.passSize;
         }
     }
 
@@ -369,6 +374,18 @@ static NSString * _Nullable OriginFromExifFields(NSString *make, NSString *model
     if (self.options.autoRotate && rotationDegrees != 0) {
         rotatedCG = [RNImageProcessor cgImageByRotating:cropped degrees:rotationDegrees];
         if (rotatedCG) encodeCG = rotatedCG;
+    }
+
+    // Vision measured the boxes on the frame the winning pass ran on. When that
+    // same rotation gets baked into the output the two frames agree; otherwise
+    // the output stays un-rotated and the boxes need it undone — which is the
+    // equal clockwise turn, since the pixel rotation is CCW.
+    if (self.options.ocrGeometry && ocrLines.count > 0) {
+        ocrLines = [RNOcrGeometry linesByRotating:ocrLines
+                                        frameSize:ocrPassSize
+                                 clockwiseDegrees:(rotatedCG ? 0 : rotationDegrees)];
+    } else {
+        ocrLines = nil;
     }
 
     NSError *err = nil;
@@ -413,6 +430,7 @@ static NSString * _Nullable OriginFromExifFields(NSString *make, NSString *model
         // exposes ocrQuality.confidence on both platforms. Reporting only.
         img[@"ocrQuality"] = @{@"confidence": @(ocrMeanConfidence)};
     }
+    if (ocrLines.count > 0) img[@"ocrLines"] = ocrLines;
     if (processed.exifData)  img[@"exif"]    = processed.exifData;
     [self didFinishOneItem:[img copy]];
 }

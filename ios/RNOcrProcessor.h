@@ -1,4 +1,5 @@
 #import <Foundation/Foundation.h>
+#import <CoreGraphics/CoreGraphics.h>
 
 @class UIImage;
 
@@ -26,6 +27,21 @@ NS_ASSUME_NONNULL_BEGIN
  * to JS via `ocrQuality.confidence`.
  */
 @property (nonatomic, assign) double meanConfidence;
+/**
+ * Per-line geometry for the chosen rotation, shaped like the JS `OcrLine`
+ * (`text`, `frame`, `confidence`). Coordinates are top-left pixels of
+ * `passSize` — i.e. of the *rotated* image whenever `rotationDegrees` is
+ * non-zero, since that is the frame Vision measured them on. Callers that do
+ * not bake the rotation into their output must undo it via
+ * `+[RNOcrGeometry linesByRotating:frameSize:clockwiseDegrees:]`.
+ *
+ * Always collected; the delegates only forward it when `options.ocrGeometry`
+ * is set. Lines with empty text or a degenerate box are omitted, so this does
+ * not line up index-wise with the newline-joined `text`.
+ */
+@property (nonatomic, copy) NSArray<NSDictionary *> *lines;
+/** Pixel size of the image the chosen pass ran on — the frame `lines` sit in. */
+@property (nonatomic, assign) CGSize passSize;
 @end
 
 /**

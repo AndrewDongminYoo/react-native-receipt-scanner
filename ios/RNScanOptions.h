@@ -36,6 +36,11 @@ NS_ASSUME_NONNULL_BEGIN
 /** Whether to attach the flat raw EXIF map under `exif.raw`. */
 @property (nonatomic, assign) BOOL       includeRawExif;
 /**
+ * Whether to attach per-line OCR boxes under `ocrLines`. Effective only when
+ * `ocr` is `YES`. See docs/specs/ocr-line-geometry.md.
+ */
+@property (nonatomic, assign) BOOL       ocrGeometry;
+/**
  * Vision `minimumTextHeight` as a fraction of image height in `(0, 1]`.
  * `0` (the default) means "use the package default" (1/32). Lowering it can
  * recover smaller receipt line items at the cost of more noise.
