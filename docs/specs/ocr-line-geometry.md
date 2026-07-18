@@ -11,8 +11,8 @@
 ## 현재 상태: Implemented (0.7.0) — 회전 경로는 기기 QA 대기
 
 JS 계약과 양 플랫폼 구현이 들어갔고, CW 리매핑 공식은 `OcrGeometryTest`(JUnit 10케이스)가 고정한다.
-아직 검증되지 않은 것은 **실제 기기에서 회전된 캡처의 오버레이 정합**이다 (아래 검증 계획 ③). iOS는 유닛 테스트 타깃이 없어 "어느 프레임 · 어느 분기" 배선이 코드 리뷰로만 확인된 상태다.
-다만 iOS에서 리매핑이 도는 경로는 `autoRotate: false` + 회전된 콘텐츠뿐이며, `autoRotate` 기본값이 `true`이므로 기본 설정에서는 항상 항등 경로를 탄다.
+아직 검증되지 않은 것은 **실제 기기에서의 오버레이 정합**이다 (아래 검증 계획 ④). iOS는 유닛 테스트 타깃이 없어 "어느 프레임 · 어느 분기" 배선이 코드 리뷰와 `clang -fsyntax-only`로만 확인된 상태이며, 앱 빌드(`yarn example ios`)는 아직 돌리지 않았다.
+회전 리매핑이 도는 iOS 경로는 `autoRotate: false` + 회전된 콘텐츠뿐이라 기본 설정에서는 항등 경로를 타지만, **기본 경로가 자동으로 안전한 것은 아니다** — pass 프레임과 출력 프레임이 일치한다는 가정이 그 위에 있었고, 이는 위 iOS 설계 ④의 rescale로 제거했다. 기기 QA는 카메라 경로부터 확인한다.
 
 ## 목적
 
@@ -94,7 +94,8 @@ export type ReceiptImage = {
    - `autoRotate == true && rotationDegrees != 0`: 출력 JPEG은 `cgImageByRotating:`으로 회전된 픽셀 = 그 패스가 본 픽셀. 변환 후 **identity**.
    - `autoRotate == false && rotationDegrees != 0`: 출력은 미회전 픽셀인데 box는 회전 프레임 기준. **역회전 리매핑**을 적용해 미회전 프레임으로 되돌린다.
    - `rotationDegrees == 0`: identity.
-4. delegate의 결과 dict에 `ocrLines` 직렬화를 추가한다.
+4. **출력 프레임으로 재정규화**: 위 변환은 Vision이 측정한 pass 프레임 기준이고, 계약이 요구하는 것은 인코딩된 출력(`processed.width/height`) 기준이다. 둘은 같을 것으로 기대되지만 — `RNImageProcessor.normalizeOrientation:`이 `UIGraphicsImageRenderer`(화면 scale)로 재렌더할 수 있어 `UIImage.size`(point)와 픽셀이 갈리는 지점이 있다 — 가정으로 두지 않고 `linesByRotating:...outputSize:`가 두 프레임의 축별 비율로 rescale한 뒤 출력 경계로 clamp한다. 기대 케이스에서는 배율이 1이라 무연산이다. 그래서 이 호출은 `processImage:`가 끝난 뒤에 위치한다.
+5. delegate의 결과 dict에 `ocrLines` 직렬화를 추가한다.
 
 ### 회전 리매핑 테이블
 

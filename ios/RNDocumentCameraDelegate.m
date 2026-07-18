@@ -72,18 +72,7 @@
                                                         degrees:rotationDegrees];
             }
             CGImageRef encodeCG = rotatedCG ?: sourceCG;
-
-            // Vision measured the boxes on the frame the winning pass ran on. When
-            // that same rotation gets baked into the output the two frames agree;
-            // otherwise the output stays un-rotated and the boxes need it undone —
-            // which is the equal clockwise turn, since the pixel rotation is CCW.
-            if (strongSelf.options.ocrGeometry && ocrLines.count > 0) {
-                ocrLines = [RNOcrGeometry linesByRotating:ocrLines
-                                                frameSize:ocrPassSize
-                                         clockwiseDegrees:(rotatedCG ? 0 : rotationDegrees)];
-            } else {
-                ocrLines = nil;
-            }
+            BOOL rotationBaked = (rotatedCG != NULL);
 
             NSError *err = nil;
             // sourceRef is NULL — VisionKit does not expose the original shutter EXIF.
@@ -98,6 +87,19 @@
                                         error:&err];
             if (rotatedCG) CGImageRelease(rotatedCG);
             if (!processed) continue;
+
+            // Vision measured the boxes on the frame the winning pass ran on. When
+            // that same rotation gets baked into the output the two frames agree;
+            // otherwise the output stays un-rotated and the boxes need it undone —
+            // which is the equal clockwise turn, since the pixel rotation is CCW.
+            if (strongSelf.options.ocrGeometry && ocrLines.count > 0) {
+                ocrLines = [RNOcrGeometry linesByRotating:ocrLines
+                                                frameSize:ocrPassSize
+                                         clockwiseDegrees:(rotationBaked ? 0 : rotationDegrees)
+                                               outputSize:CGSizeMake(processed.width, processed.height)];
+            } else {
+                ocrLines = nil;
+            }
 
             NSMutableDictionary *img = [@{
                 // absoluteString gives a properly percent-encoded file:// URI; manually

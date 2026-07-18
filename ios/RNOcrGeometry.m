@@ -25,12 +25,20 @@
 
 + (NSArray<NSDictionary *> *)linesByRotating:(NSArray<NSDictionary *> *)lines
                                    frameSize:(CGSize)frameSize
-                            clockwiseDegrees:(NSInteger)degrees {
+                            clockwiseDegrees:(NSInteger)degrees
+                                  outputSize:(CGSize)outputSize {
     NSInteger turn = ((degrees % 360) + 360) % 360;
     BOOL swapsAxes = (turn == 90 || turn == 270);
-    CGRect bounds = CGRectMake(0, 0,
-                               swapsAxes ? frameSize.height : frameSize.width,
-                               swapsAxes ? frameSize.width : frameSize.height);
+    CGSize turnedFrame = CGSizeMake(swapsAxes ? frameSize.height : frameSize.width,
+                                    swapsAxes ? frameSize.width : frameSize.height);
+    if (turnedFrame.width <= 0 || turnedFrame.height <= 0) return @[];
+    // Vision measures on the frame it was handed, which is expected to be the
+    // one that gets encoded. Rescale rather than trust that: it costs a multiply
+    // and keeps the emitted coordinates inside ReceiptImage.width x height even
+    // if the two ever diverge.
+    CGFloat scaleX = outputSize.width / turnedFrame.width;
+    CGFloat scaleY = outputSize.height / turnedFrame.height;
+    CGRect bounds = CGRectMake(0, 0, outputSize.width, outputSize.height);
 
     NSMutableArray<NSDictionary *> *placed = [NSMutableArray arrayWithCapacity:lines.count];
     for (NSDictionary *line in lines) {
@@ -40,9 +48,11 @@
                                  [frame[@"width"] doubleValue],
                                  [frame[@"height"] doubleValue]);
         CGRect turned = [self rectByRotating:rect frameSize:frameSize clockwiseDegrees:turn];
+        CGRect scaled = CGRectMake(turned.origin.x * scaleX, turned.origin.y * scaleY,
+                                   turned.size.width * scaleX, turned.size.height * scaleY);
         // Clamp to the image; a box with nothing left inside carries no drawable
         // geometry, so drop it rather than ship an off-image rectangle.
-        CGRect clamped = CGRectIntersection(turned, bounds);
+        CGRect clamped = CGRectIntersection(scaled, bounds);
         if (CGRectIsNull(clamped) || CGRectIsEmpty(clamped)) continue;
 
         NSMutableDictionary *out = [line mutableCopy];

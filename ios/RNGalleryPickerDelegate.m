@@ -375,18 +375,7 @@ static NSString * _Nullable OriginFromExifFields(NSString *make, NSString *model
         rotatedCG = [RNImageProcessor cgImageByRotating:cropped degrees:rotationDegrees];
         if (rotatedCG) encodeCG = rotatedCG;
     }
-
-    // Vision measured the boxes on the frame the winning pass ran on. When that
-    // same rotation gets baked into the output the two frames agree; otherwise
-    // the output stays un-rotated and the boxes need it undone — which is the
-    // equal clockwise turn, since the pixel rotation is CCW.
-    if (self.options.ocrGeometry && ocrLines.count > 0) {
-        ocrLines = [RNOcrGeometry linesByRotating:ocrLines
-                                        frameSize:ocrPassSize
-                                 clockwiseDegrees:(rotatedCG ? 0 : rotationDegrees)];
-    } else {
-        ocrLines = nil;
-    }
+    BOOL rotationBaked = (rotatedCG != NULL);
 
     NSError *err = nil;
     RNProcessedImage *processed = [RNImageProcessor processImage:encodeCG
@@ -401,6 +390,19 @@ static NSString * _Nullable OriginFromExifFields(NSString *make, NSString *model
     if (!processed) {
         [self didFinishOneItem:nil];
         return;
+    }
+
+    // Vision measured the boxes on the frame the winning pass ran on. When that
+    // same rotation gets baked into the output the two frames agree; otherwise
+    // the output stays un-rotated and the boxes need it undone — which is the
+    // equal clockwise turn, since the pixel rotation is CCW.
+    if (self.options.ocrGeometry && ocrLines.count > 0) {
+        ocrLines = [RNOcrGeometry linesByRotating:ocrLines
+                                        frameSize:ocrPassSize
+                                 clockwiseDegrees:(rotationBaked ? 0 : rotationDegrees)
+                                       outputSize:CGSizeMake(processed.width, processed.height)];
+    } else {
+        ocrLines = nil;
     }
 
     // Priority: PHAsset subtype → extracted exifData → raw source properties → "unknown".
