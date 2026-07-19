@@ -368,7 +368,14 @@ class ReceiptScannerModule(
           null
         }
       }
-    return if (refreshed != null) {
+    // An empty re-read counts as a failed one. Reaching here means the first
+    // pass found enough text to detect a rotation, so "no lines now" says the
+    // second pass did not work — not that the receipt is blank. The extra JPEG
+    // re-encode can cost that much detail at a low `quality`, and accepting it
+    // would hand the JS OcrFloor an empty result for a scan that did recognize.
+    // A partial drop is left alone: those lines are what the shipped image
+    // genuinely yields, and reporting the pre-rotation count would overstate it.
+    return if (refreshed != null && refreshed.lineCount > 0) {
       OcrOutcome(refreshed, rotatedDims, 0)
     } else {
       OcrOutcome(detected, rotatedDims, detected?.rotationDegrees ?: 0)
