@@ -1,5 +1,18 @@
 # Phase 7 — OCR Line Geometry Exposure
 
+## Status: Executed (0.7.0) — Android section partially superseded (2026-07-19)
+
+This plan shipped, but one Android instruction below no longer describes the code and **must not be followed as written**.
+
+The plan says to populate `OcrResult.lines` from the Pass 0 recognition result "without starting another OCR pass", and to forward-remap those boxes whenever `applyAutoRotateIfNeeded` reports rotated dimensions.
+The shipped flow does the opposite on the rotate path: after the rotation is applied, `OcrProcessor.recognizeInFinalFrame` **re-recognizes the rotated output JPEG**, and that pass is authoritative for text, line count, confidence, and boxes.
+Forward-remapping survives only as the fallback for when that re-read fails.
+
+The reason is that ML Kit orders lines by their position in the frame it was handed, so Pass 0 text kept its pre-rotation order and could read bottom-to-top once the pixels turned.
+See [`../specs/ocr-angle-rotation-detection.md`](../specs/ocr-angle-rotation-detection.md) §해소 and [`../notes/platform-asymmetries.md`](../notes/platform-asymmetries.md) §4.2.
+
+The original text is left intact below as the record of what was planned.
+
 ## Goal
 
 Expose opt-in per-line OCR bounding boxes through `ReceiptImage.ocrLines` so consumers can render post-capture overlays in the final JPEG pixel space.

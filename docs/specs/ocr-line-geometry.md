@@ -10,7 +10,7 @@
 
 ## 현재 상태: Implemented (0.7.0) — 기기 QA 완료
 
-JS 계약과 양 플랫폼 구현이 들어갔고, CW 리매핑 공식은 `OcrGeometryTest`(JUnit 10케이스)가 고정한다.
+JS 계약과 양 플랫폼 구현이 들어갔고, CW 리매핑 공식은 `OcrGeometryTest`(JUnit 22케이스)가 고정한다.
 2026-07-18 실기기 QA에서 아래 셀을 확인했다 (모두 example 앱 오버레이 육안 정합 + `줄 수` = `OCR 영역 좌표 (N줄)` 일치):
 
 | 셀                                | 결과 | 근거                                                                                 |
@@ -20,8 +20,17 @@ JS 계약과 양 플랫폼 구현이 들어갔고, CW 리매핑 공식은 `OcrGe
 | Android 갤러리 · 리매핑 (`d=270`) | ✅   | autoRotate가 실제로 픽셀을 회전시킨 상태에서 정합 — 축이 바뀌는 90/270 분기를 태움   |
 | 박스 누락                         | ✅   | 양 플랫폼 4개 캡처 모두 `ocrLines.length == ocrQuality.lineCount` (52/54/57/59/62줄) |
 
-**나머지 각도는 "미검증"이 아니라 "도달 불가"다.** autoRotate 검출이 그 값을 내놓지 못하기 때문이다 — iOS는 현재 어떤 회전도 검출하지 않아 `d`가 항상 0이고(그래서 iOS 역회전 분기는 실행 자체가 불가능), Android는 가로 콘텐츠에 항상 270°만 적용한다. 상세는 [`portrait-rotation-detection.md`](./portrait-rotation-detection.md) §회전 방향 결정의 한계와 [`ocr-orientation-correction.md`](./ocr-orientation-correction.md) 상단 상태 블록.
-이 제약은 geometry의 결함이 아니라 상류 autoRotate의 상태이며, 별도 작업으로 추적한다.
+~~**나머지 각도는 "미검증"이 아니라 "도달 불가"다.** autoRotate 검출이 그 값을 내놓지 못하기 때문이다 — iOS는 현재 어떤 회전도 검출하지 않아 `d`가 항상 0이고(그래서 iOS 역회전 분기는 실행 자체가 불가능), Android는 가로 콘텐츠에 항상 270°만 적용한다.~~
+
+⚠️ **2026-07-19 해소.** 위 제약은 상류 autoRotate의 상태였고, 각도 기반 재설계([`ocr-angle-rotation-detection.md`](./ocr-angle-rotation-detection.md))가 그 상태를 바꿨다. 이제 검출이 90·180·270을 모두 내놓으므로 남아 있던 셀에 실제로 도달한다.
+
+| 셀                            | 결과 | 근거                             |
+| ----------------------------- | ---- | -------------------------------- |
+| 양 플랫폼 · 90° / 270° 리매핑 | ✅   | 2026-07-19 QA, 오버레이 정합     |
+| Android · 180° 리매핑         | ✅   | 2026-07-19 2차 QA                |
+| iOS · 180°                    | —    | 미측정 (2차 QA는 Android만 실행) |
+
+Android 회전 경로는 리매핑을 **거치지 않는 것이 정상 경로**가 됐다는 점도 함께 바뀌었다 — 회전 후 재인식이 박스를 출력 프레임에서 직접 재므로, `rotateClockwise`는 그 재인식이 실패했을 때만 쓰인다. iOS는 종전대로다.
 
 ## 목적
 
@@ -139,8 +148,8 @@ iOS가 `360 − d`가 아니라 `d`를 넘기는 이유는 CCW-`d`를 되돌리�
 
 1. ✅ **JS**: `ocrGeometry` 기본값 전파와 `ocrLines` 통과를 `src/__tests__/index.test.tsx`가 검증. → `yarn test` (21케이스)
 2. ✅ **타입**: `Required<ScanReceiptOptions>` 컴파일 강제 + 루트 `OcrLine` re-export를 테스트의 type-only import가 확인. → `yarn typecheck`
-3. ✅ **CW 공식**: `OcrGeometryTest` 10케이스 — 0/90/180/270 각 행(비대칭 rect로 축 교환 검출), 90→270 왕복 항등, 각도 정규화, clamp 트림·전량 탈락·zero-area 탈락. → `./gradlew :react-native-receipt-scanner:testDebugUnitTest`
-4. ✅ **기기 매트릭스** (수동, 2026-07-18): 위 상태 표의 셀을 확인. 도달 가능한 조합이 autoRotate 검출에 의해 제한되므로 전체 매트릭스(2 × 4 × 2)는 실행할 수 없었고, 실행 가능한 셀은 모두 통과했다. 공식 자체는 3이 고정하므로 여기서 잡힐 실패는 배선 오류였을 것이다.
+3. ✅ **CW 공식**: `OcrGeometryTest` 22케이스 — 리매핑 10건(0/90/180/270 각 행을 비대칭 rect로 축 교환까지 검출, 90→270 왕복 항등, 각도 정규화, clamp 트림·전량 탈락·zero-area 탈락) + 각도 라우팅 12건(1/4 회전 양자화와 동률 규칙, 보정각, 최빈값 집계·기권). → `./gradlew :react-native-receipt-scanner:testDebugUnitTest`
+4. ✅ **기기 매트릭스** (수동, 2026-07-18 / 2026-07-19): 위 상태 표의 셀을 확인. 1차에는 autoRotate 검출이 내놓는 각도가 제한돼 전체 매트릭스(2 × 4 × 2)를 실행할 수 없었으나, 각도 기반 재설계 이후 2차에서 90·180·270이 모두 도달 가능해졌다. 공식 자체는 3이 고정하므로 여기서 잡힐 실패는 배선 오류였을 것이다.
 5. ✅ **example 앱**: 결과 화면에 스캔라인 스윕 후 `frame.y` 순 박스 리빌 데모 (`OcrGeometryPreview`) — 데모이자 4의 검증 도구. `resizeMode="contain"` 레터박싱을 감안해 `containFit`으로 그려진 사각형 기준으로 배치한다.
 
 ## 호환성

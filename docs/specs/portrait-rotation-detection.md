@@ -113,9 +113,15 @@ field 데이터 추가 수집 후 결정. 만약 1번 케이스가 잘못 회전
 | CW 270°          | `postRotate(270)` | **180° 뒤집힘** ❌ |
 
 즉 위 두 가설은 배타적이지 않고 **둘 다 실제로 발생한다**. 고정 기본값을 90으로 바꾸면 성공/실패 케이스가 서로 뒤바뀔 뿐, 적중률은 그대로다.
-ML Kit Korean이 rotation-invariant인 이상([`../notes/platform-asymmetries.md`](../notes/platform-asymmetries.md) §2.1) 인식 품질에서는 90과 270을 가르는 신호가 나오지 않으므로, **다른 신호가 필요하다**. 후보는 박스 기하 — 0.7.0에서 노출한 `ocrLines`가 라인 baseline 방향과 문자 진행 방향을 담고 있어, 텍스트가 위에서 아래로 읽히는지 아래에서 위로 읽히는지를 판별할 여지가 있다.
+ML Kit Korean이 rotation-invariant인 이상([`../notes/platform-asymmetries.md`](../notes/platform-asymmetries.md) §2.1) 인식 품질에서는 90과 270을 가르는 신호가 나오지 않으므로, **다른 신호가 필요하다**.
 
-재설계는 별도 작업으로 분리한다. 이 절의 기본값 변경 안내는 **적용하지 말 것** — 문제를 옮길 뿐이다.
+~~후보는 박스 기하 — 0.7.0에서 노출한 `ocrLines`가 라인 baseline 방향과 문자 진행 방향을 담고 있어, 텍스트가 위에서 아래로 읽히는지 아래에서 위로 읽히는지를 판별할 여지가 있다.~~
+
+⚠️ **이 후보는 틀렸다 (2026-07-19 정정).** `OcrLine.frame`은 **축정렬** 사각형(`x`/`y`/`width`/`height`)이라 baseline 방향도 문자 진행 방향도 담고 있지 않다 — 90°와 270°로 누운 레이아웃에서 기하가 동일하므로 원리적으로 방향을 가릴 수 없다.
+
+실제 해답은 박스가 아니라 **엔진이 보고하는 텍스트 각도**였다 (`Text.Line.getAngle()`). 상세는 [`ocr-angle-rotation-detection.md`](./ocr-angle-rotation-detection.md) v1.0 — 이 문서를 대체한다.
+
+재설계는 별도 작업으로 분리했다. 이 절의 기본값 변경 안내는 **적용하지 말 것** — 문제를 옮길 뿐이다.
 
 ## 진단 로그
 

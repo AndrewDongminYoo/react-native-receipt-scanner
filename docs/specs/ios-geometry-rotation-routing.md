@@ -17,7 +17,9 @@ Two of this document's conclusions survived and were carried into the replacemen
 - **"Match Android" is not a design goal** — correct, and the replacement does not port Android's thresholds. What it _does_ share is a platform-independent quantity (the angle), not an algorithm tuned to one engine's behaviour.
 - **Thresholds cannot be guessed** — carried over verbatim; the new gates are marked PROVISIONAL and gated on the same on-device measurement this document called for.
 
-The step-1 `boxAspect` diagnostic shipped here is **kept**: it is the corroborating signal the replacement's regression guard reads to detect its own assumption failing.
+The step-1 `boxAspect` diagnostic shipped here is **kept, as diagnostics only**. No routing code reads it. It sits next to `angleBins` in the same DEBUG log line, so a reader comparing the two can tell whether the angle signal is alive — an `[n,0,0,0]` histogram beside a `boxAspect` that says "sideways" is the fingerprint of the angle being reported in Vision's own reading frame. That is a human calibration aid, not a branch.
+
+The regression guard in the replacement spec is a different mechanism and does **not** consult `boxAspect`: on iOS it simply never acts on `turn == 0`, and the only guard that reads an aspect signal is Android's, which uses `lineAspect`.
 
 The original proposal follows as historical record.
 
