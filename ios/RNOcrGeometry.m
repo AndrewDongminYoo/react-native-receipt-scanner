@@ -84,7 +84,12 @@ const double RNOcrGeometryAngleMajority = 0.7;
 }
 
 + (NSInteger)quantizeQuarterTurn:(CGFloat)degrees {
-    NSInteger quarters = (NSInteger)lround(degrees / 90.0);
+    // floor(x + 0.5), deliberately not lround(): lround rounds halves *away
+    // from zero*, while Kotlin's roundToInt rounds ties toward positive
+    // infinity. With lround, -45 and -135 would land in different bins here
+    // than on Android — the two platforms are supposed to agree on this. The
+    // tie rule is pinned by OcrGeometryTest on the Kotlin side.
+    NSInteger quarters = (NSInteger)floor(degrees / 90.0 + 0.5);
     return ((quarters * 90) % 360 + 360) % 360;
 }
 

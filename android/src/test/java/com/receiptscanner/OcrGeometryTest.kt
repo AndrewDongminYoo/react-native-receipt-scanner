@@ -107,6 +107,18 @@ class OcrGeometryTest {
   }
 
   @Test
+  fun `quantize breaks ties toward positive infinity`() {
+    // The tie rule is a cross-platform contract, not an implementation detail:
+    // RNOcrGeometry mirrors this in Obj-C, where the obvious lround() rounds
+    // halves *away from zero* and would put -45 and -135 in different bins than
+    // Kotlin's roundToInt. The iOS side uses floor(x + 0.5) to match these.
+    assertEquals(0, OcrGeometry.quantizeQuarterTurn(-45f))
+    assertEquals(270, OcrGeometry.quantizeQuarterTurn(-135f))
+    assertEquals(90, OcrGeometry.quantizeQuarterTurn(45f))
+    assertEquals(180, OcrGeometry.quantizeQuarterTurn(135f))
+  }
+
+  @Test
   fun `correction undoes the tilt`() {
     assertEquals(0, OcrGeometry.correctionForTextAngle(0))
     assertEquals(270, OcrGeometry.correctionForTextAngle(90))
