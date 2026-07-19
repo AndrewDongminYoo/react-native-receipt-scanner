@@ -158,7 +158,7 @@ class ReceiptScannerModule(
     executor.execute {
       try {
         val ocrProcessor =
-          if (scanOptions.ocr) OcrProcessor(reactApplicationContext) else null
+          if (scanOptions.ocr) OcrProcessor() else null
 
         val imageResults =
           pages.map { page ->
@@ -171,14 +171,9 @@ class ReceiptScannerModule(
                 includeRawExif = scanOptions.includeRawExif,
                 synthesizeDeviceInfo = true,
               )
-            val ocr = runOcr(ocrProcessor, processed.file)
-            val finalDims =
-              applyAutoRotateIfNeeded(
-                processed.file,
-                ocr?.rotationDegrees ?: 0,
-                scanOptions.autoRotate,
-                scanOptions.quality,
-              ) ?: Pair(processed.width, processed.height)
+            val outcome = runOcrAndAutoRotate(ocrProcessor, processed.file, scanOptions)
+            val ocr = outcome.result
+            val finalDims = outcome.rotatedDims ?: Pair(processed.width, processed.height)
             // Write the parsed EXIF back onto the final JPEG (after any
             // autoRotate re-compress) so server-side file readers see it on
             // Android too — parity with iOS.
@@ -191,6 +186,15 @@ class ReceiptScannerModule(
               exifData = processed.exifData,
               imageOrigin = "camera",
               confidence = ocr?.confidence?.toDouble(),
+              ocrLines =
+                ocrLinesFor(
+                  scanOptions,
+                  ocr,
+                  processed.width,
+                  processed.height,
+                  outcome.rotatedDims,
+                  outcome.remapDegrees,
+                ),
             )
           }
 
@@ -233,7 +237,7 @@ class ReceiptScannerModule(
     }
 
     executor.execute {
-      val ocrProcessor = if (scanOptions.ocr) OcrProcessor(reactApplicationContext) else null
+      val ocrProcessor = if (scanOptions.ocr) OcrProcessor() else null
       try {
         val imageResults =
           originalUriStrs.mapIndexed { i, uriStr ->
@@ -249,14 +253,9 @@ class ReceiptScannerModule(
                 includeRawExif = scanOptions.includeRawExif,
               )
             val imageOrigin = imageProcessor.inferOrigin(originalUri, processed.exifData)
-            val ocr = runOcr(ocrProcessor, processed.file)
-            val finalDims =
-              applyAutoRotateIfNeeded(
-                processed.file,
-                ocr?.rotationDegrees ?: 0,
-                scanOptions.autoRotate,
-                scanOptions.quality,
-              ) ?: Pair(processed.width, processed.height)
+            val outcome = runOcrAndAutoRotate(ocrProcessor, processed.file, scanOptions)
+            val ocr = outcome.result
+            val finalDims = outcome.rotatedDims ?: Pair(processed.width, processed.height)
             // Write the parsed EXIF back onto the final JPEG (after any
             // autoRotate re-compress) so server-side file readers see it on
             // Android too — parity with iOS.
@@ -269,6 +268,15 @@ class ReceiptScannerModule(
               exifData = processed.exifData,
               imageOrigin = imageOrigin,
               confidence = ocr?.confidence?.toDouble(),
+              ocrLines =
+                ocrLinesFor(
+                  scanOptions,
+                  ocr,
+                  processed.width,
+                  processed.height,
+                  outcome.rotatedDims,
+                  outcome.remapDegrees,
+                ),
             )
           }
 
@@ -300,6 +308,107 @@ class ReceiptScannerModule(
         null
       }
     }
+
+  /**
+   * An OCR result together with the frame bookkeeping needed to place its boxes.
+   *
+   * The three values are only meaningful as a set — [remapDegrees] depends on
+   * which pass [result] came from — so they travel together rather than being
+   * recomputed at each call site.
+   *
+   * @property result The OCR result to report, or null when OCR was off or failed.
+   * @property rotatedDims Output dimensions after auto-rotate, or null when the
+   *                       pixels were not turned.
+   * @property remapDegrees Clockwise rotation still owed to [result]'s line
+   *                        boxes; `0` when they already sit in the output frame.
+   */
+  private data class OcrOutcome(
+    val result: OcrProcessor.OcrResult?,
+    val rotatedDims: Pair<Int, Int>?,
+    val remapDegrees: Int,
+  )
+
+  /**
+   * Recognize, apply the detected rotation to the file, then recognize again on
+   * the rotated file.
+   *
+   * The second pass is what keeps `ocrText`'s line order matching the image that
+   * ships. ML Kit orders lines by their position in the frame it was handed, so
+   * text recognized before the rotation reads in the pre-rotation order — on a
+   * receipt turned 180° that is bottom-to-top. Re-recognizing also measures the
+   * boxes on the output frame directly, which is why the success path owes them
+   * no rotation. iOS has always worked this way; see
+   * docs/notes/platform-asymmetries.md §4.2.
+   *
+   * If the second pass cannot decode the file [applyAutoRotateIfNeeded] just
+   * wrote, keep the first result and remap its boxes instead: losing the
+   * corrected line order is much cheaper than losing all the text.
+   */
+  private fun runOcrAndAutoRotate(
+    processor: OcrProcessor?,
+    file: File,
+    options: ScanOptions,
+  ): OcrOutcome {
+    val detected = runOcr(processor, file)
+    val rotatedDims =
+      applyAutoRotateIfNeeded(
+        file,
+        detected?.rotationDegrees ?: 0,
+        options.autoRotate,
+        options.quality,
+      )
+    if (rotatedDims == null) return OcrOutcome(detected, null, 0)
+
+    val refreshed =
+      processor?.let {
+        try {
+          it.recognizeInFinalFrame(file)
+        } catch (e: Exception) {
+          Log.w(NAME, "Re-OCR after auto-rotate failed for ${file.name}", e)
+          null
+        }
+      }
+    // An empty re-read counts as a failed one. Reaching here means the first
+    // pass found enough text to detect a rotation, so "no lines now" says the
+    // second pass did not work — not that the receipt is blank. The extra JPEG
+    // re-encode can cost that much detail at a low `quality`, and accepting it
+    // would hand the JS OcrFloor an empty result for a scan that did recognize.
+    // A partial drop is left alone: those lines are what the shipped image
+    // genuinely yields, and reporting the pre-rotation count would overstate it.
+    return if (refreshed != null && refreshed.lineCount > 0) {
+      OcrOutcome(refreshed, rotatedDims, 0)
+    } else {
+      OcrOutcome(detected, rotatedDims, detected?.rotationDegrees ?: 0)
+    }
+  }
+
+  /**
+   * OCR line boxes expressed in the *output* JPEG's frame, or null when the
+   * caller didn't ask for geometry.
+   *
+   * [remapDegrees] carries the whole decision — see [OcrOutcome]. It is `0` both
+   * when nothing was rotated and when the boxes came from a pass that already
+   * ran on the rotated file, and non-zero only when boxes measured before the
+   * rotation have to be turned to catch up.
+   *
+   * Boxes that fall outside the output frame are clamped, and any that clamp to
+   * nothing are dropped — see docs/specs/ocr-line-geometry.md.
+   */
+  private fun ocrLinesFor(
+    options: ScanOptions,
+    ocr: OcrProcessor.OcrResult?,
+    sourceWidth: Int,
+    sourceHeight: Int,
+    rotatedDims: Pair<Int, Int>?,
+    remapDegrees: Int,
+  ): List<OcrProcessor.Line>? {
+    if (!options.ocrGeometry || ocr == null) return null
+    val (frameWidth, frameHeight) = rotatedDims ?: Pair(sourceWidth, sourceHeight)
+    return ocr.lines.mapNotNull { line ->
+      val turned = OcrGeometry.rotateClockwise(line.box, sourceWidth, sourceHeight, remapDegrees)
+      OcrGeometry.clamp(turned, frameWidth, frameHeight)?.let { line.copy(box = it) }
+    }
+  }
 
   /**
    * When auto-rotate is enabled and OCR detected a non-zero rotation, rotate the

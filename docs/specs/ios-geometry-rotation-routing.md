@@ -6,7 +6,24 @@
 **Related:** [`portrait-rotation-detection.md`](./portrait-rotation-detection.md) (Android v1.3), [`../notes/platform-asymmetries.md`](../notes/platform-asymmetries.md) §2.1
 **Platform:** iOS only
 
-## Status: Proposed — blocked on on-device data
+## Status: Closed (2026-07-18) — superseded by a stronger signal
+
+This design's step-1/step-2 structure was adopted, but its **signal was replaced**.
+It proposed measuring the _bounding-box aspect_ — a proxy for line shape.
+[`ocr-angle-rotation-detection.md`](./ocr-angle-rotation-detection.md) v1.0 instead reads the _text angle_ off the observation quad, which strictly dominates: aspect is identical at 90° and 270° (shape carries no direction), while the angle separates them and detects a plain 180° flip as well.
+
+Two of this document's conclusions survived and were carried into the replacement:
+
+- **"Match Android" is not a design goal** — correct, and the replacement does not port Android's thresholds. What it _does_ share is a platform-independent quantity (the angle), not an algorithm tuned to one engine's behaviour.
+- **Thresholds cannot be guessed** — carried over verbatim; the new gates are marked PROVISIONAL and gated on the same on-device measurement this document called for.
+
+The step-1 `boxAspect` diagnostic shipped here is **kept, as diagnostics only**. No routing code reads it. It sits next to `angleBins` in the same DEBUG log line, so a reader comparing the two can tell whether the angle signal is alive — an `[n,0,0,0]` histogram beside a `boxAspect` that says "sideways" is the fingerprint of the angle being reported in Vision's own reading frame. That is a human calibration aid, not a branch.
+
+The regression guard in the replacement spec is a different mechanism and does **not** consult `boxAspect`: on iOS it simply never acts on `turn == 0`, and the only guard that reads an aspect signal is Android's, which uses `lineAspect`.
+
+The original proposal follows as historical record.
+
+## Original status: Proposed — blocked on on-device data
 
 This document does **not** propose shippable routing logic yet.
 The core hypothesis it rests on cannot be validated in CI or from source inspection — it needs Vision bounding-box geometry measured on real Korean receipts.

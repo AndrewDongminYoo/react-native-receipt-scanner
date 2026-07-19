@@ -1,5 +1,6 @@
 #import "RNDocumentCameraDelegate.h"
 #import "RNImageProcessor.h"
+#import "RNOcrGeometry.h"
 #import "RNOcrProcessor.h"
 #import <UIKit/UIKit.h>
 #import <VisionKit/VisionKit.h>
@@ -47,6 +48,8 @@
             NSString *ocrText = nil;
             NSInteger rotationDegrees = 0;
             double ocrMeanConfidence = 0.0;
+            NSArray<NSDictionary *> *ocrLines = nil;
+            CGSize ocrPassSize = CGSizeZero;
             if (strongSelf.options.ocr) {
                 NSError *ocrErr = nil;
                 RNOcrResult *ocr =
@@ -57,6 +60,8 @@
                     ocrText = ocr.text;
                     rotationDegrees = ocr.rotationDegrees;
                     ocrMeanConfidence = ocr.meanConfidence;
+                    ocrLines = ocr.lines;
+                    ocrPassSize = ocr.passSize;
                 }
             }
 
@@ -67,6 +72,7 @@
                                                         degrees:rotationDegrees];
             }
             CGImageRef encodeCG = rotatedCG ?: sourceCG;
+            BOOL rotationBaked = (rotatedCG != NULL);
 
             NSError *err = nil;
             // sourceRef is NULL — VisionKit does not expose the original shutter EXIF.
@@ -81,6 +87,19 @@
                                         error:&err];
             if (rotatedCG) CGImageRelease(rotatedCG);
             if (!processed) continue;
+
+            // Vision measured the boxes on the frame the winning pass ran on. When
+            // that same rotation gets baked into the output the two frames agree;
+            // otherwise the output stays un-rotated and the boxes need it undone —
+            // which is the equal clockwise turn, since the pixel rotation is CCW.
+            if (strongSelf.options.ocrGeometry && ocrLines.count > 0) {
+                ocrLines = [RNOcrGeometry linesByRotating:ocrLines
+                                                frameSize:ocrPassSize
+                                         clockwiseDegrees:(rotationBaked ? 0 : rotationDegrees)
+                                               outputSize:CGSizeMake(processed.width, processed.height)];
+            } else {
+                ocrLines = nil;
+            }
 
             NSMutableDictionary *img = [@{
                 // absoluteString gives a properly percent-encoded file:// URI; manually
@@ -101,6 +120,7 @@
                 // Reporting only — not used for routing.
                 img[@"ocrQuality"] = @{@"confidence": @(ocrMeanConfidence)};
             }
+            if (ocrLines.count > 0) img[@"ocrLines"] = ocrLines;
             if (processed.exifData)  img[@"exif"]    = processed.exifData;
             [images addObject:[img copy]];
         }

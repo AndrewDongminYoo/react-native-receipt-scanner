@@ -1,6 +1,7 @@
 package com.receiptscanner
 
 import com.facebook.react.bridge.Arguments
+import com.facebook.react.bridge.WritableArray
 import com.facebook.react.bridge.WritableMap
 import java.io.File
 
@@ -21,6 +22,8 @@ object ResultBuilder {
    * @param ocrText Joined OCR text or `null` when OCR didn't run.
    * @param exifData Parsed EXIF or `null` when `includeExif` was `false`.
    * @param imageOrigin One of `"camera"`, `"screenshot"`, `"download"`, `"unknown"`.
+   * @param ocrLines Per-line OCR geometry already remapped and clamped into the
+   *                 output frame, or `null` when `ocrGeometry` was `false`.
    */
   fun buildImage(
     file: File,
@@ -30,6 +33,7 @@ object ResultBuilder {
     exifData: ImageProcessor.ExifData?,
     imageOrigin: String,
     confidence: Double? = null,
+    ocrLines: List<OcrProcessor.Line>? = null,
   ): WritableMap =
     Arguments.createMap().apply {
       putString("uri", "file://${file.absolutePath}")
@@ -51,8 +55,34 @@ object ResultBuilder {
         )
       }
 
+      if (!ocrLines.isNullOrEmpty()) {
+        putArray("ocrLines", buildOcrLinesArray(ocrLines))
+      }
+
       if (exifData != null) {
         putMap("exif", buildExifMap(exifData))
+      }
+    }
+
+  /** Serializes [OcrProcessor.Line] into the JS `OcrLine[]` shape. */
+  private fun buildOcrLinesArray(lines: List<OcrProcessor.Line>): WritableArray =
+    Arguments.createArray().apply {
+      for (line in lines) {
+        pushMap(
+          Arguments.createMap().apply {
+            putString("text", line.text)
+            putMap(
+              "frame",
+              Arguments.createMap().apply {
+                putInt("x", line.box.x)
+                putInt("y", line.box.y)
+                putInt("width", line.box.width)
+                putInt("height", line.box.height)
+              },
+            )
+            line.confidence?.let { putDouble("confidence", it.toDouble()) }
+          },
+        )
       }
     }
 

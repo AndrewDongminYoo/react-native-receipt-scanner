@@ -24,7 +24,19 @@ export default defineConfig([
     },
   },
   {
-    ignores: [".yarn/", "eslint.config.mjs", "node_modules/", "lib/"],
+    // Build output. Same set `yarn clean` deletes — Gradle in particular writes
+    // JS into its test reports, which lands as hundreds of lint errors the
+    // moment anyone runs the Android unit tests.
+    ignores: [
+      ".yarn/",
+      "eslint.config.mjs",
+      "node_modules/",
+      "lib/",
+      "android/build/",
+      "example/android/build/",
+      "example/android/app/build/",
+      "example/ios/build/",
+    ],
   },
   {
     files: ["**/*.mjs"],

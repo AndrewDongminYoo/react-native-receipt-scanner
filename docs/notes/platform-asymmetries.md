@@ -67,16 +67,26 @@
 | iOS Vision (VNRecognizeTextRequest) | 입력 픽셀 회전에 따라 confidence가 다름 → multi-pass 검출 가능                                                                                                                                 |
 | Android ML Kit Korean               | **rotation invariant** — `InputImage.fromBitmap(bitmap, rotationDegrees)` 의 rotation hint와 무관하게 동일 결과 (lineCount/lineAspect/textLength). 2026-05-10 Galaxy Z Flip6 field data로 확인 |
 
-**Resolution path.** 비범위 (ML Kit 동작). 두 플랫폼이 _동일한 회전 검출 알고리즘을 공유할 수 없음_. iOS는 confidence 기반 multi-pass(ADR-006 D7), Android는 단일-pass + lineAspect 기반(ADR-006 D14 v1.3).
+**Resolution path.** ~~비범위 (ML Kit 동작). 두 플랫폼이 _동일한 회전 검출 알고리즘을 공유할 수 없음_. iOS는 confidence 기반 multi-pass(ADR-006 D7), Android는 단일-pass + lineAspect 기반(ADR-006 D14 v1.3).~~ — 2026-07-18 해소. 아래 참조.
+
+⚠️ **2026-07-18 갱신 — 이 비대칭은 더 이상 성립하지 않는다.** iOS 26.5 실기기 측정에서 Vision도 회전된 한글·영문을 거의 동등하게 읽어냈다: 180° 뒤집힌 영수증에서 0° 패스가 62줄/신뢰도 76%, 90°·270°로 누운 영수증에서 52~54줄/84%. 즉 **양 플랫폼 모두 사실상 rotation-robust**가 되었다.
+
+이건 단순한 표 갱신이 아니라 두 플랫폼의 회전 검출 설계 근거가 동시에 사라졌다는 뜻이다. iOS의 multi-pass는 "회전된 입력은 못 읽힌다"는 격차를 전제로 하고(그래서 `kRotateCommitRatio = 1.3`이 영원히 미달), Android의 lineAspect 방식은 애초에 rotation-invariance를 전제로 설계됐으나 90/270을 가를 신호가 없다. 결과적으로 iOS `autoRotate`는 어떤 회전도 보정하지 못하고, Android는 가로 콘텐츠에 항상 270°만 적용해 절반만 맞는다.
+
+관측 가능한 사용자 증상은 양 플랫폼 공통이었다 — **OCR 텍스트는 정방향으로 정상 출력되는데 결과 이미지는 돌아간 채로 남는다.**
+
+**해소 (2026-07-18): 두 플랫폼이 처음으로 동일한 신호를 공유한다.** "공유할 수 없다"는 원래 판단은 _인식 품질_ 을 신호로 쓴다는 전제에서만 참이었다 — 품질은 엔진마다 회전 반응이 다르므로 공유 불가가 맞다. 그러나 **텍스트 각도**는 엔진과 무관한 기하량이라 양쪽에서 같은 의미를 갖는다. [`../specs/ocr-angle-rotation-detection.md`](../specs/ocr-angle-rotation-detection.md) v1.0이 그 신호로 재설계했고, quantize·최빈값·보정 수학은 양 플랫폼이 같은 공식을 쓴다 (취득 경로 차이는 §2.5). 위 표의 rotation-invariance 차이는 이제 _폴백_ 경로에만 영향을 준다 — 특히 iOS 16/17에서는 Vision이 아직 rotation-variant라 probe 루프가 실제로 동작하므로, 그 폴백은 살려 둔다.
 
 ### 2.2 per-line confidence 노출
 
-| 플랫폼                | per-line confidence                   |
-| --------------------- | ------------------------------------- |
-| iOS Vision            | ✅ `VNRecognizedText.confidence` 노출 |
-| Android ML Kit Korean | ❌ 미노출                             |
+| 플랫폼                | per-line confidence                                                                                   |
+| --------------------- | ----------------------------------------------------------------------------------------------------- |
+| iOS Vision            | ✅ `VNRecognizedText.confidence` 노출                                                                 |
+| Android ML Kit Korean | ✅ `Text.Line.getConfidence()` 노출 (**번들** 인식기 기준. unbundled 라이브러리는 0을 반환할 수 있음) |
 
-**Resolution path.** 비범위. `OcrQuality.confidence?: number` 필드는 **iOS에서만 채워지고 Android에서는 항상 absent**. `ocrFloor.minConfidence`는 absent 시 satisfied로 간주(per ADR-006 D6) — Android가 임계값에 부정적 영향 안 받음.
+**Resolution path.** 해소됨 (0.5.0). 이 표는 원래 "Android 미노출"로 기록돼 있었으나 0.5.0이 `meanLineConfidence`로 양 플랫폼 모두 `ocrQuality.confidence`를 채우도록 바꿨고, 표만 갱신되지 않았다 (2026-07-18 정정). `ocrFloor.minConfidence`는 여전히 absent 시 satisfied로 간주한다(ADR-006 D6) — OCR 미실행이나 무텍스트에서는 양 플랫폼 모두 absent이기 때문.
+
+⚠️ 다만 두 값의 **분포는 비교 가능하다고 검증되지 않았다**. `api-contract.md`가 명시한 대로 confidence는 reporting-only이며, cross-platform 임계값으로 쓰지 말 것.
 
 ### 2.3 `Line.boundingBox` 좌표계
 
@@ -85,7 +95,9 @@
 | iOS Vision     | 정규화된 `[0, 1]` 좌표 |
 | Android ML Kit | 픽셀 좌표 (`Rect`)     |
 
-**Resolution path.** 비범위. 패키지가 양 플랫폼에서 _aspect ratio_(width/height)만 계산해 사용하므로 단위 차이가 외부에 노출되지 않음. raw bbox 자체는 노출 안 함.
+추가로 원점도 다르다 — iOS Vision은 **bottom-left**, Android ML Kit `Rect`는 **top-left**.
+
+**Resolution path.** 해소됨 (0.7.0, `ocrGeometry`). 그전까지는 _aspect ratio_(width/height)만 쓰여 단위 차이가 외부에 노출되지 않았으나, `ReceiptImage.ocrLines`가 bbox를 노출하면서 양 플랫폼 모두 **출력 JPEG 픽셀 · top-left 원점**으로 정규화해서 내보낸다 (iOS는 `+[RNOcrGeometry rectFromNormalizedBox:pixelSize:]`가 `1 - maxY`로 y축을 뒤집어 변환). 잔여 차이 하나: Android는 ML Kit `Rect`에서 온 **정수** 픽셀, iOS는 정규화 값 × 픽셀 크기라 **소수** 픽셀이다. JS `OcrLine.frame`은 `number`이므로 계약 위반은 아니고, 오버레이 배치에도 영향이 없다. 자세한 계약은 `docs/specs/ocr-line-geometry.md`.
 
 ### 2.4 OCR 단계 호출 순서 (autoRotate 흐름)
 
@@ -95,6 +107,17 @@
 | Android | JPEG 인코딩 _후_ (cache 파일을 디코드하여 OCR, 필요 시 in-place 회전+재인코딩) |
 
 **Resolution path.** 비범위. iOS는 perspective correction 결과가 CGImage이고 `RNImageProcessor`가 모든 인코딩을 담당하므로 OCR-first가 자연스러움. Android는 `ImageProcessor.processGallery`가 perspective correction + 인코딩을 한 흐름으로 처리하므로 OCR이 인코딩 후. 이 순서 차이가 사용자에게 노출되는 결과는 동일.
+
+### 2.5 텍스트 각도 취득 경로
+
+| 플랫폼         | 각도 취득                                                                                                                                     |
+| -------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| Android ML Kit | ✅ `Text.Line.getAngle()`이 직접 제공. 문서상 **시계방향 양수**, `[-180, 180]` — 이 패키지의 CW 정준화와 방향이 그대로 일치                   |
+| iOS Vision     | ❌ 각도 API 없음. `VNRecognizedTextObservation`의 `topLeft`/`topRight`에서 `atan2`로 유도해야 하고, **bottom-left 원점이라 y 부호 반전 필요** |
+
+**Resolution path.** 의도된 비대칭 — 플랫폼이 주는 것이 다르다. 두 경로가 **같은 CW 규약의 값**을 내도록 `+[RNOcrGeometry clockwiseAngleFromTopLeft:topRight:]`가 흡수한다. y 부호를 놓치면 90과 270이 조용히 뒤바뀌므로(이번 재설계가 고치려는 바로 그 증상) 부호 규약은 `OcrGeometryTest`가 Kotlin 쪽에서 고정하고 iOS는 같은 공식을 미러한다. 상세는 [`../specs/ocr-angle-rotation-detection.md`](../specs/ocr-angle-rotation-detection.md).
+
+✅ **2026-07-19 실측 확정 — 두 값 모두 이미지 공간 기준이다.** 양 플랫폼에서 90°·270°로 눕힌 영수증이 정방향으로 출력됐다. 리딩 프레임 기준이었다면 회전 여부와 무관하게 0이 나와 신호가 죽고, 회귀 가드가 발동해 v1.3 동작(Android 270 고정 → 한쪽만 정답, iOS 회전 없음)이 유지됐을 것이다. 두 방향이 동시에 맞았다는 것이 곧 방향 정보가 실재한다는 증거다. iOS `atan2` y-반전 부호도 같은 관측으로 확정됐다 — 뒤집혀 있었다면 90과 270이 서로 바뀌었을 것이기 때문. 회귀 가드는 라인이 적은 입력을 위해 유지한다.
 
 ## 3. 회전·픽셀 변환
 
@@ -112,6 +135,16 @@
 - ADR-006 D7 (iOS autoRotate): iOS 자체 알고리즘 안에서 일관됨 — `RNOcrProcessor.rotate:byDegrees:` 도 CCW 기준. iOS에선 OCR 검출과 픽셀 회전이 같은 방향 정의 사용. 자체 일관성은 유지.
 - ADR-006 D14 (Android v1.3): Android 자체 알고리즘 안에서 일관됨 — `Matrix.postRotate` CW 기준. Android에선 OCR 신호로 결정한 회전을 픽셀 회전에 그대로 전달. 자체 일관성은 유지.
 - **그러나 _플랫폼 간_** 의 의미론은 정반대. 향후 cross-platform 신호로 회전 결정을 통일하거나, `rotationDegrees`를 결과 표면에 노출할 일이 생기면 _반드시_ 한쪽으로 정규화해야 한다.
+- **0.7.0 `ocrGeometry`가 이 정규화의 첫 사례다.** OCR 박스를 출력 프레임으로 옮기려면 픽셀에 가해진 회전을 박스에도 가해야 하므로 이 비대칭을 정면으로 만난다. 채택한 규약은 위 "장기 1안"과 같은 **CW 정준화**: `OcrGeometry.rotateClockwise`(Android) / `+[RNOcrGeometry rectByRotating:frameSize:clockwiseDegrees:]`(iOS)가 같은 CW 공식을 쓰고, 방향 차이는 각 플랫폼이 넘기는 인자에 흡수된다.
+
+  | 플랫폼  | OCR이 박스를 잰 프레임            | 출력 프레임                      | remap이 필요한 조건                                | 넘기는 CW 각도 |
+  | ------- | --------------------------------- | -------------------------------- | -------------------------------------------------- | -------------- |
+  | Android | 회전 후 재인식 프레임 = 출력      | autoRotate 후                    | **재인식이 실패했을 때만** (그때만 회전 전 프레임) | `d`            |
+  | iOS     | 선택된 pass 프레임 (이미 CCW-`d`) | autoRotate면 그대로, 아니면 원본 | autoRotate가 **회전하지 않았을 때**                | `d`            |
+
+  ⚠️ **Android 행은 2026-07-19에 바뀌었다.** 원래는 "autoRotate가 실제로 회전했을 때 항상 remap"이었으나, 회전 후 재인식([§4.2](#42-ocr-결과-reading-order))이 들어가면서 **정상 경로는 remap을 거치지 않는다** — 박스가 출력 프레임에서 직접 측정되므로 `remapDegrees = 0`이다. `rotateClockwise`는 재인식이 실패해 회전 전 결과를 유지할 때만 쓰인다.
+
+  iOS가 `360 − d`가 아니라 `d`를 넘기는 이유는 CCW-`d`를 되돌리는 것이 CW-`d`이기 때문이다. CW 공식 자체는 `OcrGeometryTest`가 고정한다 — 동률 규칙(`-45` / `-135`)까지 포함하며, iOS는 `floor(x + 0.5)`로 그 규칙을 미러한다 (`lround`는 0에서 멀어지는 방향으로 반올림해 어긋난다).
 
 **Resolution path.** 단기: 현재 사용처는 native-internal이므로 외부 영향 없음 — 그대로 유지. 장기:
 
@@ -150,6 +183,31 @@ ADR-006 후속 D 항목으로 추가 추적.
 | Android ML Kit | top-to-bottom (image 좌표계)                 |
 
 **Resolution path.** 비범위. consumer가 `ocrText`를 *전체 string*으로 keyword 매칭에 사용 (ADR-006 D5). reading order의 미세 차이는 keyword 검색에 영향 없음.
+
+⚠️ **2026-07-19 추가 — autoRotate가 회전한 경우 Android는 "미세 차이"가 아니라 순서가 통째로 어긋난다.**
+
+| 플랫폼  | 회전 적용 시 `ocrText` 순서 기준 프레임                                |
+| ------- | ---------------------------------------------------------------------- |
+| iOS     | **회전 후** — `resultByRotating:`이 회전된 프레임에서 재인식           |
+| Android | **회전 전** — `runDetection`이 `pass0.text`를 그대로 반환, 재인식 없음 |
+
+QA 캡처에서 영수증 아래→위로 완전히 뒤집힌 `ocrText`가 관측됐다 (출력 이미지와 `ocrLines` 박스는 정상). 박스는 `OcrGeometry.rotateClockwise`로 리매핑되지만 텍스트 문자열은 리매핑 대상이 아니기 때문이다.
+
+v1.3부터 있던 동작이나 회전이 한 분기에서만 발동해 드물었고, 각도 라우팅([`../specs/ocr-angle-rotation-detection.md`](../specs/ocr-angle-rotation-detection.md))이 90/270/180을 모두 잡으면서 노출 빈도가 올라갔다.
+
+**사용자 영향.** ADR-006 D5의 keyword 매칭 용도에는 무해하다 — 전체 string 검색은 순서 불변. 라인 순서에 의존하는 소비자(예: "첫 줄 = 상점명" 같은 위치 기반 파싱)는 깨지지만, 그건 ADR-003이 패키지 밖으로 밀어낸 도메인 로직이며 `api-contract.md`도 `ocrText`의 라인 순서를 계약하지 않는다.
+
+**해소 (2026-07-19): 선택지 (1) 회전 후 재인식을 채택했다.**
+
+`ReceiptScannerModule.runOcrAndAutoRotate`가 회전을 적용한 뒤 `OcrProcessor.recognizeInFinalFrame`으로 **출력 파일을 다시 인식**한다. 이제 양 플랫폼 모두 `ocrText` 순서가 실제로 출하되는 이미지 기준이다.
+
+부수 효과가 셋 있다.
+
+- **박스 리매핑이 성공 경로에서 사라진다.** 재인식이 출력 프레임에서 박스를 직접 재므로 `remapDegrees = 0`이다. `OcrGeometry.rotateClockwise`는 재인식 실패 경로 전용으로 남는다 — 그 경우 첫 패스 결과를 유지하고 박스만 돌린다. 회전 보정을 잃는 것이 텍스트 전체를 잃는 것보다 싸기 때문이다.
+- **`lineCount` / `confidence`가 재인식 패스 값이 된다.** `lineCount`는 JS `OcrFloor` 게이트의 입력이므로 회전 경로에서 게이트가 보는 숫자가 바뀐다. ML Kit이 rotation-invariant라 값은 거의 같고, 정방향 이미지 기준이라는 점에서 더 정직한 숫자다.
+- **회전 시 OCR 1패스(~150 ms) 추가.** 회전이 실제로 일어날 때만 발생한다.
+
+`OcrProcessor.OcrResult.text`의 KDoc도 이에 맞춰 정정했다 — 회전하는 호출자는 `recognizeInFinalFrame`을 이어서 호출해야 한다고 명시한다.
 
 ## 5. ImageOrigin 분류
 

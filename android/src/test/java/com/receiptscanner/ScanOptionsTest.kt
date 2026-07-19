@@ -15,6 +15,13 @@ class ScanOptionsTest {
     assertEquals(true, opts.includeExif)
     assertEquals(false, opts.includeGpsExif)
     assertEquals(true, opts.ocr)
+    assertEquals(false, opts.ocrGeometry)
+  }
+
+  @Test
+  fun `from reads ocrGeometry true`() {
+    val map = JavaOnlyMap().apply { putBoolean("ocrGeometry", true) }
+    assertEquals(true, ScanOptions.from(map).ocrGeometry)
   }
 
   @Test

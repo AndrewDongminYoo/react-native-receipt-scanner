@@ -26,7 +26,7 @@ NS_ASSUME_NONNULL_BEGIN
 /**
  * Designated initializer.
  *
- * @param image Source image (orientation-normalised). The view controller
+ * @param image Source image (orientation-normalized). The view controller
  *              displays this directly via `UIImageView`.
  * @param corners Optional initial quad in CIImage coordinates. Pass `nil`
  *                or a 4-element array; when `nil` (or any other count), a

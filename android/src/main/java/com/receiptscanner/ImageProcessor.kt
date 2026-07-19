@@ -46,7 +46,7 @@ class ImageProcessor(
   private val context: Context,
 ) {
   /**
-   * Normalised EXIF white-list extracted from the source image. Values map
+   * Normalized EXIF white-list extracted from the source image. Values map
    * 1:1 to `ReceiptExif` in `src/types.ts`.
    *
    * `orientation` is the *output* orientation (always [ExifInterface.ORIENTATION_NORMAL]

@@ -1,6 +1,9 @@
 import { describe, it, expect, beforeEach, jest } from "@jest/globals";
 import { DEFAULT_OCR_FLOOR, DEFAULT_SCAN_OPTIONS } from "../types";
 import type { ReceiptImage } from "../types";
+// Type-only import from the package root: keeps the public re-export of
+// `OcrLine` under typecheck without pulling the web entry in at runtime.
+import type { OcrLine } from "../index";
 import { scan } from "../scan.native";
 import NativeReceiptScanner from "../NativeReceiptScanner";
 
@@ -38,6 +41,7 @@ describe("DEFAULT_SCAN_OPTIONS", () => {
       autoRotate: true,
       includeRawExif: false,
       minimumTextHeight: 0,
+      ocrGeometry: false,
     });
   });
 });
@@ -185,6 +189,45 @@ describe("scan (native)", () => {
 
     expect(result.status).toBe("success");
     expect(result.images).toHaveLength(1);
+  });
+
+  it("forwards ocrGeometry to the native module, off by default", async () => {
+    mockNative.scan.mockResolvedValueOnce({ status: "cancelled", images: [] });
+
+    await scan();
+
+    expect(mockNative.scan).toHaveBeenCalledWith(expect.objectContaining({ ocrGeometry: false }));
+  });
+
+  it("forwards an opted-in ocrGeometry alongside ocr", async () => {
+    mockNative.scan.mockResolvedValueOnce({ status: "cancelled", images: [] });
+
+    await scan({ ocr: true, ocrGeometry: true });
+
+    expect(mockNative.scan).toHaveBeenCalledWith(
+      expect.objectContaining({ ocr: true, ocrGeometry: true })
+    );
+  });
+
+  it("passes native ocrLines through to the result", async () => {
+    const line: OcrLine = {
+      text: "합계 5,400원",
+      frame: { x: 12, y: 340, width: 260, height: 28 },
+      confidence: 0.94,
+    };
+    mockNative.scan.mockResolvedValueOnce({
+      status: "success",
+      images: [
+        baseImage({
+          ocrText: "GS25 강남점\n2024-01-15 14:30\n합계 5,400원",
+          ocrLines: [line],
+        }),
+      ],
+    });
+
+    const result = await scan();
+
+    expect(result.images[0]!.ocrLines).toEqual([line]);
   });
 
   it("passes through cancelled status without floor evaluation", async () => {
