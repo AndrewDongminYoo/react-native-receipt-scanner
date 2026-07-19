@@ -1,9 +1,7 @@
 package com.receiptscanner
 
-import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
-import android.net.Uri
 import android.util.Log
 import com.google.android.gms.tasks.Tasks
 import com.google.mlkit.vision.common.InputImage
@@ -24,12 +22,8 @@ import java.util.Locale
  *
  * Threading: every public method blocks on [Tasks.await] and **must** be
  * called from a background thread.
- *
- * @param context Used by [recognize]'s `InputImage.fromFilePath` overload.
  */
-class OcrProcessor(
-  private val context: Context,
-) {
+class OcrProcessor {
   private val recognizer =
     TextRecognition.getClient(
       KoreanTextRecognizerOptions.Builder().build(),
@@ -130,13 +124,6 @@ class OcrProcessor(
     } finally {
       bitmap.recycle()
     }
-  }
-
-  /** Backward-compatible single-pass entry retained for callers that don't
-   *  participate in rotation detection (none today, but keeps the API stable). */
-  fun recognize(imageUri: Uri): String {
-    val image = InputImage.fromFilePath(context, imageUri)
-    return Tasks.await(recognizer.process(image)).text
   }
 
   /**

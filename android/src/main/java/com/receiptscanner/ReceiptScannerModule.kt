@@ -158,7 +158,7 @@ class ReceiptScannerModule(
     executor.execute {
       try {
         val ocrProcessor =
-          if (scanOptions.ocr) OcrProcessor(reactApplicationContext) else null
+          if (scanOptions.ocr) OcrProcessor() else null
 
         val imageResults =
           pages.map { page ->
@@ -237,7 +237,7 @@ class ReceiptScannerModule(
     }
 
     executor.execute {
-      val ocrProcessor = if (scanOptions.ocr) OcrProcessor(reactApplicationContext) else null
+      val ocrProcessor = if (scanOptions.ocr) OcrProcessor() else null
       try {
         val imageResults =
           originalUriStrs.mapIndexed { i, uriStr ->
