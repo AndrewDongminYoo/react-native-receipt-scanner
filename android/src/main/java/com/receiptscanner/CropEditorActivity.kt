@@ -34,7 +34,6 @@ import com.google.mlkit.vision.text.Text
 import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.korean.KoreanTextRecognizerOptions
 import java.io.File
-import java.io.FileOutputStream
 import java.io.InputStream
 import kotlin.math.PI
 import kotlin.math.atan2
@@ -148,8 +147,7 @@ internal class CropEditorActivity : ComponentActivity() {
 
     if (uris.isEmpty()) {
       Log.i(LOG_TAG, "picker cancelled or returned no URIs; finishing with RESULT_CANCELED")
-      setResult(RESULT_CANCELED)
-      finish()
+      cancelAndFinish()
       return
     }
 
@@ -161,8 +159,7 @@ internal class CropEditorActivity : ComponentActivity() {
 
   @Deprecated("Deprecated in API 33")
   override fun onBackPressed() {
-    setResult(RESULT_CANCELED)
-    finish()
+    cancelAndFinish()
   }
 
   // Dequeues the next URI and advances the crop editor. When the queue is empty,
@@ -378,10 +375,7 @@ internal class CropEditorActivity : ComponentActivity() {
         }
       } catch (e: Exception) {
         Log.e(LOG_TAG, "loadAndDisplayImage failed for uri=$uri", e)
-        runOnUiThread {
-          setResult(RESULT_CANCELED)
-          finish()
-        }
+        runOnUiThread { cancelAndFinish() }
       }
     }.start()
   }
@@ -546,21 +540,18 @@ internal class CropEditorActivity : ComponentActivity() {
         originalHeight,
       )
     // picker_get_content URI permission expires when this activity finishes.
-    // Copy the bytes to cache now so ImageProcessor can read via file:// after finish.
+    // Copy a bounded number of bytes to cache now so ImageProcessor can read via file:// after finish.
     // Index suffix prevents collision when multiple images are confirmed in rapid succession.
     Thread {
       val index = processedOriginalUris.size
       val cachedFile = File(cacheDir, "receipt_pick_${System.currentTimeMillis()}_$index.jpg")
       try {
         openPickedUriInputStream(uri).use { input ->
-          FileOutputStream(cachedFile).use { output -> input.copyTo(output) }
+          GalleryCacheCopier.copy(input, cachedFile)
         }
       } catch (e: Exception) {
         Log.e(LOG_TAG, "onConfirmTapped: failed to copy picker URI to cache uri=$uri", e)
-        runOnUiThread {
-          setResult(RESULT_CANCELED)
-          finish()
-        }
+        runOnUiThread { cancelAndFinish() }
         return@Thread
       }
       processedOriginalUris.add(Uri.fromFile(cachedFile).toString())
@@ -604,8 +595,18 @@ internal class CropEditorActivity : ComponentActivity() {
   }
 
   private fun onCancelTapped() {
+    cancelAndFinish()
+  }
+
+  private fun cancelAndFinish() {
+    deleteProcessedOriginals()
     setResult(RESULT_CANCELED)
     finish()
+  }
+
+  private fun deleteProcessedOriginals() {
+    processedOriginalUris.forEach { uri -> Uri.parse(uri).path?.let { File(it).delete() } }
+    processedOriginalUris.clear()
   }
 
   override fun onDestroy() {
