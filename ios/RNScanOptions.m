@@ -4,6 +4,22 @@ static id RNNullToNil(id value) {
     return [value isKindOfClass:[NSNull class]] ? nil : value;
 }
 
+// Bridged JS values are untyped at the native boundary (Phase 1 codegen uses
+// `Object`). A malformed value (object/array/string where a scalar is expected)
+// would crash if sent -boolValue/-integerValue/-doubleValue directly, so every
+// scalar extraction below is class-checked and falls back to the documented default.
+static BOOL RNBoolFromValue(id value, BOOL defaultValue) {
+    return [value isKindOfClass:[NSNumber class]] ? [value boolValue] : defaultValue;
+}
+
+static NSInteger RNIntegerFromValue(id value, NSInteger defaultValue) {
+    return [value isKindOfClass:[NSNumber class]] ? [value integerValue] : defaultValue;
+}
+
+static double RNDoubleFromValue(id value, double defaultValue) {
+    return [value isKindOfClass:[NSNumber class]] ? [value doubleValue] : defaultValue;
+}
+
 @implementation RNScanOptions
 
 + (instancetype)optionsFromDictionary:(NSDictionary *)dict {
@@ -24,33 +40,22 @@ static id RNNullToNil(id value) {
         return opts;
     }
 
-    NSString *src = RNNullToNil(dict[@"source"]);
-    opts.source = [src isEqualToString:@"gallery"] ? @"gallery" : @"camera";
+    id src = RNNullToNil(dict[@"source"]);
+    opts.source = ([src isKindOfClass:[NSString class]] && [src isEqualToString:@"gallery"]) ? @"gallery" : @"camera";
 
-    NSNumber *maxPagesNum = RNNullToNil(dict[@"maxPages"]) ?: @1;
-    opts.maxPages = MAX(1, maxPagesNum.integerValue);
+    opts.maxPages = MAX(1, RNIntegerFromValue(dict[@"maxPages"], 1));
+    opts.quality  = MAX(0.0, MIN(1.0, RNDoubleFromValue(dict[@"quality"], 0.82)));
 
-    NSNumber *qualityNum = RNNullToNil(dict[@"quality"]) ?: @0.82;
-    opts.quality = MAX(0.0, MIN(1.0, qualityNum.doubleValue));
-
-    NSNumber *includeExifNum     = RNNullToNil(dict[@"includeExif"])      ?: @YES;
-    NSNumber *includeGpsExifNum  = RNNullToNil(dict[@"includeGpsExif"])   ?: @NO;
-    NSNumber *ocrNum             = RNNullToNil(dict[@"ocr"])              ?: @YES;
-    NSNumber *cropAutoConfirmNum = RNNullToNil(dict[@"cropAutoConfirm"])  ?: @NO;
-    NSNumber *autoRotateNum      = RNNullToNil(dict[@"autoRotate"])       ?: @YES;
-    NSNumber *includeRawExifNum  = RNNullToNil(dict[@"includeRawExif"])   ?: @NO;
-    NSNumber *ocrGeometryNum     = RNNullToNil(dict[@"ocrGeometry"])      ?: @NO;
-    opts.ocrGeometry      = ocrGeometryNum.boolValue;
-    opts.includeExif      = includeExifNum.boolValue;
-    opts.includeGpsExif   = includeGpsExifNum.boolValue;
-    opts.ocr              = ocrNum.boolValue;
-    opts.cropAutoConfirm  = cropAutoConfirmNum.boolValue;
-    opts.autoRotate       = autoRotateNum.boolValue;
-    opts.includeRawExif   = includeRawExifNum.boolValue;
+    opts.includeExif      = RNBoolFromValue(dict[@"includeExif"], YES);
+    opts.includeGpsExif   = RNBoolFromValue(dict[@"includeGpsExif"], NO);
+    opts.ocr              = RNBoolFromValue(dict[@"ocr"], YES);
+    opts.cropAutoConfirm  = RNBoolFromValue(dict[@"cropAutoConfirm"], NO);
+    opts.autoRotate       = RNBoolFromValue(dict[@"autoRotate"], YES);
+    opts.includeRawExif   = RNBoolFromValue(dict[@"includeRawExif"], NO);
+    opts.ocrGeometry      = RNBoolFromValue(dict[@"ocrGeometry"], NO);
 
     // iOS-only Vision tuning knob; absent/0 → use the package default (1/32).
-    NSNumber *minTextHeightNum = RNNullToNil(dict[@"minimumTextHeight"]);
-    opts.minimumTextHeight = minTextHeightNum ? MAX(0.0, MIN(1.0, minTextHeightNum.doubleValue)) : 0.0;
+    opts.minimumTextHeight = MAX(0.0, MIN(1.0, RNDoubleFromValue(dict[@"minimumTextHeight"], 0.0)));
 
     return opts;
 }
