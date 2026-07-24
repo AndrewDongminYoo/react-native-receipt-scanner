@@ -23,4 +23,12 @@ describe("iOS gallery crop editor", () => {
     expect(cropEditor).toContain("RNReceiptScanner_cropInstruction");
     expect(cropEditor).toContain("Drag the corners to frame the document");
   });
+
+  it("only submits document segmentation requests on supported iOS versions", () => {
+    const galleryPicker = iosSource("RNGalleryPickerDelegate.m");
+
+    expect(galleryPicker).toContain("if (@available(iOS 17.0, *))");
+    expect(galleryPicker).toContain("performRequests:@[docRequest, rectRequest]");
+    expect(galleryPicker).toContain("performRequests:@[rectRequest]");
+  });
 });

@@ -255,7 +255,7 @@ static NSString * _Nullable OriginFromExifFields(NSString *make, NSString *model
 - (nullable NSArray<NSValue *> *)detectCornersForImage:(UIImage *)image
                                             confidence:(float *)confidence
                                                  error:(NSError **)error {
-    VNDetectDocumentSegmentationRequest *docRequest = [VNDetectDocumentSegmentationRequest new];
+    VNDetectDocumentSegmentationRequest *docRequest = nil;
     VNDetectRectanglesRequest *rectRequest = MakeReceiptRectangleRequest(0.5f);
 
     // Pass the CGImage + explicit orientation so Vision processes pixels in the
@@ -266,7 +266,12 @@ static NSString * _Nullable OriginFromExifFields(NSString *make, NSString *model
     VNImageRequestHandler *handler = [[VNImageRequestHandler alloc] initWithCGImage:image.CGImage
                                                                         orientation:exifOrientation
                                                                             options:@{}];
-    [handler performRequests:@[docRequest, rectRequest] error:error];
+    if (@available(iOS 17.0, *)) {
+        docRequest = [VNDetectDocumentSegmentationRequest new];
+        [handler performRequests:@[docRequest, rectRequest] error:error];
+    } else {
+        [handler performRequests:@[rectRequest] error:error];
+    }
 
     CGFloat W = image.size.width;
     CGFloat H = image.size.height;
@@ -448,4 +453,3 @@ static NSString * _Nullable OriginFromExifFields(NSString *make, NSString *model
 }
 
 @end
-
