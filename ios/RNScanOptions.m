@@ -27,8 +27,10 @@ static id RNNullToNil(id value) {
     NSString *src = RNNullToNil(dict[@"source"]);
     opts.source = [src isEqualToString:@"gallery"] ? @"gallery" : @"camera";
 
+    // Clamp to 1..10, matching Android's ScanOptions.MAX_PAGES so the same
+    // public option yields the same page count on both platforms.
     NSNumber *maxPagesNum = RNNullToNil(dict[@"maxPages"]) ?: @1;
-    opts.maxPages = MAX(1, maxPagesNum.integerValue);
+    opts.maxPages = MIN(10, MAX(1, maxPagesNum.integerValue));
 
     NSNumber *qualityNum = RNNullToNil(dict[@"quality"]) ?: @0.82;
     opts.quality = MAX(0.0, MIN(1.0, qualityNum.doubleValue));
