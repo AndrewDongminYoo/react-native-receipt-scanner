@@ -34,7 +34,6 @@ import com.google.mlkit.vision.text.Text
 import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.korean.KoreanTextRecognizerOptions
 import java.io.File
-import java.io.FileOutputStream
 import java.io.InputStream
 import kotlin.math.PI
 import kotlin.math.atan2
@@ -61,6 +60,13 @@ internal class CropEditorActivity : ComponentActivity() {
 
     /** Input extra: `Int` upper bound on multi-select count. Coerced to `>= 1`. */
     const val EXTRA_MAX_IMAGES = "max_images"
+
+    /**
+     * Result extra (with `RESULT_OK`): a processing-error message. Present only
+     * when the flow failed an enforced limit (e.g. an oversized selection),
+     * which must be distinguished from a user cancel (`RESULT_CANCELED`).
+     */
+    const val EXTRA_ERROR = "error"
 
     /** Number of `Float`s per image in [EXTRA_ALL_CORNERS] (4 corners × 2 axes). */
     const val CORNERS_PER_IMAGE = 8
@@ -95,6 +101,17 @@ internal class CropEditorActivity : ComponentActivity() {
   private var totalImageCount = 0
   private var requestedMaxImages = 1
   private var galleryPickerLaunched = false
+
+  // Guards the async cache copy in onConfirmTapped. Both flags are touched only
+  // on the main thread (button/back handlers + the copy's runOnUiThread), so no
+  // lock is needed — the point is to keep list mutation and cancel cleanup off
+  // the worker thread and serialized on one thread.
+  private var copyInProgress = false
+  private var cancelRequested = false
+
+  // Running total of bytes cached this session (main-thread only), capped at
+  // GalleryCacheCopier.SESSION_MAX_BYTES so a multi-image batch can't exhaust storage.
+  private var sessionCopiedBytes = 0L
 
   // Current image state
   private var originalUri: Uri? = null
@@ -148,8 +165,7 @@ internal class CropEditorActivity : ComponentActivity() {
 
     if (uris.isEmpty()) {
       Log.i(LOG_TAG, "picker cancelled or returned no URIs; finishing with RESULT_CANCELED")
-      setResult(RESULT_CANCELED)
-      finish()
+      cancelAndFinish()
       return
     }
 
@@ -161,8 +177,7 @@ internal class CropEditorActivity : ComponentActivity() {
 
   @Deprecated("Deprecated in API 33")
   override fun onBackPressed() {
-    setResult(RESULT_CANCELED)
-    finish()
+    cancelAndFinish()
   }
 
   // Dequeues the next URI and advances the crop editor. When the queue is empty,
@@ -378,10 +393,7 @@ internal class CropEditorActivity : ComponentActivity() {
         }
       } catch (e: Exception) {
         Log.e(LOG_TAG, "loadAndDisplayImage failed for uri=$uri", e)
-        runOnUiThread {
-          setResult(RESULT_CANCELED)
-          finish()
-        }
+        runOnUiThread { cancelAndFinish() }
       }
     }.start()
   }
@@ -535,6 +547,7 @@ internal class CropEditorActivity : ComponentActivity() {
   }
 
   private fun onConfirmTapped() {
+    if (copyInProgress) return
     val uri = originalUri ?: return
     val corners =
       cropView.getCornersInImageSpace(
@@ -545,27 +558,61 @@ internal class CropEditorActivity : ComponentActivity() {
         originalWidth,
         originalHeight,
       )
+    // Bound this copy by the smaller of the per-file limit and the remaining
+    // session budget, so N selected images can't sum past SESSION_MAX_BYTES.
+    val remainingBudget = GalleryCacheCopier.SESSION_MAX_BYTES - sessionCopiedBytes
+    if (remainingBudget <= 0L) {
+      failAndFinish("Selected images exceed the total cache budget")
+      return
+    }
     // picker_get_content URI permission expires when this activity finishes.
-    // Copy the bytes to cache now so ImageProcessor can read via file:// after finish.
+    // Copy a bounded number of bytes to cache now so ImageProcessor can read via file:// after finish.
     // Index suffix prevents collision when multiple images are confirmed in rapid succession.
+    copyInProgress = true
     Thread {
       val index = processedOriginalUris.size
       val cachedFile = File(cacheDir, "receipt_pick_${System.currentTimeMillis()}_$index.jpg")
-      try {
-        openPickedUriInputStream(uri).use { input ->
-          FileOutputStream(cachedFile).use { output -> input.copyTo(output) }
+      val error: Throwable? =
+        try {
+          openPickedUriInputStream(uri).use { input ->
+            GalleryCacheCopier.copy(input, cachedFile, minOf(GalleryCacheCopier.MAX_BYTES, remainingBudget))
+          }
+          null
+        } catch (e: Exception) {
+          Log.e(LOG_TAG, "onConfirmTapped: failed to copy picker URI to cache uri=$uri", e)
+          e
         }
-      } catch (e: Exception) {
-        Log.e(LOG_TAG, "onConfirmTapped: failed to copy picker URI to cache uri=$uri", e)
-        runOnUiThread {
-          setResult(RESULT_CANCELED)
-          finish()
+      // All list mutation runs on the main thread so it can never race with a
+      // Cancel/Back that also runs on the main thread. The cached file is
+      // deleted on every non-success path (including a Cancel that already
+      // finished the activity while this copy was still running).
+      runOnUiThread {
+        copyInProgress = false
+        when {
+          cancelRequested -> {
+            cachedFile.delete()
+          }
+
+          error is GalleryCacheCopier.SizeLimitExceededException -> {
+            cachedFile.delete()
+            failAndFinish(error.message ?: "Selected image is too large to process")
+          }
+
+          error != null -> {
+            // e.g. the input stream threw on close after a successful write —
+            // GalleryCacheCopier only cleans up failures inside its own scope.
+            cachedFile.delete()
+            cancelAndFinish()
+          }
+
+          else -> {
+            sessionCopiedBytes += cachedFile.length()
+            processedOriginalUris.add(Uri.fromFile(cachedFile).toString())
+            processedCorners.add(corners)
+            loadNextImage()
+          }
         }
-        return@Thread
       }
-      processedOriginalUris.add(Uri.fromFile(cachedFile).toString())
-      processedCorners.add(corners)
-      runOnUiThread { loadNextImage() }
     }.start()
   }
 
@@ -604,8 +651,32 @@ internal class CropEditorActivity : ComponentActivity() {
   }
 
   private fun onCancelTapped() {
+    cancelAndFinish()
+  }
+
+  private fun cancelAndFinish() {
+    // Finish immediately — never block dismissal on an in-flight copy, whose
+    // read latency is unbounded for a slow content:// provider. `cancelRequested`
+    // tells the copy worker to drop its own cached file when the read returns;
+    // list mutation stays on the main thread, so clearing it here can't race.
+    cancelRequested = true
+    deleteProcessedOriginals()
     setResult(RESULT_CANCELED)
     finish()
+  }
+
+  // Enforced-limit failures (e.g. an oversized selection) return RESULT_OK with
+  // an error extra so ReceiptScannerModule can reject with a processing code —
+  // RESULT_CANCELED is reserved for genuine user dismissal.
+  private fun failAndFinish(message: String) {
+    deleteProcessedOriginals()
+    setResult(RESULT_OK, Intent().putExtra(EXTRA_ERROR, message))
+    finish()
+  }
+
+  private fun deleteProcessedOriginals() {
+    processedOriginalUris.forEach { uri -> Uri.parse(uri).path?.let { File(it).delete() } }
+    processedOriginalUris.clear()
   }
 
   override fun onDestroy() {

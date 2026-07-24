@@ -234,6 +234,13 @@ class ReceiptScannerModule(
       return
     }
 
+    // The crop editor reports an enforced-limit failure (e.g. oversized image)
+    // as RESULT_OK + EXTRA_ERROR so it is not mistaken for a user cancel.
+    data.getStringExtra(CropEditorActivity.EXTRA_ERROR)?.let { error ->
+      promise.reject("PROCESSING_FAILED", error)
+      return
+    }
+
     val originalUriStrs = data.getStringArrayExtra(CropEditorActivity.EXTRA_ORIGINAL_URIS)
     val allCorners = data.getFloatArrayExtra(CropEditorActivity.EXTRA_ALL_CORNERS)
     Log.i(
@@ -251,42 +258,50 @@ class ReceiptScannerModule(
         val imageResults =
           originalUriStrs.mapIndexed { i, uriStr ->
             val originalUri = uriStr.toUri()
-            val corners = allCorners.copyOfRange(i * CropEditorActivity.CORNERS_PER_IMAGE, (i + 1) * CropEditorActivity.CORNERS_PER_IMAGE)
-            val processed =
-              imageProcessor.processGallery(
-                originalUri,
-                corners,
-                scanOptions.quality,
-                scanOptions.includeExif,
-                scanOptions.includeGpsExif,
-                includeRawExif = scanOptions.includeRawExif,
+            try {
+              val corners =
+                allCorners.copyOfRange(
+                  i * CropEditorActivity.CORNERS_PER_IMAGE,
+                  (i + 1) * CropEditorActivity.CORNERS_PER_IMAGE,
+                )
+              val processed =
+                imageProcessor.processGallery(
+                  originalUri,
+                  corners,
+                  scanOptions.quality,
+                  scanOptions.includeExif,
+                  scanOptions.includeGpsExif,
+                  includeRawExif = scanOptions.includeRawExif,
+                )
+              val imageOrigin = imageProcessor.inferOrigin(originalUri, processed.exifData)
+              val outcome = runOcrAndAutoRotate(ocrProcessor, processed.file, scanOptions)
+              val ocr = outcome.result
+              val finalDims = outcome.rotatedDims ?: Pair(processed.width, processed.height)
+              // Write the parsed EXIF back onto the final JPEG (after any
+              // autoRotate re-compress) so server-side file readers see it on
+              // Android too — parity with iOS.
+              processed.exifData?.let { imageProcessor.writeExifToFile(processed.file, it) }
+              ResultBuilder.buildImage(
+                file = processed.file,
+                width = finalDims.first,
+                height = finalDims.second,
+                ocrText = ocr?.text,
+                exifData = processed.exifData,
+                imageOrigin = imageOrigin,
+                confidence = ocr?.confidence?.toDouble(),
+                ocrLines =
+                  ocrLinesFor(
+                    scanOptions,
+                    ocr,
+                    processed.width,
+                    processed.height,
+                    outcome.rotatedDims,
+                    outcome.remapDegrees,
+                  ),
               )
-            val imageOrigin = imageProcessor.inferOrigin(originalUri, processed.exifData)
-            val outcome = runOcrAndAutoRotate(ocrProcessor, processed.file, scanOptions)
-            val ocr = outcome.result
-            val finalDims = outcome.rotatedDims ?: Pair(processed.width, processed.height)
-            // Write the parsed EXIF back onto the final JPEG (after any
-            // autoRotate re-compress) so server-side file readers see it on
-            // Android too — parity with iOS.
-            processed.exifData?.let { imageProcessor.writeExifToFile(processed.file, it) }
-            ResultBuilder.buildImage(
-              file = processed.file,
-              width = finalDims.first,
-              height = finalDims.second,
-              ocrText = ocr?.text,
-              exifData = processed.exifData,
-              imageOrigin = imageOrigin,
-              confidence = ocr?.confidence?.toDouble(),
-              ocrLines =
-                ocrLinesFor(
-                  scanOptions,
-                  ocr,
-                  processed.width,
-                  processed.height,
-                  outcome.rotatedDims,
-                  outcome.remapDegrees,
-                ),
-            )
+            } finally {
+              originalUri.path?.let { File(it).delete() }
+            }
           }
 
         promise.resolve(ResultBuilder.buildSuccess(imageResults))
@@ -303,6 +318,7 @@ class ReceiptScannerModule(
         promise.reject("PROCESSING_FAILED", e.message ?: "Gallery processing failed", e)
       } finally {
         ocrProcessor?.close()
+        originalUriStrs.forEach { uri -> uri.toUri().path?.let { File(it).delete() } }
       }
     }
   }
