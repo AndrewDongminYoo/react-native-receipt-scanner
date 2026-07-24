@@ -18,22 +18,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  guard:
-    name: Guard
-    runs-on: ubuntu-latest
-    if: >-
-      github.actor != 'dependabot[bot]' &&
-      github.actor != 'renovate[bot]' &&
-      github.actor != 'github-actions[bot]'
-    steps:
-      - name: Proceed
-        env:
-          ACTOR: ${{ github.actor }}
-        run: echo "CI proceeding for $ACTOR"
-
   lint:
     name: Lint & Typecheck
-    needs: guard
     runs-on: ubuntu-latest
 
     steps:
@@ -51,7 +37,6 @@ jobs:
 
   test:
     name: Test
-    needs: guard
     runs-on: ubuntu-latest
 
     steps:
@@ -66,7 +51,6 @@ jobs:
 
   audit:
     name: Security Audit
-    needs: guard
     runs-on: ubuntu-latest
 
     steps:
