@@ -40,6 +40,11 @@ jobs:
 
       - name: Setup
         uses: ./.github/actions/setup
+        with:
+          # Configures .npmrc for registry.npmjs.org so npm's OIDC trusted
+          # publishing has a registry to authenticate against. Without this the
+          # publish fails with ENEEDAUTH (no NODE_AUTH_TOKEN, no OIDC exchange).
+          registry-url: https://registry.npmjs.org
 
       # Trusted publishing requires npm >= 11.5.1; .nvmrc (v24.15.0) bundles 11.12.1.
       - name: Publish to npm
