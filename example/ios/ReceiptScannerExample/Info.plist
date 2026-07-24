@@ -32,12 +32,8 @@
 	<true/>
 	<key>NSAppTransportSecurity</key>
 	<dict>
-	  <!-- Developer test harness: arbitrary HTTP is allowed so the "API 전송 테스트"
-	       page can hit non-HTTPS dev/staging endpoints. App Store review may require
-	       justification for this; it is intentional for this example app, not a
-	       production release. -->
 		<key>NSAllowsArbitraryLoads</key>
-		<true/>
+		<false/>
 		<key>NSAllowsLocalNetworking</key>
 		<true/>
 	</dict>
