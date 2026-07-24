@@ -200,8 +200,10 @@ class ReceiptScannerModule(
 
         promise.resolve(ResultBuilder.buildSuccess(imageResults))
       } catch (e: OutOfMemoryError) {
+        // Report under the documented PROCESSING_FAILED code (the public error
+        // contract has no OUT_OF_MEMORY); the message still names the cause.
         promise.reject(
-          "OUT_OF_MEMORY",
+          "PROCESSING_FAILED",
           "Image too large to process: ${e.message ?: "out of memory"}",
           e,
         )
@@ -290,8 +292,10 @@ class ReceiptScannerModule(
         promise.resolve(ResultBuilder.buildSuccess(imageResults))
       } catch (e: OutOfMemoryError) {
         // OOM is Error, not Exception — convert to reject instead of killing the executor.
+        // Report under the documented PROCESSING_FAILED code (the public error
+        // contract has no OUT_OF_MEMORY); the message still names the cause.
         promise.reject(
-          "OUT_OF_MEMORY",
+          "PROCESSING_FAILED",
           "Image too large to process: ${e.message ?: "out of memory"}",
           e,
         )
