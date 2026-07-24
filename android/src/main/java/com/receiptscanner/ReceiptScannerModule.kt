@@ -225,6 +225,13 @@ class ReceiptScannerModule(
       return
     }
 
+    // The crop editor reports an enforced-limit failure (e.g. oversized image)
+    // as RESULT_OK + EXTRA_ERROR so it is not mistaken for a user cancel.
+    data.getStringExtra(CropEditorActivity.EXTRA_ERROR)?.let { error ->
+      promise.reject("PROCESSING_FAILED", error)
+      return
+    }
+
     val originalUriStrs = data.getStringArrayExtra(CropEditorActivity.EXTRA_ORIGINAL_URIS)
     val allCorners = data.getFloatArrayExtra(CropEditorActivity.EXTRA_ALL_CORNERS)
     Log.i(
