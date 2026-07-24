@@ -45,8 +45,6 @@
 	<string>We use a camera to scan receipts.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>We collect location data from scanned receipts.</string>
-	<key>NSPhotoLibraryUsageDescription</key>
-	<string>We read photo metadata to identify whether an image is a camera photo, screenshot, or download.</string>
 	<key>RCTNewArchEnabled</key>
 	<true/>
 	<key>UILaunchStoryboardName</key>

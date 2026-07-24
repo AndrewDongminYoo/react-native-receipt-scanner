@@ -23,7 +23,7 @@ No code in this package or (per Decision 1) the consuming app blocks an upload b
 
 How it is inferred today (precedence-ordered rules are documented in [`api-contract.md` § `imageOrigin` platform behavior](./api-contract.md#imageorigin-platform-behavior); the points below name only the signals the failure-mode analysis depends on):
 
-- **iOS** (`RNGalleryPickerDelegate.m`): `PHAssetMediaSubtypePhotoScreenshot` when Photos access is granted, else an EXIF heuristic over `dateTimeOriginal` / `make` / `model`. With no camera metadata at all the EXIF heuristic returns `download`; partial metadata falls through to `unknown`.
+- **iOS** (`RNGalleryPickerDelegate.m`): an EXIF heuristic over `dateTimeOriginal` / `make` / `model`. With no camera metadata at all the EXIF heuristic returns `download`; partial metadata falls through to `unknown`.
 - **Android** (`ImageProcessor.inferOrigin`): `MediaStore.BUCKET_DISPLAY_NAME` exact-match, else the same EXIF heuristic. The EXIF fallback never returns `download` — only an explicit bucket match does.
 - The **GMS camera gallery-import path** strips EXIF and hides the original URI, collapsing origin to `unknown` — one reason that path was disabled.
 
@@ -45,7 +45,7 @@ The classifier infers origin from signals that are **not reliably present on leg
    A Korean device or a custom gallery folder may not match `"camera"`, dropping a real camera capture to the EXIF fallback and then to `unknown`.
 
 4. **Cross-platform non-comparability.**
-   iOS and Android fill the same enum from different signals (PHAsset+EXIF vs bucket+EXIF), and `unknown` is _permissive, not suspicious_ by design.
+   iOS and Android fill the same enum from different signals (EXIF vs bucket+EXIF), and `unknown` is _permissive, not suspicious_ by design.
    A single cross-platform enforcement threshold is structurally invalid — the platforms' `unknown`/`download` populations are not the same thing.
 
 The cost is asymmetric: **blocking a legitimate user is far more expensive than letting a questionable image through**, because the latter is caught downstream by server-side receipt validation, while the former is a silent, unrecoverable rejection of a paying user. This asymmetry is why the bar for enforcement is high.

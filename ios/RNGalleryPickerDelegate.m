@@ -5,7 +5,6 @@
 #import "RNQuadGeometry.h"
 #import <UIKit/UIKit.h>
 #import <PhotosUI/PhotosUI.h>
-#import <Photos/Photos.h>
 #import <Vision/Vision.h>
 #import <CoreImage/CoreImage.h>
 #import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
@@ -73,7 +72,6 @@ static VNDetectRectanglesRequest *MakeReceiptRectangleRequest(float minimumConfi
 @interface RNGalleryPickerDelegate () <PHPickerViewControllerDelegate>
 @property (nonatomic, strong) RNScanOptions                      *options;
 @property (nonatomic, weak)   UIViewController                   *presentingVC;
-@property (nonatomic, assign) BOOL                                hasLibraryAccess;
 @property (nonatomic, copy)   RNResolveBlock                      resolve;
 @property (nonatomic, copy)   RNRejectBlock                       reject;
 @property (nonatomic, strong) NSMutableArray<NSDictionary *>     *results;
@@ -88,14 +86,12 @@ static VNDetectRectanglesRequest *MakeReceiptRectangleRequest(float minimumConfi
 
 - (instancetype)initWithOptions:(RNScanOptions *)options
        presentingViewController:(UIViewController *)presentingVC
-               hasLibraryAccess:(BOOL)hasLibraryAccess
                         resolve:(RNResolveBlock)resolve
                          reject:(RNRejectBlock)reject {
     self = [super init];
     if (self) {
         _options           = options;
         _presentingVC      = presentingVC;
-        _hasLibraryAccess  = hasLibraryAccess;
         _resolve           = resolve;
         _reject            = reject;
         _results           = [NSMutableArray new];
@@ -141,9 +137,6 @@ didFinishPicking:(NSArray<PHPickerResult *> *)results {
     PHPickerResult *item = self.queuedItems[self.queueIndex];
     self.queueIndex++;
 
-    // PHAsset fetch is synchronous for local identifiers — safe on main thread.
-    NSString *earlyOrigin = [self originForPickerResult:item];
-
     [item.itemProvider loadDataRepresentationForTypeIdentifier:UTTypeImage.identifier
                                              completionHandler:^(NSData *data, NSError *err) {
         if (!data || err) {
@@ -158,25 +151,8 @@ didFinishPicking:(NSArray<PHPickerResult *> *)results {
             [self didFinishOneItem:nil];
             return;
         }
-        [self detectRectangleAndCrop:image sourceHolder:sourceHolder earlyOrigin:earlyOrigin];
+        [self detectRectangleAndCrop:image sourceHolder:sourceHolder earlyOrigin:nil];
     }];
-}
-
-// Returns a definitive imageOrigin from the Photos library if library access is available,
-// or nil if origin cannot be determined at this stage (EXIF heuristics run later).
-- (nullable NSString *)originForPickerResult:(PHPickerResult *)result {
-    if (!self.hasLibraryAccess || !result.assetIdentifier) return nil;
-
-    PHFetchResult<PHAsset *> *fetchResult = [PHAsset fetchAssetsWithLocalIdentifiers:@[result.assetIdentifier] options:nil];
-    PHAsset *asset = fetchResult.firstObject;
-    if (!asset) return nil;
-
-    if (asset.mediaSubtypes & PHAssetMediaSubtypePhotoScreenshot) {
-        return @"screenshot";
-    }
-    // No dedicated "download" subtype in Photos framework.
-    // Fall through to EXIF heuristics in processAndFinishCGImage:.
-    return nil;
 }
 
 // Classifies imageOrigin from three EXIF indicators.
@@ -405,7 +381,7 @@ static NSString * _Nullable OriginFromExifFields(NSString *make, NSString *model
         ocrLines = nil;
     }
 
-    // Priority: PHAsset subtype → extracted exifData → raw source properties → "unknown".
+    // Prefer extracted EXIF, then fall back to the raw source properties.
     // The source-ref read is gated on exifData being nil so we don't decode the same TIFF/EXIF
     // dictionaries twice when extraction already ran (includeExif:YES).
     NSString *imageOrigin = earlyOrigin
@@ -448,4 +424,3 @@ static NSString * _Nullable OriginFromExifFields(NSString *make, NSString *model
 }
 
 @end
-
