@@ -1,5 +1,58 @@
 # Changelog
 
+## [0.7.0](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/compare/v0.6.0...v0.7.0) (2026-07-24)
+
+### Features
+
+- add ocrGeometry option and OcrLine result type ([62212c6](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/commit/62212c64c39fe135739d9d349783ff7b15b1a3a3))
+- add sample receipt images for angle detection ([54dc7cb](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/commit/54dc7cbb58da9941deb27d1157f000b965add7a3))
+- **android:** return per-line OCR geometry in the output frame ([bc1c3f9](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/commit/bc1c3f976cf8c17f5c13ebe3849d004cfba8dc51))
+- **android:** route autoRotate on ML Kit text angle ([74d6ddf](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/commit/74d6ddf427bde9da1037218258295ec16c90ca80))
+- **example:** overlay OCR text regions with a scan-line sweep ([f530e77](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/commit/f530e77990fbd6d03965602a89790c514def528d))
+- **example:** surface full scan option matrix and OCR fixture dump ([5847010](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/commit/584701030ebca5ca2a74fb8dd782f9ce6959685c))
+- **ios:** return per-line OCR geometry in the output frame ([263b0f7](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/commit/263b0f7728576f9fce6755299cef1ac078fc7e96))
+- **ios:** route autoRotate on Vision text angle ([4ab8c62](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/commit/4ab8c62dfeba6f161168b444375822dd2f4802ad))
+- **ocr:** add text-angle rotation helpers to OcrGeometry ([f7fe357](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/commit/f7fe357cbf403118b8e6b49b2ed88e4cc4f089a4))
+
+### Bug Fixes
+
+- 🐛 avoid iOS gallery Photos permission (behavioral) ([2fc0218](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/commit/2fc0218c1c34bb1fe5095053dff0e6198e690392))
+- 🐛 bound and clean gallery cache copies (behavioral) ([9dddce4](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/commit/9dddce4c6533976d59f6c7cb4f720d56418cb331))
+- 🐛 bound Android scan memory usage (behavioral) ([ca58d01](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/commit/ca58d010e0a9af4df0950b7288810e2dc409ad20))
+- 🐛 run CI checks for bot pull requests ([2d5c4a0](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/commit/2d5c4a0e5062719fa3ad711934e6502c3a349972))
+- **android:** dismiss crop editor immediately and bound aggregate cache ([43bfbfc](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/commit/43bfbfc99af625f6d1346ac9ecf4f72403bfc63e))
+- **android:** re-recognize after auto-rotate so ocrText matches the output ([c5b0274](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/commit/c5b02740f50dd480e3b8a8655def22e286666213))
+- **android:** reject OOM under the documented PROCESSING_FAILED code ([ae11ff1](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/commit/ae11ff19449667af171150f5999a626d04920325))
+- **android:** report OCR confidence on the aspect-matched path ([220f0be](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/commit/220f0be6a58ed60ae523c7679c2d819803f133d7))
+- **android:** serialize gallery cache cleanup and surface oversized selections ([e02b93d](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/commit/e02b93df3460be9503f9a623031bbc2f0a91821b))
+- **android:** treat an empty re-read as a failed one ([5836d02](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/commit/5836d02a8f5f1d19a6760138591cdeeb488cab4a)), closes [#5](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/issues/5)
+- correct spelling of "normalized" in comments across multiple files ([d9a113a](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/commit/d9a113a5108b4ed22390de77d1f7c8d2763f8bc2))
+- correct spelling of "recognizer" and "serializes" in comments across multiple files ([4607b8f](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/commit/4607b8f471c174d8c978910893751434d2c25700))
+- downgrade react and react-dom to version 19.2.3 ([3065906](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/commit/306590664614e45e1013b4346e5a0decd6206d6b))
+- **example:** 🐛 secure release network transport (behavioral) ([fd64f87](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/commit/fd64f87a970cc769557b735d0efbca966b5eeb14))
+- **ios:** 🐛 validate ocrGeometry option type ([05c9e41](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/commit/05c9e419aa87f20257f6576078dabf42da752fba))
+- **ios:** clamp maxPages to 1..10 to match Android ([28a7640](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/commit/28a76402af50d77b5aad78f36df4963484d46afd))
+- **ios:** class-check all bridged scan options, not just ocrGeometry ([ef528b6](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/commit/ef528b6498487afd7037cc58a1b40fafae04de5b))
+- **ios:** match Kotlin's quarter-turn tie rule ([055079a](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/commit/055079a82ff0e43db43f23ab6a330e742c7aea0b))
+- **ios:** rescale OCR boxes onto the encoded output frame ([5b20217](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/commit/5b2021713a123dc901fde58aea62c4663a56b688))
+
+### Documentation
+
+- add ocr-line-geometry implementation plan ([930dcfe](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/commit/930dcfe769f73fd986f044d35423515aa7304b67))
+- add ocr-line-geometry spec for 0.7.0 ([6186c87](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/commit/6186c87f1480f195d8f0639b116407dd5c2e02eb))
+- align iOS imageOrigin references with permissionless gallery ([ca3d591](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/commit/ca3d591c1a3ab12cac9860ac757b68dfb1bd3441))
+- **android:** correct the OcrResult.text rotation claim ([92083d5](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/commit/92083d5b73df4d9a95d7f9a9016710a53c3375ed))
+- fix references left stale by the angle redesign ([eb335a1](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/commit/eb335a1c2fdc28e78eb36aa2428613dc8d8e3db6)), closes [#5](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/issues/5)
+- record 0.7.0 device QA and the autoRotate detection findings ([da0bbbd](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/commit/da0bbbd9f308af8a9576e95434386a97b25ab06d))
+- record 2026-07-19 device QA — angle signal confirmed ([a1d03c8](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/commit/a1d03c826bf1599509b523ffbfaa1d84b45ce9f4))
+- record 2026-07-19 second QA — reorder fixed, 180 detection works ([4856b29](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/commit/4856b29e01df8f0aa910e10d50bb27b486bcc11b))
+- record the angle-based rotation redesign ([b482614](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/commit/b4826148feccddcce949d7973bf77e3f5146b5d6))
+- record the decision to leave -Wconversion off ([66b7467](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/commit/66b74678d51c781d167bb33536fb6df12106bb14))
+- record the OCR geometry contract and the clockwise rotation canon ([eece4d0](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/commit/eece4d046d464db59fae777a0ee94e0108b958c1))
+- record the re-OCR resolution for Android ocrText ordering ([0f1649c](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/commit/0f1649c66a32fd699dd727d3db573b5202f2e329))
+- stop calling the device matrix complete while iOS 180 is open ([b0e2400](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/commit/b0e2400429558f3a8242e1947e4dc9fda66a2a80))
+- sync ADRs, plans, specs and scrub internal ops references ([be770d9](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/commit/be770d9abe0a2acecefb3f85891e912773daa07e))
+
 ## [0.6.0](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/compare/v0.5.0...v0.6.0) (2026-06-22)
 
 Gallery crop robustness. Adds a cross-platform quad-distortion backstop so a bad document detection no longer warps a receipt into a distorted image, and discards low-confidence gallery detections that previously latched onto a screenshot's UI chrome. No public API changes — drop-in upgrade from 0.5.0.

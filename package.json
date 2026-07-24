@@ -1,6 +1,6 @@
 {
   "name": "react-native-receipt-scanner",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "Receipt document scanner for React Native. Wraps ML Kit (Android) and VisionKit + Vision (iOS) with a unified API for scanning, interactive perspective-crop, JPEG compression, EXIF extraction, and on-device OCR.",
   "main": "./lib/module/index.js",
   "types": "./lib/typescript/src/index.d.ts",
