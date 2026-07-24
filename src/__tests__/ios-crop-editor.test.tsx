@@ -32,4 +32,16 @@ describe("iOS scan options", () => {
     expect(scanOptions).toContain('RNBoolFromValue(dict[@"ocrGeometry"], NO)');
     expect(scanOptions).toContain("[value isKindOfClass:[NSNumber class]]");
   });
+
+  it("class-checks every bridged scalar option, not just ocrGeometry", () => {
+    const scanOptions = iosSource("RNScanOptions.m");
+
+    // Numeric options route through the same guarded helpers as the booleans.
+    expect(scanOptions).toContain('RNIntegerFromValue(dict[@"maxPages"]');
+    expect(scanOptions).toContain('RNDoubleFromValue(dict[@"quality"]');
+    expect(scanOptions).toContain('RNBoolFromValue(dict[@"includeExif"]');
+    // `source` must be class-checked before -isEqualToString: to avoid a crash
+    // when a non-string is bridged in.
+    expect(scanOptions).toContain("[src isKindOfClass:[NSString class]]");
+  });
 });
