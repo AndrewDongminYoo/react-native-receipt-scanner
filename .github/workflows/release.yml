@@ -43,10 +43,6 @@ jobs:
 
       # Trusted publishing requires npm >= 11.5.1; .nvmrc (v24.15.0) bundles 11.12.1.
       - name: Publish to npm
-        env:
-          # Trusted publishing turns provenance on by default, but sigstore
-          # attestations cannot be generated from a private source repo.
-          NPM_CONFIG_PROVENANCE: "false"
         run: npm publish
 
   build-android:
