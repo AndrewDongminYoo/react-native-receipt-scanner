@@ -1,11 +1,11 @@
 package com.receiptscanner
 
-import java.io.ByteArrayInputStream
-import java.io.File
-import java.nio.file.Files
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertThrows
 import org.junit.Test
+import java.io.ByteArrayInputStream
+import java.io.File
+import java.nio.file.Files
 
 class GalleryCacheCopierTest {
   @Test
