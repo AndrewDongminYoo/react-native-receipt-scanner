@@ -10,7 +10,7 @@ import com.facebook.react.bridge.ReadableMap
  * a contract violation rather than a "use the default" signal.
  *
  * @property source Acquisition path: `"camera"` or `"gallery"`.
- * @property maxPages Page / multi-select limit (coerced `>= 1`).
+ * @property maxPages Page / multi-select limit (coerced to `1..10`).
  * @property quality JPEG compression target in `[0.0, 1.0]`.
  * @property includeExif Whether to read and forward source EXIF.
  * @property includeGpsExif Whether to forward the GPS dictionary specifically.
@@ -47,7 +47,7 @@ data class ScanOptions(
           },
         maxPages =
           if (map.hasKey("maxPages")) {
-            map.getInt("maxPages").coerceAtLeast(1)
+            map.getInt("maxPages").coerceIn(1, MAX_PAGES)
           } else {
             1
           },
@@ -59,5 +59,7 @@ data class ScanOptions(
         includeRawExif = if (map.hasKey("includeRawExif")) map.getBoolean("includeRawExif") else false,
         ocrGeometry = if (map.hasKey("ocrGeometry")) map.getBoolean("ocrGeometry") else false,
       )
+
+    internal const val MAX_PAGES = 10
   }
 }

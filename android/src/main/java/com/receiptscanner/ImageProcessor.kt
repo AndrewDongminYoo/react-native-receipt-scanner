@@ -126,7 +126,7 @@ class ImageProcessor(
     includeRawExif: Boolean = false,
     synthesizeDeviceInfo: Boolean = false,
   ): ProcessedImage {
-    val bitmap = decodeBitmap(sourceUri)
+    val (bitmap) = decodeBitmapSampled(context, sourceUri, MAX_PROCESSING_DIM)
     val width = bitmap.width
     val height = bitmap.height
     val outFile = File(context.cacheDir, "receipt_${System.currentTimeMillis()}.jpg")
@@ -188,16 +188,6 @@ class ImageProcessor(
     } catch (e: Exception) {
       Log.w(LOG_TAG, "Failed to write EXIF to ${file.name}: ${e.message}")
     }
-  }
-
-  private fun decodeBitmap(uri: Uri): Bitmap {
-    if (uri.scheme == "content") {
-      return context.contentResolver.openInputStream(uri)?.use { stream ->
-        BitmapFactory.decodeStream(stream)
-      } ?: throw IllegalArgumentException("Failed to open content stream: $uri")
-    }
-    val path = requireNotNull(uri.path) { "URI has no path: $uri" }
-    return requireNotNull(BitmapFactory.decodeFile(path)) { "Failed to decode image: $path" }
   }
 
   private fun emptyExifData(): ExifData =
@@ -396,7 +386,7 @@ class ImageProcessor(
     includeRawExif: Boolean = false,
   ): ProcessedImage {
     val exifOrientation = readExifOrientation(originalUri)
-    val (raw, sample) = decodeBitmapSampled(context, originalUri, GALLERY_MAX_DIM)
+    val (raw, sample) = decodeBitmapSampled(context, originalUri, MAX_PROCESSING_DIM)
     val oriented = applyExifRotation(raw, exifOrientation)
     // corners arrive in full-resolution oriented space (CropEditorActivity's
     // originalWidth/Height); scale by 1/sample to match the decoded bitmap.
@@ -615,7 +605,7 @@ class ImageProcessor(
      * (~72MB) is still risky on 2GB-RAM devices; raising it costs visible OCR
      * accuracy ceiling on Korean receipts only above ~3000 px.
      */
-    private const val GALLERY_MAX_DIM = 3072
+    private const val MAX_PROCESSING_DIM = 3072
 
     /** EXIF tag values whose payload is binary or large enough to bloat the IPC bridge. */
     private val rawTagDenyList: Set<String> =
@@ -681,14 +671,7 @@ class ImageProcessor(
         BitmapFactory.decodeFile(path, boundsOpts)
       }
 
-      var sample = 1
-      var w = boundsOpts.outWidth
-      var h = boundsOpts.outHeight
-      while (w > maxDim || h > maxDim) {
-        sample *= 2
-        w /= 2
-        h /= 2
-      }
+      val sample = sampleSizeForBounds(boundsOpts.outWidth, boundsOpts.outHeight, maxDim)
 
       val decodeOpts = BitmapFactory.Options().apply { inSampleSize = sample }
       val bitmap =
@@ -700,6 +683,22 @@ class ImageProcessor(
           BitmapFactory.decodeFile(requireNotNull(uri.path), decodeOpts)
         } ?: throw IllegalArgumentException("Failed to decode image: $uri")
       return Pair(bitmap, sample)
+    }
+
+    internal fun sampleSizeForBounds(
+      width: Int,
+      height: Int,
+      maxDim: Int,
+    ): Int {
+      var sample = 1
+      var sampledWidth = width
+      var sampledHeight = height
+      while (sampledWidth > maxDim || sampledHeight > maxDim) {
+        sample *= 2
+        sampledWidth /= 2
+        sampledHeight /= 2
+      }
+      return sample
     }
 
     /**
