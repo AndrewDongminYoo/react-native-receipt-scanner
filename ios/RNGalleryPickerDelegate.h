@@ -9,8 +9,7 @@ NS_ASSUME_NONNULL_BEGIN
 /**
  * `PHPickerViewControllerDelegate` adapter for the gallery path.
  *
- * Pipeline: `PHPicker` selection → `PHAsset` origin lookup (when library
- * authorization is granted) → `VNDetectDocumentSegmentationRequest` (with
+ * Pipeline: `PHPicker` selection → `VNDetectDocumentSegmentationRequest` (with
  * a `VNDetectRectanglesRequest` fallback) → `RNCropEditorViewController`
  * (skipped when `cropAutoConfirm` is `YES` and detection confidence is high)
  * → `RNImageProcessor` for perspective correction, EXIF read, and JPEG
@@ -28,16 +27,11 @@ NS_ASSUME_NONNULL_BEGIN
  * @param options Parsed scan options.
  * @param presentingVC The view controller that will present the picker /
  *                     crop editor. Held weakly.
- * @param hasLibraryAccess `YES` when the user has granted Photos
- *        authorization. Determines whether `PHPickerResult.assetIdentifier`
- *        is populated, enabling definitive origin classification (screenshot
- *        subtype, etc.).
  * @param resolve Block to call with the success / cancelled payload.
  * @param reject Block to call on failure.
  */
 - (instancetype)initWithOptions:(RNScanOptions *)options
        presentingViewController:(UIViewController *)presentingVC
-               hasLibraryAccess:(BOOL)hasLibraryAccess
                         resolve:(RNResolveBlock)resolve
                          reject:(RNRejectBlock)reject;
 

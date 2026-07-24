@@ -213,12 +213,12 @@ v1.3부터 있던 동작이나 회전이 한 분기에서만 발동해 드물었
 
 (api-contract.md "imageOrigin platform behavior" 참조)
 
-| Source            | iOS                              | Android                                           |
-| ----------------- | -------------------------------- | ------------------------------------------------- |
-| `source: camera`  | `"camera"` 항상                  | `"camera"` 항상                                   |
-| `source: gallery` | PHAsset subtype + EXIF heuristic | MediaStore `BUCKET_DISPLAY_NAME` + EXIF heuristic |
+| Source            | iOS                                | Android                                           |
+| ----------------- | ---------------------------------- | ------------------------------------------------- |
+| `source: camera`  | `"camera"` 항상                    | `"camera"` 항상                                   |
+| `source: gallery` | EXIF 휴리스틱 (권한 없는 PHPicker) | MediaStore `BUCKET_DISPLAY_NAME` + EXIF heuristic |
 
-**Resolution path.** 비범위. 같은 4-value enum을 다른 신호로 채움. `api-contract.md` "imageOrigin platform behavior" 표 참조.
+**Resolution path.** 비범위. 같은 enum을 다른 신호로 채움. iOS 갤러리는 권한 없는 `PHPickerViewController`로 전환되어 PHAsset subtype 신호가 없다 — EXIF만으로 `"camera"` / `"download"` / `"unknown"` 3-value만 채우고, 스크린샷처럼 카메라 EXIF가 없는 이미지는 `"download"`로 분류된다(`"screenshot"`은 iOS에서 나오지 않는다). Android는 MediaStore 버킷으로 `"screenshot"`까지 4-value를 채운다. `api-contract.md` "imageOrigin platform behavior" 표 참조.
 
 ## 6. 추후 확인 / 추가 가능성
 

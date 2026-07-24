@@ -4,7 +4,6 @@
 #import "RNGalleryPickerDelegate.h"
 #import <UIKit/UIKit.h>
 #import <VisionKit/VisionKit.h>
-#import <Photos/Photos.h>
 #import <PhotosUI/PhotosUI.h>
 #import <React/RCTUtils.h>
 
@@ -84,57 +83,13 @@
                            presentingVC:(UIViewController *)presentingVC
                                 resolve:(RNResolveBlock)resolve
                                  reject:(RNRejectBlock)reject {
-    // We need library authorization so PHPickerResult.assetIdentifier is populated,
-    // enabling definitive imageOrigin detection (screenshot subtype, etc.).
-    // The picker itself works without authorization — we only need it for metadata.
-    // Only show the system prompt when status is undecided; otherwise present immediately
-    // so we don't add an async hop to every gallery scan.
-    PHAuthorizationStatus status = [PHPhotoLibrary authorizationStatus];
-    if (status == PHAuthorizationStatusNotDetermined) {
-        [PHPhotoLibrary requestAuthorization:^(PHAuthorizationStatus newStatus) {
-            BOOL hasAccess = (newStatus == PHAuthorizationStatusAuthorized ||
-                              newStatus == PHAuthorizationStatusLimited);
-            dispatch_async(dispatch_get_main_queue(), ^{
-                [self showPickerWithOptions:options
-                               presentingVC:presentingVC
-                            hasLibraryAccess:hasAccess
-                                    resolve:resolve
-                                     reject:reject];
-            });
-        }];
-        return;
-    }
-
-    BOOL hasAccess = (status == PHAuthorizationStatusAuthorized ||
-                      status == PHAuthorizationStatusLimited);
-    [self showPickerWithOptions:options
-                   presentingVC:presentingVC
-                hasLibraryAccess:hasAccess
-                        resolve:resolve
-                         reject:reject];
-}
-
-- (void)showPickerWithOptions:(RNScanOptions *)options
-                 presentingVC:(UIViewController *)presentingVC
-             hasLibraryAccess:(BOOL)hasLibraryAccess
-                      resolve:(RNResolveBlock)resolve
-                       reject:(RNRejectBlock)reject {
-    PHPickerConfiguration *config;
-    if (hasLibraryAccess) {
-        // Library-backed config: assetIdentifier is populated in PHPickerResult,
-        // allowing PHAsset metadata queries (screenshot subtype, etc.).
-        config = [[PHPickerConfiguration alloc]
-                    initWithPhotoLibrary:[PHPhotoLibrary sharedPhotoLibrary]];
-    } else {
-        config = [[PHPickerConfiguration alloc] init];
-    }
+    PHPickerConfiguration *config = [[PHPickerConfiguration alloc] init];
     config.filter         = [PHPickerFilter imagesFilter];
     config.selectionLimit = options.maxPages;
 
     RNGalleryPickerDelegate *delegate =
         [[RNGalleryPickerDelegate alloc] initWithOptions:options
                                 presentingViewController:presentingVC
-                                        hasLibraryAccess:hasLibraryAccess
                                                  resolve:resolve
                                                   reject:reject];
     self.galleryDelegate = delegate;

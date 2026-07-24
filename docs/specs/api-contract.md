@@ -166,19 +166,19 @@ type ReceiptImage = {
 
 ### `imageOrigin` platform behavior
 
-| Source            | iOS                                                                     | Android                                                                           |
-| ----------------- | ----------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
-| `source: camera`  | `"camera"` (always)                                                     | `"camera"` (always)                                                               |
-| `source: gallery` | PHAsset-based: `"screenshot"`, `"camera"`, `"download"`, or `"unknown"` | MediaStore bucket-based: `"screenshot"`, `"camera"`, `"download"`, or `"unknown"` |
+| Source            | iOS                                                  | Android                                                                           |
+| ----------------- | ---------------------------------------------------- | --------------------------------------------------------------------------------- |
+| `source: camera`  | `"camera"` (always)                                  | `"camera"` (always)                                                               |
+| `source: gallery` | EXIF-based: `"camera"`, `"download"`, or `"unknown"` | MediaStore bucket-based: `"screenshot"`, `"camera"`, `"download"`, or `"unknown"` |
 
 **iOS gallery detection logic (in priority order):**
 
-1. `PHAssetMediaSubtypePhotoScreenshot` → `"screenshot"` (definitive, requires `NSPhotoLibraryUsageDescription` in `Info.plist`)
-2. EXIF has `make` + `model` + `dateTimeOriginal` → `"camera"`
-3. EXIF has none of those fields → `"download"`
-4. Partial or missing EXIF → `"unknown"`
+1. EXIF has `dateTimeOriginal`, or both `make` + `model` → `"camera"`
+2. EXIF has none of those fields → `"download"`
+3. Partial EXIF → `"unknown"`
 
-If the user denies photo library permission, PHAsset detection is skipped and only EXIF heuristics (steps 2–4) are used.
+The gallery picker does not request Photos library authorization. In particular, iOS screenshots
+without camera EXIF are classified as `"download"` rather than `"screenshot"`.
 
 **Android gallery detection logic (in priority order):**
 

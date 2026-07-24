@@ -8,6 +8,14 @@ const iosSource = (...segments: string[]) =>
   fs.readFileSync(path.join(__dirname, "..", "..", "ios", ...segments), "utf8");
 
 describe("iOS gallery crop editor", () => {
+  it("opens the system photo picker without requesting library authorization", () => {
+    const receiptScanner = iosSource("ReceiptScanner.mm");
+
+    expect(receiptScanner).toContain("[[PHPickerConfiguration alloc] init]");
+    expect(receiptScanner).not.toContain("requestAuthorization");
+    expect(receiptScanner).not.toContain("initWithPhotoLibrary");
+  });
+
   it("starts detected document crops with a wider corner selection", () => {
     const cropEditor = iosSource("RNCropEditorViewController.m");
 
