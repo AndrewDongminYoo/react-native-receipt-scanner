@@ -245,13 +245,17 @@ export type ReceiptExif = {
  * Best-effort classification of where the image came from.
  *
  * - `"camera"` — captured by the device camera (strong EXIF signal).
- * - `"screenshot"` — system screenshot (iOS PHAsset subtype, Android bucket name).
+ * - `"screenshot"` — system screenshot. **Android only**: detected from the
+ *   MediaStore bucket name. iOS cannot report this — the gallery flow is a
+ *   permissionless `PHPickerViewController` with no PHAsset subtype signal, so
+ *   EXIF-less images (screenshots included) are classified as `"download"`.
  * - `"download"` — saved from a network source; no camera-style EXIF.
  * - `"unknown"` — no determinative signal available.
  *
- * Used by consumers as a coarse fraud / source filter. iOS has stronger
- * signals (PHAsset subtypes); Android falls back to MediaStore bucket name
- * plus EXIF heuristics.
+ * Used by consumers as a coarse fraud / source filter. iOS classifies from
+ * EXIF only (`"camera"` / `"download"` / `"unknown"`); Android adds the
+ * MediaStore bucket name (also yielding `"screenshot"`). See the
+ * `imageOrigin` platform behavior table in `docs/specs/api-contract.md`.
  */
 export type ImageOrigin = "camera" | "screenshot" | "download" | "unknown";
 

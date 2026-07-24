@@ -55,7 +55,7 @@ yarn example ios            # Run on iOS simulator
 
 The library does not declare runtime permissions for its host. Consuming apps must add:
 
-- iOS `Info.plist` — `NSCameraUsageDescription` and `NSPhotoLibraryUsageDescription`. No location permission is required: `includeGpsExif` only copies the EXIF GPS dictionary already present in the source image; there is no `CLLocationManager` call.
+- iOS `Info.plist` — `NSCameraUsageDescription` only. The gallery flow uses `PHPickerViewController`, which reads no Photos authorization, so `NSPhotoLibraryUsageDescription` is **not** required. No location permission is required either: `includeGpsExif` only copies the EXIF GPS dictionary already present in the source image; there is no `CLLocationManager` call.
 - Android `AndroidManifest.xml` — only `android.permission.INTERNET`. ML Kit Document Scanner handles camera grant via Play Services, and the custom gallery flow uses the system photo picker (no `READ_MEDIA_IMAGES`).
 
 ## Architecture
