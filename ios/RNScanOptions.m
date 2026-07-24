@@ -43,7 +43,9 @@ static double RNDoubleFromValue(id value, double defaultValue) {
     id src = RNNullToNil(dict[@"source"]);
     opts.source = ([src isKindOfClass:[NSString class]] && [src isEqualToString:@"gallery"]) ? @"gallery" : @"camera";
 
-    opts.maxPages = MAX(1, RNIntegerFromValue(dict[@"maxPages"], 1));
+    // Clamp to 1..10, matching Android's ScanOptions.MAX_PAGES so the same
+    // public option yields the same page count on both platforms.
+    opts.maxPages = MIN(10, MAX(1, RNIntegerFromValue(dict[@"maxPages"], 1)));
     opts.quality  = MAX(0.0, MIN(1.0, RNDoubleFromValue(dict[@"quality"], 0.82)));
 
     opts.includeExif      = RNBoolFromValue(dict[@"includeExif"], YES);

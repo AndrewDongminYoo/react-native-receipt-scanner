@@ -153,13 +153,13 @@ class ReceiptScannerModule(
         return
       }
 
-    val pages = scanningResult?.pages ?: emptyList()
+    // Do not rely solely on ML Kit honoring its configured page limit.
+    val pages = scanningResult?.pages?.take(scanOptions.maxPages) ?: emptyList()
 
     executor.execute {
+      var ocrProcessor: OcrProcessor? = null
       try {
-        val ocrProcessor =
-          if (scanOptions.ocr) OcrProcessor() else null
-
+        ocrProcessor = if (scanOptions.ocr) OcrProcessor() else null
         val imageResults =
           pages.map { page ->
             val processed =
@@ -198,10 +198,19 @@ class ReceiptScannerModule(
             )
           }
 
-        ocrProcessor?.close()
         promise.resolve(ResultBuilder.buildSuccess(imageResults))
+      } catch (e: OutOfMemoryError) {
+        // Report under the documented PROCESSING_FAILED code (the public error
+        // contract has no OUT_OF_MEMORY); the message still names the cause.
+        promise.reject(
+          "PROCESSING_FAILED",
+          "Image too large to process: ${e.message ?: "out of memory"}",
+          e,
+        )
       } catch (e: Exception) {
         promise.reject("PROCESSING_FAILED", e.message ?: "Image processing failed", e)
+      } finally {
+        ocrProcessor?.close()
       }
     }
   }
@@ -283,8 +292,10 @@ class ReceiptScannerModule(
         promise.resolve(ResultBuilder.buildSuccess(imageResults))
       } catch (e: OutOfMemoryError) {
         // OOM is Error, not Exception — convert to reject instead of killing the executor.
+        // Report under the documented PROCESSING_FAILED code (the public error
+        // contract has no OUT_OF_MEMORY); the message still names the cause.
         promise.reject(
-          "OUT_OF_MEMORY",
+          "PROCESSING_FAILED",
           "Image too large to process: ${e.message ?: "out of memory"}",
           e,
         )

@@ -37,9 +37,10 @@ export type ScanReceiptOptions = {
    */
   source?: "camera" | "gallery";
   /**
-   * Maximum number of pages the user is allowed to capture. Coerced to
-   * `>= 1` natively. The camera path enforces this as a page limit; the
-   * gallery path enforces it as a multi-select limit.
+   * Maximum number of pages the user is allowed to capture. Clamped to
+   * `1..10` natively on both platforms (values above 10 are capped to bound
+   * memory use). The camera path enforces this as a page limit; the gallery
+   * path enforces it as a multi-select limit.
    *
    * @defaultValue `1`
    */

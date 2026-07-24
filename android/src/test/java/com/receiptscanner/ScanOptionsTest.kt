@@ -37,6 +37,13 @@ class ScanOptionsTest {
   }
 
   @Test
+  fun `from caps maxPages to the native processing limit`() {
+    val map = JavaOnlyMap().apply { putInt("maxPages", 100) }
+
+    assertEquals(10, ScanOptions.from(map).maxPages)
+  }
+
+  @Test
   fun `from reads quality`() {
     val map = JavaOnlyMap().apply { putDouble("quality", 0.5) }
     assertEquals(0.5, ScanOptions.from(map).quality, 0.001)
