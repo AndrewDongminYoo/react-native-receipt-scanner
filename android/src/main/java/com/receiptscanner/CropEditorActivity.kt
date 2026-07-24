@@ -109,6 +109,10 @@ internal class CropEditorActivity : ComponentActivity() {
   private var copyInProgress = false
   private var cancelRequested = false
 
+  // Running total of bytes cached this session (main-thread only), capped at
+  // GalleryCacheCopier.SESSION_MAX_BYTES so a multi-image batch can't exhaust storage.
+  private var sessionCopiedBytes = 0L
+
   // Current image state
   private var originalUri: Uri? = null
   private var originalWidth: Int = 0
@@ -554,6 +558,13 @@ internal class CropEditorActivity : ComponentActivity() {
         originalWidth,
         originalHeight,
       )
+    // Bound this copy by the smaller of the per-file limit and the remaining
+    // session budget, so N selected images can't sum past SESSION_MAX_BYTES.
+    val remainingBudget = GalleryCacheCopier.SESSION_MAX_BYTES - sessionCopiedBytes
+    if (remainingBudget <= 0L) {
+      failAndFinish("Selected images exceed the total cache budget")
+      return
+    }
     // picker_get_content URI permission expires when this activity finishes.
     // Copy a bounded number of bytes to cache now so ImageProcessor can read via file:// after finish.
     // Index suffix prevents collision when multiple images are confirmed in rapid succession.
@@ -561,39 +572,41 @@ internal class CropEditorActivity : ComponentActivity() {
     Thread {
       val index = processedOriginalUris.size
       val cachedFile = File(cacheDir, "receipt_pick_${System.currentTimeMillis()}_$index.jpg")
-      // GalleryCacheCopier.copy() deletes the partial file on any failure, so we
-      // only capture the error and decide what to do back on the main thread.
       val error: Throwable? =
         try {
           openPickedUriInputStream(uri).use { input ->
-            GalleryCacheCopier.copy(input, cachedFile)
+            GalleryCacheCopier.copy(input, cachedFile, minOf(GalleryCacheCopier.MAX_BYTES, remainingBudget))
           }
           null
         } catch (e: Exception) {
           Log.e(LOG_TAG, "onConfirmTapped: failed to copy picker URI to cache uri=$uri", e)
           e
         }
-      // All list mutation and cleanup runs on the main thread so it can never
-      // race with a Cancel/Back that also runs on the main thread.
+      // All list mutation runs on the main thread so it can never race with a
+      // Cancel/Back that also runs on the main thread. The cached file is
+      // deleted on every non-success path (including a Cancel that already
+      // finished the activity while this copy was still running).
       runOnUiThread {
         copyInProgress = false
         when {
-          // A Cancel/Back arrived while the copy was running — honor it now that
-          // the worker is done, deleting the just-copied original.
           cancelRequested -> {
             cachedFile.delete()
-            cancelAndFinish()
           }
 
           error is GalleryCacheCopier.SizeLimitExceededException -> {
+            cachedFile.delete()
             failAndFinish(error.message ?: "Selected image is too large to process")
           }
 
           error != null -> {
+            // e.g. the input stream threw on close after a successful write —
+            // GalleryCacheCopier only cleans up failures inside its own scope.
+            cachedFile.delete()
             cancelAndFinish()
           }
 
           else -> {
+            sessionCopiedBytes += cachedFile.length()
             processedOriginalUris.add(Uri.fromFile(cachedFile).toString())
             processedCorners.add(corners)
             loadNextImage()
@@ -642,13 +655,11 @@ internal class CropEditorActivity : ComponentActivity() {
   }
 
   private fun cancelAndFinish() {
-    // If a copy is running on the worker thread, defer the cancel until it
-    // finishes (the worker's runOnUiThread re-invokes this). Deleting the
-    // cache list here would race with the worker's append.
-    if (copyInProgress) {
-      cancelRequested = true
-      return
-    }
+    // Finish immediately — never block dismissal on an in-flight copy, whose
+    // read latency is unbounded for a slow content:// provider. `cancelRequested`
+    // tells the copy worker to drop its own cached file when the read returns;
+    // list mutation stays on the main thread, so clearing it here can't race.
+    cancelRequested = true
     deleteProcessedOriginals()
     setResult(RESULT_CANCELED)
     finish()
