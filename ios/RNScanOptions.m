@@ -4,6 +4,10 @@ static id RNNullToNil(id value) {
     return [value isKindOfClass:[NSNull class]] ? nil : value;
 }
 
+static BOOL RNBoolFromValue(id value, BOOL defaultValue) {
+    return [value isKindOfClass:[NSNumber class]] ? [value boolValue] : defaultValue;
+}
+
 @implementation RNScanOptions
 
 + (instancetype)optionsFromDictionary:(NSDictionary *)dict {
@@ -39,8 +43,7 @@ static id RNNullToNil(id value) {
     NSNumber *cropAutoConfirmNum = RNNullToNil(dict[@"cropAutoConfirm"])  ?: @NO;
     NSNumber *autoRotateNum      = RNNullToNil(dict[@"autoRotate"])       ?: @YES;
     NSNumber *includeRawExifNum  = RNNullToNil(dict[@"includeRawExif"])   ?: @NO;
-    NSNumber *ocrGeometryNum     = RNNullToNil(dict[@"ocrGeometry"])      ?: @NO;
-    opts.ocrGeometry      = ocrGeometryNum.boolValue;
+    opts.ocrGeometry      = RNBoolFromValue(dict[@"ocrGeometry"], NO);
     opts.includeExif      = includeExifNum.boolValue;
     opts.includeGpsExif   = includeGpsExifNum.boolValue;
     opts.ocr              = ocrNum.boolValue;

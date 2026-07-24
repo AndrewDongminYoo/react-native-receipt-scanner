@@ -24,3 +24,12 @@ describe("iOS gallery crop editor", () => {
     expect(cropEditor).toContain("Drag the corners to frame the document");
   });
 });
+
+describe("iOS scan options", () => {
+  it("validates ocrGeometry before reading its boolean value", () => {
+    const scanOptions = iosSource("RNScanOptions.m");
+
+    expect(scanOptions).toContain('RNBoolFromValue(dict[@"ocrGeometry"], NO)');
+    expect(scanOptions).toContain("[value isKindOfClass:[NSNumber class]]");
+  });
+});
