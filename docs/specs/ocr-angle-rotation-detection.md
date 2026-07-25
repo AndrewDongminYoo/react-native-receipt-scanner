@@ -34,11 +34,12 @@ Android는 CW-positive라 이 패키지가 이미 채택한 CW 정준화(§3.1)�
 iOS는 Vision이 정규화 `[0, 1]` · **bottom-left 원점**을 쓰므로 y축을 뒤집어야 CW가 된다.
 
 ```log
-A_cw = atan2(−(topRight.y − topLeft.y), topRight.x − topLeft.x) × 180 / π
+A_cw = atan2(−(topRight.y − topLeft.y) × H, (topRight.x − topLeft.x) × W) × 180 / π
 ```
 
 `topRight − topLeft`는 텍스트 자신의 진행 방향 벡터다.
 bottom-left 원점에서 top-left 원점으로 옮기면 y 성분의 부호가 뒤집히고, 화면 좌표계(+y 아래)에서 CW 양수 각도는 `atan2(dy_screen, dx)`가 된다.
+정규화 델타는 픽셀 크기(`W × H`)로 먼저 스케일한다 — 정사각형이 아닌 이미지에서 스케일 없는 atan2는 각도를 종횡비만큼 왜곡해(`tan θ' = tan θ · W/H`) ML Kit의 픽셀 공간 `getAngle` 규약과 어긋난다.
 
 ## 보정 각도
 

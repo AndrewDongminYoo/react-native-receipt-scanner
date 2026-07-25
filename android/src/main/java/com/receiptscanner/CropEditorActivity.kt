@@ -393,7 +393,7 @@ internal class CropEditorActivity : ComponentActivity() {
         }
       } catch (e: Exception) {
         Log.e(LOG_TAG, "loadAndDisplayImage failed for uri=$uri", e)
-        runOnUiThread { cancelAndFinish() }
+        runOnUiThread { failAndFinish(e.message ?: "Failed to load the selected image") }
       }
     }.start()
   }
@@ -601,8 +601,10 @@ internal class CropEditorActivity : ComponentActivity() {
           error != null -> {
             // e.g. the input stream threw on close after a successful write —
             // GalleryCacheCopier only cleans up failures inside its own scope.
+            // Report as an error, not a cancel: EXTRA_ERROR exists precisely
+            // so failures aren't mistaken for the user backing out.
             cachedFile.delete()
-            cancelAndFinish()
+            failAndFinish(error.message ?: "Failed to copy the selected image")
           }
 
           else -> {

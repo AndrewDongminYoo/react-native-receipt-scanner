@@ -402,7 +402,9 @@ class ReceiptScannerModule(
     // would hand the JS OcrFloor an empty result for a scan that did recognize.
     // A partial drop is left alone: those lines are what the shipped image
     // genuinely yields, and reporting the pre-rotation count would overstate it.
-    return if (refreshed != null && refreshed.lineCount > 0) {
+    // Require real text, not a positive lineCount: lineCount includes blank
+    // ML Kit lines, and what ships below is refreshed.text.
+    return if (refreshed != null && refreshed.text.isNotBlank()) {
       OcrOutcome(refreshed, rotatedDims, 0)
     } else {
       OcrOutcome(detected, rotatedDims, detected?.rotationDegrees ?: 0)

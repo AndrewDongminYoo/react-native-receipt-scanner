@@ -45,10 +45,12 @@ static const double kRotateCommitRatio = 1.3;            // probe must find >= r
 /** Rotate ciImage by 90 / 180 / 270 degrees CCW and translate to a non-negative origin. */
 + (CIImage *)rotate:(CIImage *)ciImage byDegrees:(NSInteger)degrees;
 
-/** Per-observation clockwise text angles, read off the observation quad. This is
- *  the iOS counterpart of ML Kit's `Text.Line.getAngle`, which Android gets for
- *  free. See docs/specs/ocr-angle-rotation-detection.md. */
-+ (NSArray<NSNumber *> *)clockwiseAnglesFromResults:(NSArray<VNRecognizedTextObservation *> *)results;
+/** Per-observation clockwise text angles, read off the observation quad scaled
+ *  into a `pixelSize` frame. This is the iOS counterpart of ML Kit's
+ *  `Text.Line.getAngle`, which Android gets for free.
+ *  See docs/specs/ocr-angle-rotation-detection.md. */
++ (NSArray<NSNumber *> *)clockwiseAnglesFromResults:(NSArray<VNRecognizedTextObservation *> *)results
+                                          pixelSize:(CGSize)pixelSize;
 
 /** Runs an accurate pass on `ciImage` rotated `ccwDegrees` and packages it as a
  *  result. Falls back to `fallbackResults` (already-recognized observations for
@@ -65,7 +67,8 @@ static const double kRotateCommitRatio = 1.3;            // probe must find >= r
  *  no-op in release builds. Used to calibrate confidence thresholds against a
  *  Korean receipt corpus; does not affect routing. */
 + (void)logDiagnostics:(NSString *)label
-               results:(NSArray<VNRecognizedTextObservation *> *)results;
+               results:(NSArray<VNRecognizedTextObservation *> *)results
+             pixelSize:(CGSize)pixelSize;
 
 @end
 
@@ -100,7 +103,7 @@ static const double kRotateCommitRatio = 1.3;            // probe must find >= r
     if (!t0) return nil;
 
     NSInteger c0 = [self nonEmptyCountFromResults:r0];
-    [self logDiagnostics:@"pass1 0deg accurate" results:r0];
+    [self logDiagnostics:@"pass1 0deg accurate" results:r0 pixelSize:ciImage.extent.size];
 
     // Result skeleton — defaults to "0° accepted". Every early return below
     // ships these 0° boxes; the Pass-3 branches overwrite them.
@@ -123,7 +126,8 @@ static const double kRotateCommitRatio = 1.3;            // probe must find >= r
     // receipt — plenty of lines, every one upside down — was never detected.
     // See docs/specs/ocr-angle-rotation-detection.md.
     NSInteger textAngle =
-        [RNOcrGeometry dominantQuarterTurnFromAngles:[self clockwiseAnglesFromResults:r0]];
+        [RNOcrGeometry dominantQuarterTurnFromAngles:[self clockwiseAnglesFromResults:r0
+                                                                             pixelSize:result.passSize]];
     if (textAngle != RNOcrGeometryQuarterTurnUnknown) {
         NSInteger correction = [RNOcrGeometry correctionForTextAngle:textAngle];
         // Only a quarter turn is acted on, never a confirmed 0. The probe loop
@@ -186,7 +190,8 @@ static const double kRotateCommitRatio = 1.3;            // probe must find >= r
         NSInteger cN = [self nonEmptyCountFromResults:rN];
         [self logDiagnostics:[NSString stringWithFormat:@"probe %lddeg fast",
                                                         (long)deg.integerValue]
-                     results:rN];
+                     results:rN
+                   pixelSize:rotated.extent.size];
         if (cN > bestCount) {
             bestCount = cN;
             bestDegrees = deg.integerValue;
@@ -240,17 +245,19 @@ static const double kRotateCommitRatio = 1.3;            // probe must find >= r
     result.meanConfidence = [self meanConfidenceFromResults:chosen];
     result.passSize = rotated.extent.size;
     result.lines = [self linesFromResults:chosen pixelSize:result.passSize];
-    if (t3) [self logDiagnostics:@"pass3 chosen accurate" results:r3];
+    if (t3) [self logDiagnostics:@"pass3 chosen accurate" results:r3 pixelSize:result.passSize];
     return result;
 }
 
-+ (NSArray<NSNumber *> *)clockwiseAnglesFromResults:(NSArray<VNRecognizedTextObservation *> *)results {
++ (NSArray<NSNumber *> *)clockwiseAnglesFromResults:(NSArray<VNRecognizedTextObservation *> *)results
+                                          pixelSize:(CGSize)pixelSize {
     NSMutableArray<NSNumber *> *angles = [NSMutableArray arrayWithCapacity:results.count];
     for (VNRecognizedTextObservation *obs in results) {
         VNRecognizedText *top = [[obs topCandidates:1] firstObject];
         if (top.string.length == 0) continue;
         [angles addObject:@([RNOcrGeometry clockwiseAngleFromTopLeft:obs.topLeft
-                                                            topRight:obs.topRight])];
+                                                            topRight:obs.topRight
+                                                           pixelSize:pixelSize])];
     }
     return [angles copy];
 }
@@ -355,7 +362,8 @@ static const double kRotateCommitRatio = 1.3;            // probe must find >= r
 }
 
 + (void)logDiagnostics:(NSString *)label
-               results:(NSArray<VNRecognizedTextObservation *> *)results {
+               results:(NSArray<VNRecognizedTextObservation *> *)results
+             pixelSize:(CGSize)pixelSize {
 #if DEBUG
     if (results.count == 0) {
         NSLog(@"[ReceiptScanner.Ocr] %@ count=0", label);
@@ -382,7 +390,8 @@ static const double kRotateCommitRatio = 1.3;            // probe must find >= r
     // quad in its own reading frame rather than in image space — the assumption
     // this routing rests on. See docs/specs/ocr-angle-rotation-detection.md.
     NSArray<NSNumber *> *bins =
-        [RNOcrGeometry quarterTurnHistogramFromAngles:[self clockwiseAnglesFromResults:results]];
+        [RNOcrGeometry quarterTurnHistogramFromAngles:[self clockwiseAnglesFromResults:results
+                                                                              pixelSize:pixelSize]];
     NSLog(@"[ReceiptScanner.Ocr] %@ count=%lu meanConf=%.3f candidateSpread=%.3f boxAspect=%.3f "
           @"angleBins=[%@,%@,%@,%@]",
           label, (unsigned long)results.count, meanConf, meanSpread, meanBoxAspect,
