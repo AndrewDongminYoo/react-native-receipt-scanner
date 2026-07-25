@@ -73,9 +73,12 @@ const double RNOcrGeometryAngleMajority = 0.7;
 
 #pragma mark - Text angle rotation detection
 
-+ (CGFloat)clockwiseAngleFromTopLeft:(CGPoint)topLeft topRight:(CGPoint)topRight {
-    CGFloat dx = topRight.x - topLeft.x;
-    CGFloat dy = topRight.y - topLeft.y;
++ (CGFloat)clockwiseAngleFromTopLeft:(CGPoint)topLeft topRight:(CGPoint)topRight pixelSize:(CGSize)pixelSize {
+    // Scale the normalized deltas into pixel space first: ML Kit's getAngle
+    // measures in pixels, and unscaled deltas distort the angle by the frame's
+    // aspect ratio (tan θ' = tan θ · W/H).
+    CGFloat dx = (topRight.x - topLeft.x) * pixelSize.width;
+    CGFloat dy = (topRight.y - topLeft.y) * pixelSize.height;
     // Negate dy: Vision's y grows upward, the canonical top-left frame's grows
     // downward, and in that frame a clockwise angle from +x is atan2(dy, dx).
     // Upright text gives dy == 0 -> 0; text running down the image gives

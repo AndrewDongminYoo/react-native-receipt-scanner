@@ -58,12 +58,15 @@ extern const double RNOcrGeometryAngleMajority;
 /// Clockwise angle in degrees of the text running from `topLeft` to `topRight`.
 ///
 /// Both points come from `VNRectangleObservation`: normalized, **bottom-left**
-/// origin. Moving to the top-left origin the rest of this package uses flips the
-/// sign of the y component, and that flip is what turns Vision's convention into
-/// the clockwise one Android's `Text.Line.getAngle` already reports. Getting it
+/// origin. The deltas are scaled by `pixelSize` first — Android's
+/// `Text.Line.getAngle` (the cross-platform contract) measures in pixel space,
+/// and on a non-square image an unscaled atan2 distorts the angle by the
+/// frame's aspect ratio. Moving to the top-left origin the rest of this package
+/// uses flips the sign of the y component, and that flip is what turns Vision's
+/// convention into the clockwise one `getAngle` already reports. Getting it
 /// wrong silently swaps 90 and 270 — the exact bug this redesign exists to fix.
 /// See docs/specs/ocr-angle-rotation-detection.md.
-+ (CGFloat)clockwiseAngleFromTopLeft:(CGPoint)topLeft topRight:(CGPoint)topRight;
++ (CGFloat)clockwiseAngleFromTopLeft:(CGPoint)topLeft topRight:(CGPoint)topRight pixelSize:(CGSize)pixelSize;
 
 /// Rounds a clockwise text angle to the nearest quarter turn, normalized into
 /// `[0, 360)`. Mirrors Android `OcrGeometry.quantizeQuarterTurn`.
