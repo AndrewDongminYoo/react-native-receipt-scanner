@@ -12,7 +12,9 @@ internal object GalleryCacheCopier {
   // multi-page receipts legitimately need more than this.
   const val SESSION_MAX_BYTES = 250L * 1024L * 1024L
 
-  class SizeLimitExceededException : Exception("Selected image exceeds the 50 MB limit")
+  class SizeLimitExceededException(
+    limitBytes: Long,
+  ) : Exception("Selected image exceeds the ${limitBytes / (1024L * 1024L)} MB limit")
 
   fun copy(
     input: InputStream,
@@ -27,7 +29,7 @@ internal object GalleryCacheCopier {
           val count = input.read(buffer)
           if (count == -1) break
           copied += count
-          if (copied > maxBytes) throw SizeLimitExceededException()
+          if (copied > maxBytes) throw SizeLimitExceededException(maxBytes)
           output.write(buffer, 0, count)
         }
       }
