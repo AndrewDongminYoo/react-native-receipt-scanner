@@ -111,7 +111,9 @@ If `trunk check` reports a finding you believe is a false positive, suppress it 
 Releases are driven by [release-it](https://github.com/release-it/release-it) locally, and the npm publish itself happens in CI.
 `yarn release` bumps `package.json`, regenerates `CHANGELOG.md`, commits with `chore: 🔖 release vX.Y.Z`, pushes the `vX.Y.Z` tag, and publishes a GitHub Release.
 The GitHub Release then triggers the `publish-npm` job in `.github/workflows/release.yml`, which publishes to the public npm registry via [OIDC trusted publishing](https://docs.npmjs.com/trusted-publishers/) — no npm token secret is stored in the repo.
-The GitHub repository is private while the npm package is public, so provenance attestations are not generated.
+Both the GitHub repository and the npm package are public, so trusted publishing also generates [provenance attestations](https://docs.npmjs.com/generating-provenance-statements).
+Provenance generation is a hard requirement of the publish step — if it fails, `npm publish` fails with it.
+Do not set `NPM_CONFIG_PROVENANCE: "false"` to work around that unless the repository goes private again, in which case attestations genuinely cannot be produced.
 
 ### Scripts
 
