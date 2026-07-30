@@ -73,12 +73,31 @@ internal object OcrLanguageResolver {
     try {
       Locale.Builder().setLanguageTag(tag)
     } catch (error: IllformedLocaleException) {
-      throw OcrLanguageException(
-        "INVALID_OCR_LANGUAGE",
-        "OCR language tag $tag is invalid",
-      )
+      throw invalidLanguageTag(tag)
+    }
+
+    val variants = mutableSetOf<String>()
+    val extensionSingletons = mutableSetOf<String>()
+    var inExtension = false
+    tag.lowercase(Locale.ROOT).split("-").drop(1).forEach { subtag ->
+      if (subtag.length == 1) {
+        if (subtag == "x") return
+        if (!extensionSingletons.add(subtag)) throw invalidLanguageTag(tag)
+        inExtension = true
+      } else if (
+        !inExtension &&
+        (subtag.length in 5..8 || (subtag.length == 4 && subtag.first().isDigit()))
+      ) {
+        if (!variants.add(subtag)) throw invalidLanguageTag(tag)
+      }
     }
   }
+
+  private fun invalidLanguageTag(tag: String) =
+    OcrLanguageException(
+      "INVALID_OCR_LANGUAGE",
+      "OCR language tag $tag is invalid",
+    )
 
   private fun likelySubtagsFor(tag: String): LikelySubtags {
     val locale = ULocale.forLanguageTag(tag)

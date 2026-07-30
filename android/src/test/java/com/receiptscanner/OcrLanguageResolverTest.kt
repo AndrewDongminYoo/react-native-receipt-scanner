@@ -133,6 +133,44 @@ class OcrLanguageResolverTest {
   }
 
   @Test
+  fun `duplicate variant rejects before likely script resolution`() {
+    // Given
+    var resolutionCount = 0
+
+    // When
+    val error =
+      assertThrows(OcrLanguageException::class.java) {
+        OcrLanguageResolver.resolve(listOf("sl-rozaj-rozaj")) {
+          resolutionCount += 1
+          LikelySubtags("sl", "Latn")
+        }
+      }
+
+    // Then
+    assertEquals("INVALID_OCR_LANGUAGE", error.code)
+    assertEquals(0, resolutionCount)
+  }
+
+  @Test
+  fun `duplicate extension singleton rejects before likely script resolution`() {
+    // Given
+    var resolutionCount = 0
+
+    // When
+    val error =
+      assertThrows(OcrLanguageException::class.java) {
+        OcrLanguageResolver.resolve(listOf("en-a-foo-a-bar")) {
+          resolutionCount += 1
+          LikelySubtags("en", "Latn")
+        }
+      }
+
+    // Then
+    assertEquals("INVALID_OCR_LANGUAGE", error.code)
+    assertEquals(0, resolutionCount)
+  }
+
+  @Test
   fun `valid language script and region reaches likely script resolution`() {
     // Given
     var resolvedTag: String? = null
