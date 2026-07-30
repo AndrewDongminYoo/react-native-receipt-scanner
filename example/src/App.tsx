@@ -13,11 +13,14 @@ import {
   StatusBar,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from "react-native";
 import {
+  getOcrCapabilities,
   scan,
   type ImageOrigin,
+  type OcrCapabilities,
   type OcrLine,
   type OcrQuality,
   type ReceiptExif,
@@ -626,13 +629,36 @@ function ImageDetailCard({ image, index }: { image: ReceiptImage; index: number 
 type ScanPageProps = {
   opts: ScanOptionsState;
   set: <K extends keyof ScanOptionsState>(key: K, value: ScanOptionsState[K]) => void;
+  ocrLanguageInput: string;
+  setOcrLanguageInput: (value: string) => void;
+  ocrCapabilities: OcrCapabilities | null;
+  capabilityError: { code: string; message: string } | null;
   scanning: boolean;
   error: { code: string; message: string } | null;
   lastResult: ScanReceiptResult | null;
   onScan: () => void;
 };
 
-function ScanPage({ opts, set, scanning, error, lastResult, onScan }: ScanPageProps) {
+function errorDetails(error: unknown): { code: string; message: string } {
+  if (error instanceof Error) {
+    const code = "code" in error && typeof error.code === "string" ? error.code : "UNKNOWN";
+    return { code, message: error.message };
+  }
+  return { code: "UNKNOWN", message: String(error) };
+}
+
+function ScanPage({
+  opts,
+  set,
+  ocrLanguageInput,
+  setOcrLanguageInput,
+  ocrCapabilities,
+  capabilityError,
+  scanning,
+  error,
+  lastResult,
+  onScan,
+}: ScanPageProps) {
   const isIOS = Platform.OS === "ios";
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -642,7 +668,7 @@ function ScanPage({ opts, set, scanning, error, lastResult, onScan }: ScanPagePr
         <View style={{ marginBottom: S["3xl"] }}>
           <Text style={styles.headerTitle}>Receipt Scanner</Text>
           <Text style={styles.headerSubtitle}>
-            New Architecture · Korean OCR · Interactive Crop
+            New Architecture · Multilingual OCR · Interactive Crop
           </Text>
         </View>
 
@@ -699,7 +725,7 @@ function ScanPage({ opts, set, scanning, error, lastResult, onScan }: ScanPagePr
           <SectionHeader title="스캔 옵션" description="처리할 데이터와 품질을 설정하세요" />
           <Card>
             <ToggleRow
-              label="OCR — 한국어 + 라틴 텍스트 인식"
+              label="OCR — 온디바이스 텍스트 인식"
               value={opts.ocr}
               onToggle={() => set("ocr", !opts.ocr)}
             />
@@ -735,6 +761,23 @@ function ScanPage({ opts, set, scanning, error, lastResult, onScan }: ScanPagePr
             description="회전 보정 · 작은 글자 인식 · 인식 결과 게이트"
           />
           <Card>
+            <View style={styles.inputRow}>
+              <Text style={styles.toggleLabel}>OCR 언어 힌트 (ocrLanguages)</Text>
+              <TextInput
+                style={styles.textInput}
+                accessibilityLabel="OCR 언어 힌트 (ocrLanguages)"
+                value={ocrLanguageInput}
+                onChangeText={setOcrLanguageInput}
+                autoCapitalize="none"
+                autoCorrect={false}
+                placeholder="ko-KR,en-US"
+                placeholderTextColor={C.ink400}
+              />
+              <Text style={styles.controlHint}>
+                쉼표로 구분한 BCP 47 태그를 입력 순서와 빈 항목까지 그대로 전달합니다
+              </Text>
+            </View>
+            <View style={styles.divider} />
             <ToggleRow
               label="자동 회전 보정 (autoRotate)"
               value={opts.autoRotate}
@@ -869,6 +912,20 @@ function ScanPage({ opts, set, scanning, error, lastResult, onScan }: ScanPagePr
               </Text>
             )}
           </Pressable>
+        </View>
+
+        <View style={styles.section}>
+          <SectionHeader title="OCR 진단" description="현재 플랫폼의 OCR 언어 및 모델 가용성" />
+          <Card>
+            <Text style={styles.controlHint}>getOcrCapabilities()</Text>
+            <Text style={[styles.ocrText, styles.diagnosticJson]}>
+              {ocrCapabilities
+                ? JSON.stringify(ocrCapabilities, null, 2)
+                : capabilityError
+                  ? `${capabilityError.code}: ${capabilityError.message}`
+                  : "OCR 기능을 조회하는 중..."}
+            </Text>
+          </Card>
         </View>
 
         {/* 오류 표시 */}
@@ -1047,16 +1104,43 @@ export default function App() {
     code: string;
     message: string;
   } | null>(null);
+  const [ocrLanguageInput, setOcrLanguageInput] = useState("ko-KR,en-US");
+  const [ocrCapabilities, setOcrCapabilities] = useState<OcrCapabilities | null>(null);
+  const [capabilityError, setCapabilityError] = useState<{
+    code: string;
+    message: string;
+  } | null>(null);
 
   const [opts, setOpts] = useState<ScanOptionsState>(INITIAL_OPTIONS);
   const set = <K extends keyof ScanOptionsState>(key: K, value: ScanOptionsState[K]) =>
     setOpts((prev) => ({ ...prev, [key]: value }));
 
+  useEffect(() => {
+    let mounted = true;
+
+    getOcrCapabilities()
+      .then((capabilities) => {
+        if (mounted) {
+          setOcrCapabilities(capabilities);
+        }
+      })
+      .catch((capabilitiesError: unknown) => {
+        if (mounted) {
+          setCapabilityError(errorDetails(capabilitiesError));
+        }
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
   async function handleScan() {
     setError(null);
     setScanning(true);
     try {
-      const scanResult = await scan(buildOptions(opts));
+      const ocrLanguages = ocrLanguageInput.split(",").map((tag) => tag.trim());
+      const scanResult = await scan({ ...buildOptions(opts), ocrLanguages });
       console.debug("[🧾] Scanned Result:", scanResult);
       setResult(scanResult);
       // Navigate to the result screen for both success and rejected so the
@@ -1064,12 +1148,8 @@ export default function App() {
       if (scanResult.status !== "cancelled") {
         setPage("result");
       }
-    } catch (e: unknown) {
-      const err = e as { code?: string; message?: string };
-      setError({
-        code: err?.code ?? "UNKNOWN",
-        message: err?.message ?? String(e),
-      });
+    } catch (scanError: unknown) {
+      setError(errorDetails(scanError));
     } finally {
       setScanning(false);
     }
@@ -1094,6 +1174,10 @@ export default function App() {
     <ScanPage
       opts={opts}
       set={set}
+      ocrLanguageInput={ocrLanguageInput}
+      setOcrLanguageInput={setOcrLanguageInput}
+      ocrCapabilities={ocrCapabilities}
+      capabilityError={capabilityError}
       scanning={scanning}
       error={error}
       lastResult={result}
@@ -1226,6 +1310,20 @@ const styles = StyleSheet.create({
   },
   controlDisabled: {
     color: C.ink400,
+  },
+  inputRow: {
+    paddingVertical: S.sm,
+  },
+  textInput: {
+    borderWidth: 1,
+    borderColor: C.border,
+    borderRadius: R.md,
+    backgroundColor: C.surfaceAlt,
+    color: C.ink900,
+    fontSize: 14,
+    marginTop: S.sm,
+    paddingHorizontal: S.md,
+    paddingVertical: S.sm,
   },
 
   // Toggle
@@ -1598,6 +1696,12 @@ const styles = StyleSheet.create({
   exifRawJson: {
     backgroundColor: C.surfaceAlt,
     borderRadius: R.md,
+    padding: S.md,
+  },
+  diagnosticJson: {
+    backgroundColor: C.surfaceAlt,
+    borderRadius: R.md,
+    marginTop: S.sm,
     padding: S.md,
   },
   exifNote: {
