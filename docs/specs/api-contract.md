@@ -195,6 +195,7 @@ type ReceiptImage = {
   fileSize: number;
   ocrText?: string;
   ocrQuality?: OcrQuality;
+  ocrLines?: OcrLine[];
   exif?: ReceiptExif;
   imageOrigin: "camera" | "screenshot" | "download" | "unknown";
 };

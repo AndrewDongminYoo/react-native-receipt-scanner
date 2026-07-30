@@ -2,7 +2,8 @@
 
 ## Status
 
-Approved for implementation planning.
+Implemented. Shipped in 0.8.0 (PR #16); the execution record is [`../plans/phase-8-multilingual-ocr.md`](../plans/phase-8-multilingual-ocr.md).
+This document remains the normative reference for the behaviour — read it as the contract, not as a proposal.
 
 ## Objective
 

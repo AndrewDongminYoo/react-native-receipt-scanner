@@ -1,6 +1,6 @@
 # Phase 8 — Multilingual OCR
 
-## Status: Executed (unreleased, on top of 0.7.0)
+## Status: Executed. Shipped in 0.8.0.
 
 The normative behaviour — public API, language-resolution rules, error contract, and acceptance criteria — lives in [`../specs/multilingual-ocr.md`](../specs/multilingual-ocr.md).
 This document records scope, sequencing, and the decisions that shaped the implementation.
