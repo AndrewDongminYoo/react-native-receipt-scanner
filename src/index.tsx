@@ -5,8 +5,11 @@
  * `.native.tsx` / `.tsx` resolution is handled by Metro automatically — JS
  * callers should not import `./scan.native` or `./scan` directly.
  */
-export { scan } from "./scan";
+export { getOcrCapabilities, scan } from "./scan";
 export type {
+  AndroidOcrCapabilities,
+  IosOcrCapabilities,
+  OcrCapabilities,
   ScanReceiptOptions,
   ScanReceiptResult,
   ReceiptImage,
@@ -15,5 +18,7 @@ export type {
   OcrFloor,
   OcrQuality,
   OcrLine,
+  OcrModelState,
+  WebOcrCapabilities,
 } from "./types";
-export { DEFAULT_OCR_FLOOR } from "./types";
+export { DEFAULT_OCR_FLOOR, DEFAULT_OCR_LANGUAGES } from "./types";

@@ -36,6 +36,7 @@ describe("DEFAULT_SCAN_OPTIONS", () => {
       includeExif: true,
       includeGpsExif: false,
       ocr: true,
+      ocrLanguages: ["ko-KR", "en-US"],
       cropAutoConfirm: false,
       ocrFloor: DEFAULT_OCR_FLOOR,
       autoRotate: true,

@@ -78,6 +78,14 @@ export type ScanReceiptOptions = {
    */
   ocr?: boolean;
   /**
+   * Ordered BCP 47 language hints for on-device OCR. The first entry has the
+   * highest priority on platforms that support ordered languages. Empty arrays
+   * and empty entries are invalid when OCR is enabled.
+   *
+   * @defaultValue `["ko-KR", "en-US"]`
+   */
+  ocrLanguages?: readonly string[];
+  /**
    * Skip the in-package crop editor when the document detector reports a
    * high-confidence quadrilateral. Effective only for `source: "gallery"`
    * — the camera path uses the platform scanner's own confirm UI.
@@ -358,6 +366,44 @@ export type ScanReceiptResult = {
   rejectedImages: ReceiptImage[];
 };
 
+/** Languages used for OCR when callers do not provide an override. */
+export const DEFAULT_OCR_LANGUAGES = ["ko-KR", "en-US"] as const;
+
+/** Runtime availability of one native OCR script model. */
+export type OcrModelState = {
+  /** Unicode script identifier such as "Latn", "Kore", "Jpan", "Hans", "Hant", or "Deva". */
+  readonly script: string;
+  /** Whether recognition can run immediately or requires a model download. */
+  readonly status: "ready" | "download-required";
+};
+
+/** OCR capability reported by the active iOS Vision request configuration. */
+export type IosOcrCapabilities = {
+  readonly platform: "ios";
+  readonly defaultLanguages: readonly ["ko-KR", "en-US"];
+  /** Exact identifiers returned by the active Vision request revision and accurate recognition level. */
+  readonly supportedLanguages: readonly string[];
+};
+
+/** OCR capability reported by the Android ML Kit integration. */
+export type AndroidOcrCapabilities = {
+  readonly platform: "android";
+  readonly defaultLanguages: readonly ["ko-KR", "en-US"];
+  /** Script capabilities exposed by the installed package version, not a package-defined country list. */
+  readonly models: readonly OcrModelState[];
+};
+
+/** Capability reported by the unsupported web fallback. */
+export type WebOcrCapabilities = {
+  readonly platform: "web";
+  readonly defaultLanguages: readonly ["ko-KR", "en-US"];
+  /** The web fallback does not provide native OCR. */
+  readonly supported: false;
+};
+
+/** Platform-specific OCR capability result. */
+export type OcrCapabilities = IosOcrCapabilities | AndroidOcrCapabilities | WebOcrCapabilities;
+
 /**
  * Package-default OCR floor, applied when {@link ScanReceiptOptions.ocrFloor}
  * is omitted. Override per-call by passing a partial `OcrFloor` — missing
@@ -381,6 +427,7 @@ export const DEFAULT_SCAN_OPTIONS: Required<ScanReceiptOptions> = {
   includeExif: true,
   includeGpsExif: false,
   ocr: true,
+  ocrLanguages: DEFAULT_OCR_LANGUAGES,
   cropAutoConfirm: false,
   ocrFloor: DEFAULT_OCR_FLOOR,
   autoRotate: true,

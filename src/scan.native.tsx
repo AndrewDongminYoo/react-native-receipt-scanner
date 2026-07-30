@@ -1,6 +1,7 @@
 import NativeReceiptScanner from "./NativeReceiptScanner";
 import { DEFAULT_OCR_FLOOR, DEFAULT_SCAN_OPTIONS } from "./types";
 import type {
+  OcrCapabilities,
   OcrFloor,
   OcrQuality,
   ReceiptImage,
@@ -20,10 +21,17 @@ import type {
  *          (empty when nothing was rejected).
  */
 export async function scan(options?: ScanReceiptOptions): Promise<ScanReceiptResult> {
-  const merged = { ...DEFAULT_SCAN_OPTIONS, ...options };
+  const merged = {
+    ...DEFAULT_SCAN_OPTIONS,
+    ...options,
+    ocrLanguages: options?.ocrLanguages ?? DEFAULT_SCAN_OPTIONS.ocrLanguages,
+  };
+  const forwardedOptions = merged.ocr
+    ? { ...merged, ocrLanguages: normalizeOcrLanguages(merged.ocrLanguages) }
+    : merged;
   // Type assertion is intentional: the TurboModule Spec uses `Object` for Phase 1.
   // Phase 2 will tighten this once the native shape is stabilized.
-  const native = (await NativeReceiptScanner.scan(merged)) as ScanReceiptResult;
+  const native = (await NativeReceiptScanner.scan(forwardedOptions)) as ScanReceiptResult;
 
   if (native.status !== "success") {
     return { ...native, rejectedImages: native.rejectedImages ?? [] };
@@ -48,6 +56,42 @@ export async function scan(options?: ScanReceiptOptions): Promise<ScanReceiptRes
     return { status: "rejected", images: [], rejectedImages: rejected };
   }
   return { status: "success", images: passed, rejectedImages: rejected };
+}
+
+/** Returns the active native OCR capability without presenting scanner UI. */
+export async function getOcrCapabilities(): Promise<OcrCapabilities> {
+  return (await NativeReceiptScanner.getOcrCapabilities()) as OcrCapabilities;
+}
+
+/** Typed validation error for OCR language hints rejected at the JS boundary. */
+class InvalidOcrLanguageError extends Error {
+  readonly code: "INVALID_OCR_LANGUAGE" = "INVALID_OCR_LANGUAGE";
+
+  constructor(message: string) {
+    super(message);
+    this.name = "InvalidOcrLanguageError";
+  }
+}
+
+/** Trims, validates, and de-duplicates OCR language hints in caller order. */
+function normalizeOcrLanguages(languages: readonly string[]): string[] {
+  if (languages.length === 0) {
+    throw new InvalidOcrLanguageError("OCR language hints must not be empty.");
+  }
+
+  const normalized: string[] = [];
+  const seen = new Set<string>();
+  for (const language of languages) {
+    const trimmed = language.trim();
+    if (trimmed.length === 0) {
+      throw new InvalidOcrLanguageError("OCR language hints must not contain empty values.");
+    }
+    if (!seen.has(trimmed)) {
+      seen.add(trimmed);
+      normalized.push(trimmed);
+    }
+  }
+  return normalized;
 }
 
 /**
