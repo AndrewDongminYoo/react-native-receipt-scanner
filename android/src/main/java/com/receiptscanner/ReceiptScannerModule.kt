@@ -74,10 +74,18 @@ class ReceiptScannerModule(
   private val imageProcessor = ImageProcessor(reactContext)
   private val ocrModelManager = OcrModelManager(reactContext)
   private val pendingScanLifecycle = PendingScanLifecycle()
-  private var pendingPromise: Promise? = null
-  private var pendingOptions: ScanOptions? = null
-  private var pendingOcrPreparation: OcrPreparation? = null
-  private var pendingOcrProcessor: OcrProcessor? = null
+
+  // Written on the caller's thread in scan(), read from the UI thread in
+  // onActivityResult and from the executor in finishPendingScan/invalidate.
+  // PendingScanLifecycle's token owns the hand-off; @Volatile only publishes the
+  // writes, which happen outside its monitor.
+  @Volatile private var pendingPromise: Promise? = null
+
+  @Volatile private var pendingOptions: ScanOptions? = null
+
+  @Volatile private var pendingOcrPreparation: OcrPreparation? = null
+
+  @Volatile private var pendingOcrProcessor: OcrProcessor? = null
 
   init {
     reactContext.addActivityEventListener(this)
