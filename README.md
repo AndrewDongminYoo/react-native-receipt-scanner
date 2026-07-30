@@ -387,12 +387,12 @@ console.log(result.images[0].exif?.raw);
 
 - [API contract](docs/specs/api-contract.md) — full type reference, platform requirements, `imageOrigin` rules, fraud-filter notes
 - [Scan pipeline](docs/specs/scan-pipeline.md) — internal processing flow (contributors)
+- [Multilingual OCR](docs/specs/multilingual-ocr.md) — `ocrLanguages`, `getOcrCapabilities()`, per-platform language resolution
+- [OCR line geometry](docs/specs/ocr-line-geometry.md) — `ocrLines` coordinate contract
 - [OCR 180° orientation correction](docs/specs/ocr-orientation-correction.md) — confidence-based 2-pass detection (iOS)
-- [Phase 1 — JS wrapper](docs/plans/phase-1-js-wrapper.md)
-- [Phase 2 — Android](docs/plans/phase-2-android.md)
-- [Phase 3 — iOS](docs/plans/phase-3-ios.md)
-- [Phase 4 — OCR orientation correction](docs/plans/phase-4-ocr-orientation-correction.md)
-- ADRs: [001 Android ML Kit](docs/notes/adr-001-android-mlkit.md) · [002 iOS gallery crop](docs/notes/adr-002-ios-gallery-crop.md) · [003 package boundaries](docs/notes/adr-003-package-boundaries.md) · [004 iOS crop editor real-device fixes](docs/notes/adr-004-ios-crop-editor-realdevice-fixes.md) · [005 Android gallery strategy](docs/notes/adr-005-android-gallery-strategy.md) · [006 design audit + iOS 16 baseline](docs/notes/adr-006-design-audit-and-ios16-baseline.md)
+- [Platform asymmetries](docs/notes/platform-asymmetries.md) — living record of every iOS/Android behavioural difference
+- Phase plans: [1 JS wrapper](docs/plans/phase-1-js-wrapper.md) · [2 Android](docs/plans/phase-2-android.md) · [3 iOS](docs/plans/phase-3-ios.md) · [4 OCR orientation](docs/plans/phase-4-ocr-orientation-correction.md) · [5 autoflip/mirror](docs/plans/phase-5-autoflip-mirror-detection.md) · [6 data quality](docs/plans/phase-6-receipt-data-quality-hardening.md) · [7 line geometry](docs/plans/phase-7-ocr-line-geometry.md) · [8 multilingual OCR](docs/plans/phase-8-multilingual-ocr.md)
+- ADRs: [001 Android ML Kit](docs/notes/adr-001-android-mlkit.md) · [002 iOS gallery crop](docs/notes/adr-002-ios-gallery-crop.md) · [003 package boundaries](docs/notes/adr-003-package-boundaries.md) · [004 iOS crop editor real-device fixes](docs/notes/adr-004-ios-crop-editor-realdevice-fixes.md) · [005 Android gallery strategy](docs/notes/adr-005-android-gallery-strategy.md) · [006 design audit + iOS 16 baseline](docs/notes/adr-006-design-audit-and-ios16-baseline.md) · [007 v0.4.2→v0.4.3 diff](docs/notes/adr-007-v042-v043-code-diff.md)
 
 ---
 

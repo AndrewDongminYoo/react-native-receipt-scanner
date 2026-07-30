@@ -32,17 +32,14 @@ docs/
 | New implementation plan              | `docs/plans/phase-N-<scope>.md`                 |
 | API / type reference update          | `docs/specs/api-contract.md` (extend existing)  |
 | Internal pipeline description update | `docs/specs/scan-pipeline.md` (extend existing) |
-| Architecture decision (ADR)          | `docs/notes/adr-NNN-<topic>.md` (next: 005)     |
+| Architecture decision (ADR)          | `docs/notes/adr-NNN-<topic>.md` (next: 008)     |
 | Design context / background          | `docs/notes/` using ADR format                  |
 
 ## Existing files (do not duplicate)
 
-- `docs/specs/api-contract.md` — public `scan()` API, types, error codes
-- `docs/specs/scan-pipeline.md` — internal processing pipeline per platform
-- `docs/plans/phase-1-js-wrapper.md` — JS layer implementation (complete)
-- `docs/plans/phase-2-android.md` — Android ML Kit implementation (complete)
-- `docs/plans/phase-3-ios.md` — iOS VisionKit + gallery crop implementation (complete)
-- `docs/notes/adr-001-android-mlkit.md`
-- `docs/notes/adr-002-ios-gallery-crop.md`
-- `docs/notes/adr-003-package-boundaries.md`
-- `docs/notes/adr-004-ios-crop-editor-realdevice-fixes.md`
+**List the directory before adding a file** — `ls docs/specs docs/plans docs/notes`. This section used to enumerate them and fell four ADRs and five phase plans behind, which defeats its own purpose: an agent trusting a stale list creates the duplicate it was meant to prevent.
+
+Two files are normative and should be extended rather than supplemented:
+
+- `docs/specs/api-contract.md` — the public `scan()` API, types, and error codes
+- `docs/specs/scan-pipeline.md` — the internal processing pipeline per platform
