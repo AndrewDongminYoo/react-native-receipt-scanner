@@ -19,7 +19,7 @@ ios/
 
 ## WHERE TO LOOK
 
-| Task                                                   | File:Lines                                                                                                                 |
+| Task                                                   | Location                                                                                                                   |
 | ------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------- |
 | Module strong-refs the delegates                       | `ReceiptScanner.mm` — the `cameraDelegate` / `galleryDelegate` properties and the `-scan:` guard                           |
 | Camera vs gallery routing on main queue                | `ReceiptScanner.mm` — `-scan:`, its `dispatch_async(dispatch_get_main_queue())` block                                      |
@@ -28,7 +28,7 @@ ios/
 | Vision rectangle detection (with explicit orientation) | `RNGalleryPickerDelegate.m` — `-detectCornersForImage:`, `MakeReceiptRectangleRequest`                                     |
 | Document segmentation mask path (preferred)            | `RNGalleryPickerDelegate.m` — `VNDetectDocumentSegmentationRequest` inside `-detectCornersForImage:`                       |
 | Crop editor handles + button bar + hit-test order      | `RNCropEditorViewController.m` — `-viewDidLoad`                                                                            |
-| EXIF synthesis on camera scans                         | `RNImageProcessor.m` — `+buildDeviceExifDict`, merged in `+buildExifDict:`                                                 |
+| EXIF synthesis on camera scans                         | `RNImageProcessor.m` — the `sourceProps ? +buildExifDict: : +buildDeviceExifDict` ternary in `+processImage:`              |
 | Perspective correction (orientation baked first)       | `RNImageProcessor.m` — `+perspectiveCorrectedCGImage:`                                                                     |
 | Localizable string keys                                | `RNCropEditorViewController.m` — the `RNReceiptScanner_*` keys in `-viewDidLoad`                                           |
 | OCR language validation and Vision availability        | `RNOcrProcessor.m` — `+validateRecognitionLanguages:`, `+supportedRecognitionLanguages:`, `RNIsWellFormedBCP47LanguageTag` |
@@ -42,7 +42,7 @@ ios/
 - **Output orientation is always `1` (Up)**: `RNImageProcessor.processImage:` writes both `kCGImagePropertyOrientation` and TIFF `Orientation` = `kCGImagePropertyOrientationUp`. JS receives `exif.orientation === 1` always.
 - **ARC-managed `CGImageSourceRef`**: `RNCGImageSourceHolder` wraps the source so all early-return paths in the gallery delegate release it. Don't introduce raw `CGImageSourceRef` locals.
 - **Per-call `CIContext`**: `RNImageProcessor.perspectiveCorrectedCGImage:` allocates `[CIContext context]` per call because `CIContext` is not thread-safe under `maxPages > 1`.
-- **CGImage origin normalization**: After `imageByApplyingOrientation:`, defensively translate to `(0,0)` if extent origin shifted (`RNImageProcessor.m`, `+perspectiveCorrectedCGImage:`).
+- **CIImage extent normalization**: `imageByApplyingOrientation:` returns a `CIImage` whose `extent.origin` can shift off `(0,0)` (a `CGImage` has no extent origin). `+perspectiveCorrectedCGImage:` defensively translates it back before the corner maths, since the caller's corners are in a zero-origin space.
 - **`absoluteString`, not manual concat**: Always return `processed.fileURL.absoluteString` for `uri` — handles spaces and non-ASCII chars correctly. Manual `[@"file://" stringByAppendingString:fileURL.path]` breaks for usernames with special chars.
 
 ## ANTI-PATTERNS (ADR-004 — read before touching the crop editor)

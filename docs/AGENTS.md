@@ -27,17 +27,17 @@ docs/
 
 ## Where to put things
 
-| What you are adding                  | Where                                           |
-| ------------------------------------ | ----------------------------------------------- |
-| New implementation plan              | `docs/plans/phase-N-<scope>.md`                 |
-| API / type reference update          | `docs/specs/api-contract.md` (extend existing)  |
-| Internal pipeline description update | `docs/specs/scan-pipeline.md` (extend existing) |
-| Architecture decision (ADR)          | `docs/notes/adr-NNN-<topic>.md` (next: 008)     |
-| Design context / background          | `docs/notes/` using ADR format                  |
+| What you are adding                  | Where                                                                   |
+| ------------------------------------ | ----------------------------------------------------------------------- |
+| New implementation plan              | `docs/plans/phase-N-<scope>.md`                                         |
+| API / type reference update          | `docs/specs/api-contract.md` (extend existing)                          |
+| Internal pipeline description update | `docs/specs/scan-pipeline.md` (extend existing)                         |
+| Architecture decision (ADR)          | `docs/notes/adr-NNN-<topic>.md` — derive NNN from `ls docs/notes/adr-*` |
+| Design context / background          | `docs/notes/` using ADR format                                          |
 
 ## Existing files (do not duplicate)
 
-**List the directory before adding a file** — `ls docs/specs docs/plans docs/notes`. This section used to enumerate them and fell four ADRs and five phase plans behind, which defeats its own purpose: an agent trusting a stale list creates the duplicate it was meant to prevent.
+**List the directory before adding a file** — `ls docs/specs docs/plans docs/notes`. This section used to enumerate them, fell behind, and so caused the duplication it existed to prevent: an agent trusting a stale inventory creates the file it was told already existed elsewhere.
 
 Two files are normative and should be extended rather than supplemented:
 

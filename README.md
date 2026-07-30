@@ -374,6 +374,7 @@ console.log(result.images[0].exif?.raw);
 | `NOT_SUPPORTED`                          | `VNDocumentCameraViewController` not supported on this device (iOS) |
 | `SCANNER_INIT_FAILED`                    | ML Kit scanner failed to initialize (Android)                       |
 | `SCAN_FAILED`                            | Unexpected activity result code (Android)                           |
+| `SCAN_RESULT_ERROR`                      | ML Kit scan result could not be parsed (Android)                    |
 | `PROCESSING_FAILED`                      | Image processing or OCR failed                                      |
 | `CAMERA_FAILED`                          | `VNDocumentCameraViewController` reported an error (iOS)            |
 | `INVALID_OCR_LANGUAGE`                   | OCR is enabled and a hint is empty or not a valid BCP 47 tag        |

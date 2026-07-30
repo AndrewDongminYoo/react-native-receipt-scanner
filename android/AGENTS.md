@@ -21,7 +21,7 @@ android/
 
 ## WHERE TO LOOK
 
-| Task                                              | File:Lines                                                                                                                      |
+| Task                                              | Location                                                                                                                        |
 | ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
 | `SCAN_IN_PROGRESS` guard / promise lifecycle      | `ReceiptScannerModule.kt` — `PendingScanLifecycle`; settle via `finishPendingScan` / `resolvePendingScan` / `rejectPendingScan` |
 | ML Kit scanner config (gallery, page limit, mode) | `ReceiptScannerModule.kt` — `launchScan`, the `GmsDocumentScannerOptions.Builder` block                                         |

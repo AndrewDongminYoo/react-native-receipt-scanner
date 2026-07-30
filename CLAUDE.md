@@ -98,7 +98,7 @@ Minimum deployment target is iOS 16 (Korean OCR via `VNRecognizeTextRequest`).
 - `RNGalleryPickerDelegate.{h,m}` — `PHPickerViewControllerDelegate`. Calls `VNDetectRectanglesRequest` (and document-segmentation when available) then presents `RNCropEditorViewController`.
 - `RNCropEditorViewController.{h,m}` — Custom crop editor with four draggable corner handles and a confirm/cancel button bar. See ADR-004 for critical implementation constraints.
 - `RNImageProcessor.{h,m}` — Orientation normalize + JPEG recompress + EXIF read via `ImageIO`/`CoreGraphics`. Always writes EXIF orientation as `kCGImagePropertyOrientationUp (1)` in output; `exif.orientation` on the JS side will always be `1`.
-- `RNOcrProcessor.{h,m}` — `VNRecognizeTextRequest` with `recognitionLanguages: ["ko-KR", "en-US"]`.
+- `RNOcrProcessor.{h,m}` — `VNRecognizeTextRequest` configured with the caller's ordered `ocrLanguages` (default `["ko-KR", "en-US"]`). Validates the tags as BCP 47 and against Vision's supported set before any scanner UI opens; also backs `getOcrCapabilities()`.
 - `RNScanOptions.{h,m}` — Parses the JS options dictionary into a typed Obj-C object.
 
 **Read `ios/AGENTS.md` before modifying any iOS file.** It contains the line-anchored "where to look" map (e.g., `cropAutoConfirm` threshold at `RNGalleryPickerDelegate.m:12, 130-133`), the strong-ref / background-thread / `CIContext`-per-call conventions, and the full anti-pattern list that ADR-004 only summarises.
@@ -116,15 +116,15 @@ The module name string `"ReceiptScanner"` must remain identical in `NativeReceip
 
 Full ADRs live in `docs/notes/`. Read the relevant one before changing the corresponding subsystem.
 
-| ID      | File                                                     | Topic                                                                                                            |
-| ------- | -------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| ADR-001 | `docs/notes/adr-001-android-mlkit.md`                    | Why Android uses GMS ML Kit Document Scanner for the camera path.                                                |
-| ADR-002 | `docs/notes/adr-002-ios-gallery-crop.md`                 | iOS gallery crop strategy (Vision detect → custom 4-handle editor → CIPerspectiveCorrection).                    |
-| ADR-003 | `docs/notes/adr-003-package-boundaries.md`               | Package responsibility boundary — image primitives only, no receipt domain logic. Summarised below.              |
-| ADR-004 | `docs/notes/adr-004-ios-crop-editor-realdevice-fixes.md` | iOS crop editor real-device implementation fixes. Summarised below.                                              |
-| ADR-005 | `docs/notes/adr-005-android-gallery-strategy.md`         | Android `source: "gallery"` uses `CropEditorActivity`, not GMS gallery import. EXIF + origin notes.              |
-| ADR-006 | `docs/notes/adr-006-design-audit-and-ios16-baseline.md`  | 2026-05-09 design audit outcomes — iOS 16 baseline, `exif.software`, dropped `AndroidCameraOptions`, OCR intent. |
-| ADR-007 | `docs/notes/adr-007-v042-v043-code-diff.md`              | v0.4.2 → v0.4.3 code diff of record (includes the `GALLERY_MAX_DIM` → `MAX_PROCESSING_DIM` rename).              |
+| ID      | File                                                     | Topic                                                                                                                                        |
+| ------- | -------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| ADR-001 | `docs/notes/adr-001-android-mlkit.md`                    | Why Android uses GMS ML Kit Document Scanner for the camera path.                                                                            |
+| ADR-002 | `docs/notes/adr-002-ios-gallery-crop.md`                 | iOS gallery crop strategy (Vision detect → custom 4-handle editor → CIPerspectiveCorrection).                                                |
+| ADR-003 | `docs/notes/adr-003-package-boundaries.md`               | Package responsibility boundary — image primitives only, no receipt domain logic. Summarised below.                                          |
+| ADR-004 | `docs/notes/adr-004-ios-crop-editor-realdevice-fixes.md` | iOS crop editor real-device implementation fixes. Summarised below.                                                                          |
+| ADR-005 | `docs/notes/adr-005-android-gallery-strategy.md`         | Android `source: "gallery"` uses `CropEditorActivity`, not GMS gallery import. EXIF + origin notes.                                          |
+| ADR-006 | `docs/notes/adr-006-design-audit-and-ios16-baseline.md`  | 2026-05-09 design audit outcomes — iOS 16 baseline, `exif.software`, dropped `AndroidCameraOptions`, OCR intent.                             |
+| ADR-007 | `docs/notes/adr-007-v042-v043-code-diff.md`              | v0.4.2 → v0.4.3 code diff of record. Uses the then-current `GALLERY_MAX_DIM`; the rename to `MAX_PROCESSING_DIM` landed later, in `ca58d01`. |
 
 **Cross-cutting reference.** `docs/notes/platform-asymmetries.md` is a living document tracking every iOS/Android difference (EXIF semantics, OCR rotation invariance, `rotationDegrees` direction, etc.). Read it before designing any feature that spans both platforms.
 
