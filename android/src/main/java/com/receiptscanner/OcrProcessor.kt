@@ -6,15 +6,13 @@ import android.util.Log
 import com.google.android.gms.tasks.Tasks
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.Text
-import com.google.mlkit.vision.text.TextRecognition
-import com.google.mlkit.vision.text.korean.KoreanTextRecognizerOptions
+import com.google.mlkit.vision.text.TextRecognizer
 import java.io.File
 import java.util.Locale
 
 /**
- * Wraps ML Kit's Korean text recognizer plus a single-pass content-rotation
- * heuristic. ML Kit Korean covers Latin too, so we don't ship a separate
- * Latin recognizer — see ADR-006 for the language strategy.
+ * Wraps a selected ML Kit text recognizer plus a single-pass content-rotation
+ * heuristic. [OcrModelManager] owns recognizer selection and model preparation.
  *
  * Lifecycle: callers must invoke [close] to release the underlying ML Kit
  * client. [ReceiptScannerModule] does this once per scan, after iterating
@@ -23,12 +21,9 @@ import java.util.Locale
  * Threading: every public method blocks on [Tasks.await] and **must** be
  * called from a background thread.
  */
-class OcrProcessor {
-  private val recognizer =
-    TextRecognition.getClient(
-      KoreanTextRecognizerOptions.Builder().build(),
-    )
-
+class OcrProcessor(
+  private val recognizer: TextRecognizer,
+) {
   /**
    * One recognized line with the box it occupies, in the coordinates of the
    * image handed to [recognizeWithRotationDetection] — i.e. the processed JPEG

@@ -164,7 +164,7 @@ class ReceiptScannerModule(
     executor.execute {
       var ocrProcessor: OcrProcessor? = null
       try {
-        ocrProcessor = if (scanOptions.ocr) OcrProcessor() else null
+        ocrProcessor = if (scanOptions.ocr) createDefaultOcrProcessor() else null
         val imageResults =
           pages.map { page ->
             val processed =
@@ -258,7 +258,7 @@ class ReceiptScannerModule(
     }
 
     executor.execute {
-      val ocrProcessor = if (scanOptions.ocr) OcrProcessor() else null
+      val ocrProcessor = if (scanOptions.ocr) createDefaultOcrProcessor() else null
       try {
         val imageResults =
           originalUriStrs.mapIndexed { i, uriStr ->
@@ -327,6 +327,9 @@ class ReceiptScannerModule(
       }
     }
   }
+
+  // Task 4 replaces this default-path construction with prepared selection.
+  private fun createDefaultOcrProcessor(): OcrProcessor = OcrProcessor(DefaultOcrRecognizerFactory.create(OcrScript.KOREAN))
 
   private fun runOcr(
     processor: OcrProcessor?,

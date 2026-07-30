@@ -76,6 +76,10 @@ dependencies {
   // (identical lineCount/lineAspect/textLength at 0/90/180/270) per the
   // procedure in docs/notes/ml-kit-korean-rotation-invariance.md.
   implementation "com.google.mlkit:text-recognition-korean:16.0.1"
+  implementation "com.google.android.gms:play-services-mlkit-text-recognition:19.0.1"
+  implementation "com.google.android.gms:play-services-mlkit-text-recognition-japanese:16.0.1"
+  implementation "com.google.android.gms:play-services-mlkit-text-recognition-chinese:16.0.1"
+  implementation "com.google.android.gms:play-services-mlkit-text-recognition-devanagari:16.0.1"
 
   // EXIF metadata read/write
   implementation "androidx.exifinterface:exifinterface:1.4.2"
