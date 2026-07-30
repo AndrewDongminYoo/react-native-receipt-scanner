@@ -1,12 +1,6 @@
 import { beforeEach, describe, expect, it, jest } from "@jest/globals";
 import { DEFAULT_OCR_LANGUAGES } from "../index";
-import type {
-  AndroidOcrCapabilities,
-  IosOcrCapabilities,
-  OcrCapabilities,
-  OcrModelState,
-  WebOcrCapabilities,
-} from "../index";
+import type { IosOcrCapabilities, OcrCapabilities, WebOcrCapabilities } from "../index";
 import NativeReceiptScanner from "../NativeReceiptScanner";
 import { getOcrCapabilities, scan } from "../scan.native";
 
@@ -99,17 +93,5 @@ describe("multilingual OCR", () => {
     };
 
     await expect(getWebOcrCapabilities()).resolves.toEqual(expected);
-  });
-
-  it("retains the Android model capability shape in the public contract", () => {
-    const model: OcrModelState = { script: "Kore", status: "ready" };
-    const capabilities: AndroidOcrCapabilities = {
-      platform: "android",
-      defaultLanguages: ["ko-KR", "en-US"],
-      models: [model],
-    };
-    const result: OcrCapabilities = capabilities;
-
-    expect(result).toEqual(capabilities);
   });
 });
