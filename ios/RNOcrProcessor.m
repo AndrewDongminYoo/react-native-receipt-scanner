@@ -65,8 +65,11 @@ static BOOL RNIsWellFormedBCP47LanguageTag(NSString *languageTag) {
                 @"^(?:(?:[A-Za-z]{2,3}(?:-[A-Za-z]{3}){0,3}|[A-Za-z]{4}|[A-Za-z]{5,8})"
                  @"(?:-[A-Za-z]{4})?(?:-(?:[A-Za-z]{2}|[0-9]{3}))?"
                  @"(?:-(?:[A-Za-z0-9]{5,8}|[0-9][A-Za-z0-9]{3}))*"
-                 @"(?:-[0-9A-WYZa-wyz](?:-[A-Za-z0-9]{2,8})+)*(?:-x(?:-[A-Za-z0-9]{1,8})+)?"
-                 @"|x(?:-[A-Za-z0-9]{1,8})+)$"
+                 // BCP 47 is case-insensitive, so the private-use singleton
+                 // accepts both cases (`en-X-private`, `X-private`). The
+                 // extension class excludes x/X by construction.
+                 @"(?:-[0-9A-WYZa-wyz](?:-[A-Za-z0-9]{2,8})+)*(?:-[xX](?:-[A-Za-z0-9]{1,8})+)?"
+                 @"|[xX](?:-[A-Za-z0-9]{1,8})+)$"
                             options:0
                               error:NULL];
     });
