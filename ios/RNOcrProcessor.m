@@ -12,6 +12,20 @@ static const CGFloat kReceiptMinTextHeight = 1.0f / 32.0f;
 static const NSUInteger kReceiptTextRecognitionRevision = VNRecognizeTextRequestRevision3;
 static NSString *const kRNOcrErrorCodeKey = @"code";
 
+static BOOL RNIsGrandfatheredBCP47LanguageTag(NSString *languageTag) {
+    static NSSet<NSString *> *tags;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        tags = [NSSet setWithArray:@[
+            @"art-lojban", @"cel-gaulish", @"en-gb-oed", @"i-ami", @"i-bnn", @"i-default",
+            @"i-enochian", @"i-hak", @"i-klingon", @"i-lux", @"i-mingo", @"i-navajo", @"i-pwn",
+            @"i-tao", @"i-tay", @"i-tsu", @"no-bok", @"no-nyn", @"sgn-be-fr", @"sgn-be-nl",
+            @"sgn-ch-de", @"zh-guoyu", @"zh-hakka", @"zh-min", @"zh-min-nan", @"zh-xiang",
+        ]];
+    });
+    return [tags containsObject:languageTag.lowercaseString];
+}
+
 static BOOL RNIsWellFormedBCP47LanguageTag(NSString *languageTag) {
     static NSRegularExpression *expression;
     static dispatch_once_t onceToken;
@@ -26,9 +40,10 @@ static BOOL RNIsWellFormedBCP47LanguageTag(NSString *languageTag) {
                             options:0
                               error:NULL];
     });
-    return [expression firstMatchInString:languageTag
-                                   options:0
-                                     range:NSMakeRange(0, languageTag.length)] != nil;
+    return RNIsGrandfatheredBCP47LanguageTag(languageTag) ||
+           [expression firstMatchInString:languageTag
+                                  options:0
+                                    range:NSMakeRange(0, languageTag.length)] != nil;
 }
 
 // Count-only rotation routing. PROVISIONAL — biased against rotating
