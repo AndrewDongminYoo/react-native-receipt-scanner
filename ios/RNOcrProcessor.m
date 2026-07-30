@@ -12,6 +12,25 @@ static const CGFloat kReceiptMinTextHeight = 1.0f / 32.0f;
 static const NSUInteger kReceiptTextRecognitionRevision = VNRecognizeTextRequestRevision3;
 static NSString *const kRNOcrErrorCodeKey = @"code";
 
+static BOOL RNIsWellFormedBCP47LanguageTag(NSString *languageTag) {
+    static NSRegularExpression *expression;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        expression = [NSRegularExpression
+            regularExpressionWithPattern:
+                @"^(?:(?:[A-Za-z]{2,3}(?:-[A-Za-z]{3}){0,3}|[A-Za-z]{4}|[A-Za-z]{5,8})"
+                 @"(?:-[A-Za-z]{4})?(?:-(?:[A-Za-z]{2}|[0-9]{3}))?"
+                 @"(?:-(?:[A-Za-z0-9]{5,8}|[0-9][A-Za-z0-9]{3}))*"
+                 @"(?:-[0-9A-WYZa-wyz](?:-[A-Za-z0-9]{2,8})+)*(?:-x(?:-[A-Za-z0-9]{1,8})+)?"
+                 @"|x(?:-[A-Za-z0-9]{1,8})+)$"
+                            options:0
+                              error:NULL];
+    });
+    return [expression firstMatchInString:languageTag
+                                   options:0
+                                     range:NSMakeRange(0, languageTag.length)] != nil;
+}
+
 // Count-only rotation routing. PROVISIONAL — biased against rotating
 // (a false rotation is worse than a missed one); calibrate with corpus logs.
 static const NSInteger kMinLinesToJudgeOrientation = 3;  // fewer lines -> trust 0°
@@ -113,8 +132,15 @@ static const double kRotateCommitRatio = 1.3;            // probe must find >= r
     NSCharacterSet *whitespace = [NSCharacterSet whitespaceAndNewlineCharacterSet];
     for (NSString *language in languages) {
         NSString *trimmed = [language stringByTrimmingCharactersInSet:whitespace];
+        if (trimmed.length == 0 || !RNIsWellFormedBCP47LanguageTag(trimmed)) {
+            if (error) {
+                *error = [self languageErrorWithCode:@"INVALID_OCR_LANGUAGE"
+                                              message:@"OCR language must be a valid BCP 47 identifier"];
+            }
+            return nil;
+        }
         NSString *canonical = [NSLocale canonicalLanguageIdentifierFromString:trimmed];
-        if (trimmed.length == 0 || canonical.length == 0) {
+        if (canonical.length == 0) {
             if (error) {
                 *error = [self languageErrorWithCode:@"INVALID_OCR_LANGUAGE"
                                               message:@"OCR language must be a valid BCP 47 identifier"];
