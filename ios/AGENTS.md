@@ -36,6 +36,7 @@ ios/
 ## CONVENTIONS
 
 - **Strong refs on the module**: `cameraDelegate`/`galleryDelegate` are retained on `ReceiptScanner` until `wrappedResolve`/`wrappedReject` clears them. Weak references on UIKit views WILL crash mid-flow.
+- **Single-scan guard — assign the delegate before clearing `preparingScan`.** `-scan:` rejects `SCAN_IN_PROGRESS` on `(preparingScan || cameraDelegate || galleryDelegate)`, and it reads those off the main queue while the presentation helpers write them on it. Clearing the flag first leaves a window where all three read empty, so a second scan is accepted and overwrites the only strong reference to a live delegate. Order every such transition so at least one of the three stays set.
 - **Background thread for image work**: `dispatch_async(dispatch_get_global_queue(...))` in both delegates; resolve/reject hops back to the main queue.
 - **Localization**: Read via `NSLocalizedStringWithDefaultValue(..., [NSBundle mainBundle], ...)`. Host apps add `RNReceiptScanner_cropInstruction` / `RNReceiptScanner_cancelButton` / `RNReceiptScanner_confirmButton` to their own `Localizable.strings`. Defaults are `"Drag the corners to frame the document"` / `"Cancel"` / `"Use Photo"`.
 - **Output orientation is always `1` (Up)**: `RNImageProcessor.processImage:` writes both `kCGImagePropertyOrientation` and TIFF `Orientation` = `kCGImagePropertyOrientationUp`. JS receives `exif.orientation === 1` always.

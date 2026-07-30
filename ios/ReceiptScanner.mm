@@ -93,8 +93,13 @@ static NSString *RNOcrErrorCode(NSError *error) {
         [[RNDocumentCameraDelegate alloc] initWithOptions:options
                                                   resolve:resolve
                                                    reject:reject];
-    self.preparingScan = NO;
+    // Take delegate ownership BEFORE dropping the preparation flag: the -scan:
+    // guard reads (preparingScan || cameraDelegate || galleryDelegate) off this
+    // queue, so clearing first leaves a window where all three read empty and a
+    // second scan is accepted — overwriting the only strong ref to `delegate`
+    // and tearing down a live modal. This order keeps one of them always set.
     self.cameraDelegate = delegate;
+    self.preparingScan = NO;
 
     VNDocumentCameraViewController *vc = [VNDocumentCameraViewController new];
     vc.delegate = delegate;
@@ -115,8 +120,9 @@ static NSString *RNOcrErrorCode(NSError *error) {
                                 presentingViewController:presentingVC
                                                  resolve:resolve
                                                   reject:reject];
-    self.preparingScan = NO;
+    // Ownership before the flag — see -presentCameraScannerWithOptions:.
     self.galleryDelegate = delegate;
+    self.preparingScan = NO;
 
     PHPickerViewController *picker =
         [[PHPickerViewController alloc] initWithConfiguration:config];
