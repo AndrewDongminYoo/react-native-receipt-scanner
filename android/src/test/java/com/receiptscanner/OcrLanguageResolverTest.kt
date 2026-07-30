@@ -76,6 +76,80 @@ class OcrLanguageResolverTest {
   }
 
   @Test
+  fun `malformed empty region subtag rejects before likely script resolution`() {
+    // Given
+    var resolutionCount = 0
+
+    // When
+    val error =
+      assertThrows(OcrLanguageException::class.java) {
+        OcrLanguageResolver.resolve(listOf("en--US")) {
+          resolutionCount += 1
+          LikelySubtags("en", "Latn")
+        }
+      }
+
+    // Then
+    assertEquals("INVALID_OCR_LANGUAGE", error.code)
+    assertEquals(0, resolutionCount)
+  }
+
+  @Test
+  fun `malformed punctuation rejects before likely script resolution`() {
+    // Given
+    var resolutionCount = 0
+
+    // When
+    val error =
+      assertThrows(OcrLanguageException::class.java) {
+        OcrLanguageResolver.resolve(listOf("invalid!!")) {
+          resolutionCount += 1
+          LikelySubtags("invalid", "Latn")
+        }
+      }
+
+    // Then
+    assertEquals("INVALID_OCR_LANGUAGE", error.code)
+    assertEquals(0, resolutionCount)
+  }
+
+  @Test
+  fun `extension without a value rejects before likely script resolution`() {
+    // Given
+    var resolutionCount = 0
+
+    // When
+    val error =
+      assertThrows(OcrLanguageException::class.java) {
+        OcrLanguageResolver.resolve(listOf("en-u")) {
+          resolutionCount += 1
+          LikelySubtags("en", "Latn")
+        }
+      }
+
+    // Then
+    assertEquals("INVALID_OCR_LANGUAGE", error.code)
+    assertEquals(0, resolutionCount)
+  }
+
+  @Test
+  fun `valid language script and region reaches likely script resolution`() {
+    // Given
+    var resolvedTag: String? = null
+
+    // When
+    val script =
+      OcrLanguageResolver.resolve(listOf("zh-Hant-TW")) { tag ->
+        resolvedTag = tag
+        LikelySubtags("zh", "Hant")
+      }
+
+    // Then
+    assertEquals(OcrScript.CHINESE, script)
+    assertEquals("zh-Hant-TW", resolvedTag)
+  }
+
+  @Test
   fun `empty languages reject explicitly`() {
     val error =
       assertThrows(OcrLanguageException::class.java) {

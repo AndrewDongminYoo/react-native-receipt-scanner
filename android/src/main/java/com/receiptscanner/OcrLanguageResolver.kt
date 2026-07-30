@@ -1,6 +1,8 @@
 package com.receiptscanner
 
 import android.icu.util.ULocale
+import java.util.IllformedLocaleException
+import java.util.Locale
 
 internal enum class OcrScript {
   LATIN,
@@ -37,6 +39,7 @@ internal object OcrLanguageResolver {
     val models =
       tags
         .map { tag ->
+          validateLanguageTag(tag)
           val likelySubtags = likelySubtagsFor(tag)
           if (likelySubtags.language.isBlank()) {
             throw OcrLanguageException(
@@ -63,6 +66,17 @@ internal object OcrLanguageResolver {
           "OCR languages require multiple non-Latin models on Android",
         )
       }
+    }
+  }
+
+  private fun validateLanguageTag(tag: String) {
+    try {
+      Locale.Builder().setLanguageTag(tag)
+    } catch (error: IllformedLocaleException) {
+      throw OcrLanguageException(
+        "INVALID_OCR_LANGUAGE",
+        "OCR language tag $tag is invalid",
+      )
     }
   }
 

@@ -238,6 +238,30 @@ class OcrModelManagerTest {
     assertTrue(fixture.recognizers.all.all(FakeRecognizer::isClosed))
   }
 
+  @Test
+  fun `synchronous capability recognizer factory failure is delivered exactly once`() {
+    // Given
+    val expected = IllegalStateException("recognizer creation failed")
+    val manager =
+      OcrModelManager(
+        UnusedModuleInstaller,
+        OcrRecognizerFactory { throw expected },
+      )
+    var resultCount = 0
+    val failures = mutableListOf<Exception>()
+
+    // When
+    val thrown =
+      runCatching {
+        manager.capabilities({ resultCount += 1 }, failures::add)
+      }.exceptionOrNull()
+
+    // Then
+    assertNull(thrown)
+    assertEquals(0, resultCount)
+    assertEquals(listOf(expected), failures)
+  }
+
   private fun List<OcrModelState>.stateFor(script: String): OcrModelState = single { it.script == script }
 
   private fun unexpectedFailure(error: Exception): Nothing = throw AssertionError(error)

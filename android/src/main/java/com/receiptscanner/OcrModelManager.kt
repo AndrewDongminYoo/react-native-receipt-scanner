@@ -176,7 +176,13 @@ internal class OcrModelManager(
         return
       }
 
-      val recognizer = recognizerFactory.create(script)
+      val recognizer =
+        try {
+          recognizerFactory.create(script)
+        } catch (error: Exception) {
+          onFailure(error)
+          return
+        }
       installer.check(
         recognizer,
         onResult = { isReady ->
