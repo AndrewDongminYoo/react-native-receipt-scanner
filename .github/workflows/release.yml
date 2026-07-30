@@ -47,11 +47,11 @@ jobs:
           registry-url: https://registry.npmjs.org
 
       # Trusted publishing requires npm >= 11.5.1; .nvmrc (v24.15.0) bundles 11.12.1.
+      # It also turns provenance on by default, which is what we want now that
+      # the source repo is public — sigstore attestations need a public repo, and
+      # that was the only reason NPM_CONFIG_PROVENANCE was previously forced off.
+      # Do not re-add that override unless this repo goes private again.
       - name: Publish to npm
-        env:
-          # Trusted publishing turns provenance on by default, but sigstore
-          # attestations cannot be generated from a private source repo.
-          NPM_CONFIG_PROVENANCE: "false"
         run: npm publish
 
   build-android:
