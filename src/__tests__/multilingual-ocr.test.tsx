@@ -63,6 +63,14 @@ describe("multilingual OCR", () => {
     expect(mockNative.scan).not.toHaveBeenCalled();
   });
 
+  it("rejects a non-string OCR language hint through the documented error", async () => {
+    await expect(
+      // Untyped JS callers and runtime-derived options bypass the array type.
+      scan({ ocrLanguages: ["en-US", 1] as unknown as string[] })
+    ).rejects.toMatchObject({ code: "INVALID_OCR_LANGUAGE" });
+    expect(mockNative.scan).not.toHaveBeenCalled();
+  });
+
   it("bypasses OCR language validation when OCR is disabled", async () => {
     mockNative.scan.mockResolvedValueOnce({ status: "cancelled", images: [] });
 

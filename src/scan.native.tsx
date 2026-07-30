@@ -82,6 +82,12 @@ function normalizeOcrLanguages(languages: readonly string[]): string[] {
   const normalized: string[] = [];
   const seen = new Set<string>();
   for (const language of languages) {
+    // The array type is only a compile-time promise; untyped JS callers and
+    // runtime-derived options reach here with anything. Fail through the
+    // documented error contract rather than an untyped TypeError from .trim().
+    if (typeof language !== "string") {
+      throw new InvalidOcrLanguageError("OCR language hints must be strings.");
+    }
     const trimmed = language.trim();
     if (trimmed.length === 0) {
       throw new InvalidOcrLanguageError("OCR language hints must not contain empty values.");
