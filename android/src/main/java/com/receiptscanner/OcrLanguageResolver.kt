@@ -42,9 +42,14 @@ internal object OcrLanguageResolver {
           validateLanguageTag(tag)
           val likelySubtags = likelySubtagsFor(tag)
           if (likelySubtags.language.isBlank()) {
+            // Syntax already passed in validateLanguageTag, so this is a valid
+            // tag that names no resolvable language (e.g. the private-use
+            // `x-private`). Per the error contract that is a capability
+            // failure, not a malformed identifier — and it is what iOS reports
+            // for the same input.
             throw OcrLanguageException(
-              "INVALID_OCR_LANGUAGE",
-              "OCR language tag $tag is invalid",
+              "OCR_LANGUAGE_NOT_SUPPORTED",
+              "OCR language tag $tag does not resolve to a supported language",
             )
           }
           modelForScript(likelySubtags.script)

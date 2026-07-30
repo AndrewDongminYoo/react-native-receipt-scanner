@@ -66,13 +66,27 @@ class OcrLanguageResolverTest {
   }
 
   @Test
-  fun `invalid tag rejects explicitly`() {
+  fun `well-formed tag that resolves to no language is unsupported, not invalid`() {
     val error =
       assertThrows(OcrLanguageException::class.java) {
         OcrLanguageResolver.resolve(listOf("invalid"), ::likelySubtagsFor)
       }
 
-    assertEquals("INVALID_OCR_LANGUAGE", error.code)
+    // Syntax passed; only resolution failed. INVALID_OCR_LANGUAGE is reserved
+    // for malformed identifiers (see the error contract in the spec).
+    assertEquals("OCR_LANGUAGE_NOT_SUPPORTED", error.code)
+  }
+
+  @Test
+  fun `private use tag is unsupported rather than invalid`() {
+    val error =
+      assertThrows(OcrLanguageException::class.java) {
+        OcrLanguageResolver.resolve(listOf("x-private")) { LikelySubtags("", "") }
+      }
+
+    // Matches iOS, where `x-private` canonicalizes non-empty and then fails the
+    // Vision supported-language check as OCR_LANGUAGE_NOT_SUPPORTED.
+    assertEquals("OCR_LANGUAGE_NOT_SUPPORTED", error.code)
   }
 
   @Test

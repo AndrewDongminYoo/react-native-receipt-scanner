@@ -176,6 +176,10 @@ The resolver maps scripts to provider models as follows:
 Latin may accompany one non-Latin script because each non-Latin ML Kit recognizer handles the Latin characters commonly mixed into receipts.
 For example, `["ko-KR", "en-US"]` resolves to the Korean recognizer, `["ja-JP", "en-US"]` resolves to the Japanese recognizer, and `["es-ES", "en-US"]` resolves to the Latin recognizer.
 
+A tag that passes BCP 47 syntax validation but resolves to no language — a private-use tag such as `x-private`, for which `ULocale` reports a blank language — rejects with `OCR_LANGUAGE_NOT_SUPPORTED`, not `INVALID_OCR_LANGUAGE`.
+The syntax check owns malformed identifiers; anything past it that cannot be served is a capability failure.
+iOS reaches the same code for the same input, because `x-private` canonicalizes non-empty and then misses the Vision supported-language set.
+
 A request containing more than one non-Latin script family, such as Chinese plus Japanese, rejects with `OCR_LANGUAGE_COMBINATION_NOT_SUPPORTED`.
 The package must not run multiple recognizers and merge their text, confidence, reading order, or geometry in this phase.
 
