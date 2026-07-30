@@ -11,7 +11,7 @@ Built exclusively for the [React Native New Architecture](https://reactnative.de
 | New Architecture (TurboModule) |         ✅ iOS + Android         |              ✅ iOS only              | ⚠️ JS only — native still uses old bridge |
 | Camera scan                    |                ✅                |                  ✅                   |                    ✅                     |
 | Gallery import + crop editor   | ✅ Interactive perspective-crop  |                  ✅                   |                    ✅                     |
-| On-device OCR                  |        ✅ Korean + Latin         |                  ❌                   |                    ❌                     |
+| On-device OCR                  |     ✅ Multilingual (BCP 47)     |                  ❌                   |                    ❌                     |
 | EXIF metadata                  |                ✅                |                  ✅                   |                    ❌                     |
 | GPS EXIF                       |            ✅ opt-in             |               ✅ opt-in               |                    ❌                     |
 | Result format                  |        `file://` URI only        |             URI or Base64             |               URI or Base64               |
@@ -21,9 +21,9 @@ Built exclusively for the [React Native New Architecture](https://reactnative.de
 
 ### What makes this library different
 
-**On-device OCR.** Neither competitor extracts text from scanned documents. This library runs the Vision framework (iOS) and ML Kit Korean Text Recognition (Android) on-device — no network call, no external API key. The `ocrText` field on each image is the plain-text content of that page.
+**On-device OCR.** Neither competitor extracts text from scanned documents. This library runs the Vision framework (iOS) and ML Kit Text Recognition (Android) on-device — no network call, no external API key. The `ocrText` field on each image is the plain-text content of that page.
 
-**Korean language support.** The Android OCR model (`text-recognition-korean`) covers Korean script (Hangul) and Latin characters simultaneously. The iOS Vision recognizer targets `ko-KR` and `en-US` on iOS 16+.
+**Caller-chosen OCR languages.** Pass ordered BCP 47 hints via `ocrLanguages` (default `["ko-KR", "en-US"]`). iOS forwards the ordered list to Vision; Android resolves it to one ML Kit script family — Latin, Korean, Japanese, Chinese, or Devanagari — with Korean bundled and the rest delivered through Play services. `getOcrCapabilities()` reports what the current device can serve. See [Multilingual OCR](docs/specs/multilingual-ocr.md).
 
 **Interactive perspective-crop in gallery mode.** When `source: "gallery"` is used on iOS, VNDetectRectangles automatically locates the document corners. A drag-handle overlay (`RNCropEditorViewController`) lets the user correct the crop before the image is processed. The result is a perspective-corrected JPEG — not a raw photo.
 
@@ -370,7 +370,7 @@ console.log(result.images[0].exif?.raw);
 | Code                                     | Trigger                                                             |
 | ---------------------------------------- | ------------------------------------------------------------------- |
 | `SCAN_IN_PROGRESS`                       | `scan()` called while a previous call has not yet resolved          |
-| `NO_ACTIVITY`                            | No foreground activity / view controller found (Android)            |
+| `NO_ACTIVITY`                            | No foreground activity (Android) / presented view controller (iOS)  |
 | `NOT_SUPPORTED`                          | `VNDocumentCameraViewController` not supported on this device (iOS) |
 | `SCANNER_INIT_FAILED`                    | ML Kit scanner failed to initialize (Android)                       |
 | `SCAN_FAILED`                            | Unexpected activity result code (Android)                           |
