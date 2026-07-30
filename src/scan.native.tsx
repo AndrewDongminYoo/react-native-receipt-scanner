@@ -75,6 +75,12 @@ class InvalidOcrLanguageError extends Error {
 
 /** Trims, validates, and de-duplicates OCR language hints in caller order. */
 function normalizeOcrLanguages(languages: readonly string[]): string[] {
+  // Guard the container for the same reason as each entry below: the type is a
+  // compile-time promise, and `ocrLanguages: 1` would otherwise reach the
+  // for-of and throw an untyped TypeError instead of INVALID_OCR_LANGUAGE.
+  if (!Array.isArray(languages)) {
+    throw new InvalidOcrLanguageError("OCR language hints must be an array.");
+  }
   if (languages.length === 0) {
     throw new InvalidOcrLanguageError("OCR language hints must not be empty.");
   }

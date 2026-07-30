@@ -71,6 +71,17 @@ describe("multilingual OCR", () => {
     expect(mockNative.scan).not.toHaveBeenCalled();
   });
 
+  it.each([
+    ["a number", 1],
+    ["an object", {}],
+    ["a string", "en-US"],
+  ])("rejects %s container through the documented error", async (_label, value) => {
+    await expect(scan({ ocrLanguages: value as unknown as string[] })).rejects.toMatchObject({
+      code: "INVALID_OCR_LANGUAGE",
+    });
+    expect(mockNative.scan).not.toHaveBeenCalled();
+  });
+
   it("bypasses OCR language validation when OCR is disabled", async () => {
     mockNative.scan.mockResolvedValueOnce({ status: "cancelled", images: [] });
 
