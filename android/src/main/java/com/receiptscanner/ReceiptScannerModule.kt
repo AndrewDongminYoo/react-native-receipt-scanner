@@ -36,6 +36,24 @@ internal class PendingScanLifecycle {
 
   fun current(): Token? = synchronized(this) { activeToken }
 
+  /**
+   * Runs [action] under the monitor iff [token] still owns the scan, and
+   * reports whether it ran. Callers that *take ownership* of something on the
+   * strength of the check — storing a resource into pending state — must use
+   * this rather than [isCurrent] followed by the assignment: [complete] can run
+   * between the two and clear the pending state, stranding whatever the
+   * assignment then writes with nothing left to release it.
+   */
+  fun runIfCurrent(
+    token: Token,
+    action: () -> Unit,
+  ): Boolean =
+    synchronized(this) {
+      if (activeToken !== token) return@synchronized false
+      action()
+      true
+    }
+
   fun complete(
     token: Token,
     terminalAction: () -> Unit,
@@ -136,12 +154,18 @@ class ReceiptScannerModule(
       ocrModelManager.prepare(
         script,
         onReady = { processor ->
-          if (!pendingScanLifecycle.isCurrent(token)) {
+          // Check and hand-off must be atomic: invalidate() can complete the
+          // token between them, and the processor would then be stored into
+          // torn-down state with nothing left to close it.
+          val owned =
+            pendingScanLifecycle.runIfCurrent(token) {
+              pendingOcrPreparation = null
+              pendingOcrProcessor = processor
+            }
+          if (!owned) {
             processor.close()
             return@prepare
           }
-          pendingOcrPreparation = null
-          pendingOcrProcessor = processor
           // A first-time model download can outlive the Activity captured before
           // preparation started (host recreates it while backgrounded), so read
           // the foreground one again instead of launching against a dead
@@ -176,6 +200,11 @@ class ReceiptScannerModule(
     scanOptions: ScanOptions,
     token: PendingScanLifecycle.Token,
   ) {
+    // Reached from a Play-services callback on the OCR path, so the scan may
+    // already have been torn down; don't present UI for a dead scan. The camera
+    // branch re-checks again after its own async getStartScanIntent hop.
+    if (!pendingScanLifecycle.isCurrent(token)) return
+
     if (scanOptions.source == "gallery") {
       try {
         @Suppress("DEPRECATION")
