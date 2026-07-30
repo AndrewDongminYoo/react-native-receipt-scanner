@@ -1,5 +1,50 @@
 # Changelog
 
+## [0.8.0](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/compare/v0.7.0...v0.8.0) (2026-07-30)
+
+### Features
+
+- **android:** ✨ prepare multilingual OCR models ([8e7b0f5](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/commit/8e7b0f59fd7163a7a2db12a16edb62bc288c00e1))
+- **android:** ✨ resolve OCR languages by script ([230b713](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/commit/230b713e5e0c2576a9851c6ead8faef3c5d5594f))
+- **android:** ✨ route scans through selected OCR model ([ae123a2](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/commit/ae123a2fa139840b22084d7cc289cd11ae482e74))
+- **api:** ✨ add multilingual OCR contract ([0025694](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/commit/00256941b369d5d0edb70b8530f290a19e31966c))
+- **example:** ✨ add multilingual OCR diagnostics ([9bc4c80](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/commit/9bc4c8093e63b55420e632281ede267169a43070))
+- **ios:** ✨ configure OCR recognition languages ([e76d46c](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/commit/e76d46c7873133f7287acc4b304bf903f8531c3d))
+- **ios:** ✨ validate and report OCR capabilities ([1849300](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/commit/18493007f8092a90612dcef0b11761b0a73e1473))
+
+### Bug Fixes
+
+- **android:** 🐛 classify unresolvable-but-valid tags as unsupported ([3739ec8](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/commit/3739ec831924c84ef0efe19e1ed6ba851c79d4ef))
+- **android:** 🐛 gate the re-read on real text and report editor failures as errors ([6ab3dd3](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/commit/6ab3dd327f8096ff84129e1eed4d332cc169bd71))
+- **android:** 🐛 harden OCR validation failures ([970c026](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/commit/970c026f83afbe311bd532e7c52ed6473cef8141))
+- **android:** 🐛 make the model-ready handoff atomic with invalidation ([a332ae5](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/commit/a332ae52200bb1810deb956ff9b556feedb6c0d9))
+- **android:** 🐛 name the enforced size cap in SizeLimitExceededException ([99ac8f0](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/commit/99ac8f02f59b942d5616b31411503a69a63a12a6))
+- **android:** 🐛 omit sentinel confidence from per-line OCR geometry ([8f60e91](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/commit/8f60e913039ea2dfb86fed6175898e8e59623030))
+- **android:** 🐛 preserve private-use language tags ([0759214](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/commit/07592141b8400df0469d4fb96a0e68d76c4983bb))
+- **android:** 🐛 publish pending scan state across threads ([45ff99d](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/commit/45ff99ddf69e6b56f747d03db017152f9f5bf1ef))
+- **android:** 🐛 reacquire the foreground activity after OCR model prep ([7cd417c](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/commit/7cd417c8fa1576e56c7818d15390aeedcebd1160))
+- **android:** 🐛 reject duplicate BCP 47 subtags ([0577db4](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/commit/0577db43c47bac62fd28d7813a5c68cb011cf1f7))
+- **android:** 🐛 reject synchronous OCR model failures ([a7d11cc](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/commit/a7d11cc8f8b1504201b765a5cd175d282f828b98))
+- **android:** 🐛 report no confidence when the model cannot supply one ([51ae7bc](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/commit/51ae7bc7c834606d4f56818efaa5b31a7412ba09))
+- **android:** 🐛 retain scan state through processing ([7f1533e](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/commit/7f1533e3a32240144f06b5b89715e278352a4806))
+- **ios:** 🐛 accept grandfathered language tags ([d9421fa](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/commit/d9421fad2e93690fcef061d8d23d1093da96d331))
+- **ios:** 🐛 accept uppercase private-use singleton tags ([b60ef2e](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/commit/b60ef2ed4659e5a3046fbed80235d03c4c5d9038))
+- **ios:** 🐛 reject duplicate BCP 47 subtags ([76b4b8c](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/commit/76b4b8cdbcbfd6539a1366dfbfac69143612c00d))
+- **ios:** 🐛 reject malformed OCR language tags ([a428337](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/commit/a428337533e1444cbf7ecb2568dbb8bdb5e24c42))
+- **ios:** 🐛 scale text-angle deltas into pixel space ([0d0b9a9](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/commit/0d0b9a951faed06020c53178c1b6599912eb9b0f))
+- **ios:** 🐛 take delegate ownership before clearing the scan guard ([a9ce8b4](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/commit/a9ce8b48f0b7f0f5fb7649fd343657ed87fbe731))
+- **js:** 🐛 reject non-string OCR language hints through the error contract ([9773beb](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/commit/9773beb7ed79f5705e2d7951602de820bdb7462e))
+- **js:** 🐛 validate the OCR language container before iterating ([34bebcd](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/commit/34bebcd6ad58010e42c375c44c6e3dff583d835e))
+
+### Documentation
+
+- 📝 condense the phase 8 plan to a summary ([80de38d](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/commit/80de38deeb2b27bde48666957f43ec2a0bc779cc))
+- 📝 define web OCR capability ([5738ed6](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/commit/5738ed685e92498c760c9385664871329050594b))
+- 📝 document multilingual OCR usage ([21d56d1](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/commit/21d56d1fed227bd9403f40d25e6db2ce98fccb31))
+- 📝 document the PendingScanLifecycle promise invariant ([9d11da0](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/commit/9d11da019ded2e9ddebd07b3dc226f3f612b1ccc))
+- 📝 plan multilingual OCR implementation ([d9aba9b](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/commit/d9aba9b20bd049d6741e51fc480820b2c86e8e37))
+- 📝 specify multilingual OCR expansion ([fc983b2](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/commit/fc983b29f1bbe3bd6217825d7726435b7c0057db))
+
 ## [0.7.0](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/compare/v0.6.0...v0.7.0) (2026-07-24)
 
 ### Features
