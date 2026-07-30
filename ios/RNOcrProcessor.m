@@ -26,6 +26,36 @@ static BOOL RNIsGrandfatheredBCP47LanguageTag(NSString *languageTag) {
     return [tags containsObject:languageTag.lowercaseString];
 }
 
+static BOOL RNHasUniqueBCP47VariantsAndExtensions(NSString *languageTag) {
+    NSArray<NSString *> *subtags = [languageTag.lowercaseString componentsSeparatedByString:@"-"];
+    if ([subtags.firstObject isEqualToString:@"x"]) return YES;
+
+    NSMutableSet<NSString *> *variants = [NSMutableSet new];
+    NSMutableSet<NSString *> *extensionSingletons = [NSMutableSet new];
+    BOOL inExtension = NO;
+    for (NSUInteger index = 1; index < subtags.count; index++) {
+        NSString *subtag = subtags[index];
+        if (subtag.length == 1) {
+            if ([subtag isEqualToString:@"x"]) break;
+            if ([extensionSingletons containsObject:subtag]) return NO;
+            [extensionSingletons addObject:subtag];
+            inExtension = YES;
+            continue;
+        }
+
+        unichar firstCharacter = [subtag characterAtIndex:0];
+        BOOL isVariant =
+            !inExtension &&
+            ((subtag.length >= 5 && subtag.length <= 8) ||
+             (subtag.length == 4 && firstCharacter >= '0' && firstCharacter <= '9'));
+        if (isVariant) {
+            if ([variants containsObject:subtag]) return NO;
+            [variants addObject:subtag];
+        }
+    }
+    return YES;
+}
+
 static BOOL RNIsWellFormedBCP47LanguageTag(NSString *languageTag) {
     static NSRegularExpression *expression;
     static dispatch_once_t onceToken;
@@ -40,10 +70,13 @@ static BOOL RNIsWellFormedBCP47LanguageTag(NSString *languageTag) {
                             options:0
                               error:NULL];
     });
-    return RNIsGrandfatheredBCP47LanguageTag(languageTag) ||
-           [expression firstMatchInString:languageTag
-                                  options:0
-                                    range:NSMakeRange(0, languageTag.length)] != nil;
+    if (RNIsGrandfatheredBCP47LanguageTag(languageTag)) return YES;
+    if ([expression firstMatchInString:languageTag
+                               options:0
+                                 range:NSMakeRange(0, languageTag.length)] == nil) {
+        return NO;
+    }
+    return RNHasUniqueBCP47VariantsAndExtensions(languageTag);
 }
 
 // Count-only rotation routing. PROVISIONAL — biased against rotating
