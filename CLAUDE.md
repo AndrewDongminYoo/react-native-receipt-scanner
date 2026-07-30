@@ -101,7 +101,7 @@ Minimum deployment target is iOS 16 (Korean OCR via `VNRecognizeTextRequest`).
 - `RNOcrProcessor.{h,m}` — `VNRecognizeTextRequest` configured with the caller's ordered `ocrLanguages` (default `["ko-KR", "en-US"]`). Validates the tags as BCP 47 and against Vision's supported set before any scanner UI opens; also backs `getOcrCapabilities()`.
 - `RNScanOptions.{h,m}` — Parses the JS options dictionary into a typed Obj-C object.
 
-**Read `ios/AGENTS.md` before modifying any iOS file.** It contains the line-anchored "where to look" map (e.g., `cropAutoConfirm` threshold at `RNGalleryPickerDelegate.m:12, 130-133`), the strong-ref / background-thread / `CIContext`-per-call conventions, and the full anti-pattern list that ADR-004 only summarises.
+**Read `ios/AGENTS.md` before modifying any iOS file.** It contains the symbol-based "where to look" map (e.g. the `cropAutoConfirm` threshold is `kCropAutoConfirmMinConfidence` in `RNGalleryPickerDelegate.m`), the strong-ref / single-scan-guard / background-thread / `CIContext`-per-call conventions, and the full anti-pattern list that ADR-004 only summarises.
 
 ### Adding a New Native Method
 
