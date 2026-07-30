@@ -79,12 +79,15 @@
 
 ### 2.2 per-line confidence 노출
 
-| 플랫폼                | per-line confidence                                                                                   |
-| --------------------- | ----------------------------------------------------------------------------------------------------- |
-| iOS Vision            | ✅ `VNRecognizedText.confidence` 노출                                                                 |
-| Android ML Kit Korean | ✅ `Text.Line.getConfidence()` 노출 (**번들** 인식기 기준. unbundled 라이브러리는 0을 반환할 수 있음) |
+| 플랫폼                           | per-line confidence                                                                              |
+| -------------------------------- | ------------------------------------------------------------------------------------------------ |
+| iOS Vision                       | ✅ `VNRecognizedText.confidence` 항상 노출                                                       |
+| Android ML Kit Korean (번들)     | ✅ `Text.Line.getConfidence()` 노출                                                              |
+| Android ML Kit 그 외 (unbundled) | ⚠️ Play Services < 22.30에서 전 라인 `0` 센티넬 → 이 패키지는 confidence를 **absent로 보고**한다 |
 
 **Resolution path.** 해소됨 (0.5.0). 이 표는 원래 "Android 미노출"로 기록돼 있었으나 0.5.0이 `meanLineConfidence`로 양 플랫폼 모두 `ocrQuality.confidence`를 채우도록 바꿨고, 표만 갱신되지 않았다 (2026-07-18 정정). `ocrFloor.minConfidence`는 여전히 absent 시 satisfied로 간주한다(ADR-006 D6) — OCR 미실행이나 무텍스트에서는 양 플랫폼 모두 absent이기 때문.
+
+**다국어 확장 이후 (Phase 8).** Latin/Japanese/Chinese/Devanagari는 Play services로 전달되는 unbundled 인식기라 위 센티넬에 걸린다. `meanLineConfidence`는 unbundled 인식기의 평균이 정확히 `0`일 때 이를 점수가 아니라 "미보고"로 처리한다 — 그렇지 않으면 `ocrFloor.minConfidence > 0`을 설정한 호출자가 멀쩡한 스캔을 거부하게 된다. 따라서 **Android는 iOS와 달리 OCR이 텍스트를 찾았는데도 confidence가 absent일 수 있다.** 기본 언어(`["ko-KR", "en-US"]`)는 번들 Korean 인식기로 해석되므로 영향받지 않는다.
 
 ⚠️ 다만 두 값의 **분포는 비교 가능하다고 검증되지 않았다**. `api-contract.md`가 명시한 대로 confidence는 reporting-only이며, cross-platform 임계값으로 쓰지 말 것.
 
@@ -118,6 +121,15 @@
 **Resolution path.** 의도된 비대칭 — 플랫폼이 주는 것이 다르다. 두 경로가 **같은 CW 규약의 값**을 내도록 `+[RNOcrGeometry clockwiseAngleFromTopLeft:topRight:]`가 흡수한다. y 부호를 놓치면 90과 270이 조용히 뒤바뀌므로(이번 재설계가 고치려는 바로 그 증상) 부호 규약은 `OcrGeometryTest`가 Kotlin 쪽에서 고정하고 iOS는 같은 공식을 미러한다. 상세는 [`../specs/ocr-angle-rotation-detection.md`](../specs/ocr-angle-rotation-detection.md).
 
 ✅ **2026-07-19 실측 확정 — 두 값 모두 이미지 공간 기준이다.** 양 플랫폼에서 90°·270°로 눕힌 영수증이 정방향으로 출력됐다. 리딩 프레임 기준이었다면 회전 여부와 무관하게 0이 나와 신호가 죽고, 회귀 가드가 발동해 v1.3 동작(Android 270 고정 → 한쪽만 정답, iOS 회전 없음)이 유지됐을 것이다. 두 방향이 동시에 맞았다는 것이 곧 방향 정보가 실재한다는 증거다. iOS `atan2` y-반전 부호도 같은 관측으로 확정됐다 — 뒤집혀 있었다면 90과 270이 서로 바뀌었을 것이기 때문. 회귀 가드는 라인이 적은 입력을 위해 유지한다.
+
+### 2.6 다국어 OCR 언어 선택과 모델 준비
+
+| 플랫폼         | 언어 선택                                                                                                                                              | 모델 준비와 capability discovery                                                                                                                        |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| iOS Vision     | 활성 `VNRecognizeTextRequest`가 지원하는 식별자 중 호출자가 요청한 BCP 47 언어를 **순서대로** 사용                                                     | capability는 활성 request revision과 accurate level의 지원 식별자를 읽는다. 별도 설치 단계가 없다.                                                      |
+| Android ML Kit | 요청 언어에서 **하나의 script recognizer**를 고른다. Latin은 하나의 non-Latin script와 함께 허용하지만, 두 개 이상의 non-Latin script 조합은 거절한다. | non-default recognizer는 scanner UI 전 준비 단계에서 다운로드가 필요할 수 있다. capability discovery는 설치 상태만 보고하며 다운로드를 시작하지 않는다. |
+
+**Resolution path.** 의도된 제공자 비대칭이다. iOS는 Vision의 ordered language identifiers를 직접 전달하지만, Android ML Kit은 script 단위 recognizer 하나를 선택한다. 기본 `ko-KR`, `en-US` 이외의 script는 제공자가 지원하더라도 fixture로 보정되기 전까지 coverage가 uncalibrated다.
 
 ## 3. 회전·픽셀 변환
 

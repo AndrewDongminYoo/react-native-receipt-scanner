@@ -6,15 +6,13 @@ import android.util.Log
 import com.google.android.gms.tasks.Tasks
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.Text
-import com.google.mlkit.vision.text.TextRecognition
-import com.google.mlkit.vision.text.korean.KoreanTextRecognizerOptions
+import com.google.mlkit.vision.text.TextRecognizer
 import java.io.File
 import java.util.Locale
 
 /**
- * Wraps ML Kit's Korean text recognizer plus a single-pass content-rotation
- * heuristic. ML Kit Korean covers Latin too, so we don't ship a separate
- * Latin recognizer — see ADR-006 for the language strategy.
+ * Wraps a selected ML Kit text recognizer plus a single-pass content-rotation
+ * heuristic. [OcrModelManager] owns recognizer selection and model preparation.
  *
  * Lifecycle: callers must invoke [close] to release the underlying ML Kit
  * client. [ReceiptScannerModule] does this once per scan, after iterating
@@ -23,19 +21,24 @@ import java.util.Locale
  * Threading: every public method blocks on [Tasks.await] and **must** be
  * called from a background thread.
  */
-class OcrProcessor {
-  private val recognizer =
-    TextRecognition.getClient(
-      KoreanTextRecognizerOptions.Builder().build(),
-    )
-
+class OcrProcessor(
+  private val recognizer: TextRecognizer,
+  /**
+   * Whether [recognizer]'s provider is guaranteed to report real per-line
+   * confidence. True for the bundled Korean recognizer; false for the
+   * Play-services-delivered ones, whose confidence is a `0` sentinel on
+   * Play Services < 22.30. See [meanLineConfidence].
+   */
+  private val reportsConfidence: Boolean,
+) {
   /**
    * One recognized line with the box it occupies, in the coordinates of the
    * image handed to [recognizeWithRotationDetection] — i.e. the processed JPEG
    * *before* any [ImageProcessor.rotateFileInPlace] auto-rotate. Callers that
    * rotate the pixels afterwards must remap via [OcrGeometry.rotateClockwise].
    *
-   * @property confidence ML Kit's per-line confidence, or null when it reported NaN.
+   * @property confidence ML Kit's per-line confidence, or null when it is not a
+   *                      usable score — see [usableConfidence].
    */
   data class Line(
     val text: String,
@@ -59,7 +62,8 @@ class OcrProcessor {
    * @property lineCount Number of recognized lines — used by the JS-side
    *                     `OcrFloor` gate.
    * @property confidence Mean per-line OCR confidence in [0, 1], or null when
-   *                      no line reported a finite value. Reporting only.
+   *                      no line reported a usable value — see
+   *                      [usableConfidence]. Reporting only.
    * @property lines Per-line geometry, always collected; the module only
    *                 serializes it when `options.ocrGeometry` is set.
    */
@@ -291,12 +295,11 @@ class OcrProcessor {
         val w = box.width()
         val h = box.height()
         if (w <= 0 || h <= 0) continue
-        val c = line.confidence
         lines.add(
           Line(
             text = line.text,
             box = OcrGeometry.Box(box.left, box.top, w, h),
-            confidence = if (c.isNaN()) null else c,
+            confidence = usableConfidence(line.confidence),
           ),
         )
       }
@@ -309,24 +312,44 @@ class OcrProcessor {
    * null when no line reports a finite value. Mirrors the iOS per-observation
    * mean; reporting only, never used for routing.
    *
-   * The bundled Korean recognizer reports confidence; the *unbundled* library on
-   * Play Services < 22.30 returns 0 (indistinguishable here) — this package ships
-   * the bundled recognizer, so values are real.
+   * Built from [usableConfidence], so a sentinel-only pass yields null rather
+   * than a score of zero — otherwise a caller with `ocrFloor.minConfidence > 0`
+   * would reject perfectly good scans. Absent confidence satisfies that floor
+   * by design, and the same filter feeds [linesOf] so the per-line and
+   * aggregate views never disagree.
    */
   private fun meanLineConfidence(result: Text): Float? {
     var sum = 0f
     var count = 0
     for (block in result.textBlocks) {
       for (line in block.lines) {
-        val c = line.confidence
-        if (!c.isNaN()) {
-          sum += c
+        usableConfidence(line.confidence)?.let {
+          sum += it
           count++
         }
       }
     }
     return if (count > 0) sum / count else null
   }
+
+  /**
+   * ML Kit's per-line confidence, or null when it is not a usable score.
+   *
+   * Two ways it is unusable: `NaN`, and the exact `0` that an *unbundled*
+   * Play-services recognizer reports for every line on Play Services < 22.30
+   * (i.e. when [reportsConfidence] is false). The bundled Korean recognizer
+   * reports real values, so its zeros — if any — are kept.
+   */
+  private fun usableConfidence(raw: Float): Float? =
+    when {
+      raw.isNaN() -> null
+
+      // ponytail: exact-zero sentinel test, not a version probe. Upgrade path is
+      // querying the Play Services module version (>= 22.30 reports real values).
+      !reportsConfidence && raw == 0f -> null
+
+      else -> raw
+    }
 
   /**
    * Trimmed-mean (10% top / 10% bottom) of `width / height` for every recognized

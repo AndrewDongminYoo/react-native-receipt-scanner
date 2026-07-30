@@ -1,0 +1,236 @@
+package com.receiptscanner
+
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertThrows
+import org.junit.Test
+
+class OcrLanguageResolverTest {
+  @Test
+  fun `Korean and Latin resolve to Korean`() {
+    assertEquals(
+      OcrScript.KOREAN,
+      OcrLanguageResolver.resolve(listOf("ko-KR", "en-US"), ::likelySubtagsFor),
+    )
+  }
+
+  @Test
+  fun `Japanese and Latin resolve to Japanese`() {
+    assertEquals(
+      OcrScript.JAPANESE,
+      OcrLanguageResolver.resolve(listOf("ja-JP", "en-US"), ::likelySubtagsFor),
+    )
+  }
+
+  @Test
+  fun `Latin languages resolve to Latin`() {
+    assertEquals(
+      OcrScript.LATIN,
+      OcrLanguageResolver.resolve(listOf("es-ES", "fr-FR"), ::likelySubtagsFor),
+    )
+  }
+
+  @Test
+  fun `Hindi resolves to Devanagari`() {
+    assertEquals(
+      OcrScript.DEVANAGARI,
+      OcrLanguageResolver.resolve(listOf("hi-IN"), ::likelySubtagsFor),
+    )
+  }
+
+  @Test
+  fun `Simplified Chinese resolves to Chinese`() {
+    assertEquals(
+      OcrScript.CHINESE,
+      OcrLanguageResolver.resolve(listOf("zh-Hans"), ::likelySubtagsFor),
+    )
+  }
+
+  @Test
+  fun `Chinese and Japanese reject as multiple non Latin scripts`() {
+    val error =
+      assertThrows(OcrLanguageException::class.java) {
+        OcrLanguageResolver.resolve(listOf("zh-Hant", "ja-JP"), ::likelySubtagsFor)
+      }
+
+    assertEquals("OCR_LANGUAGE_COMBINATION_NOT_SUPPORTED", error.code)
+  }
+
+  @Test
+  fun `unsupported Arabic script rejects explicitly`() {
+    val error =
+      assertThrows(OcrLanguageException::class.java) {
+        OcrLanguageResolver.resolve(listOf("ar"), ::likelySubtagsFor)
+      }
+
+    assertEquals("OCR_LANGUAGE_NOT_SUPPORTED", error.code)
+  }
+
+  @Test
+  fun `well-formed tag that resolves to no language is unsupported, not invalid`() {
+    val error =
+      assertThrows(OcrLanguageException::class.java) {
+        OcrLanguageResolver.resolve(listOf("invalid"), ::likelySubtagsFor)
+      }
+
+    // Syntax passed; only resolution failed. INVALID_OCR_LANGUAGE is reserved
+    // for malformed identifiers (see the error contract in the spec).
+    assertEquals("OCR_LANGUAGE_NOT_SUPPORTED", error.code)
+  }
+
+  @Test
+  fun `private use tag is unsupported rather than invalid`() {
+    val error =
+      assertThrows(OcrLanguageException::class.java) {
+        OcrLanguageResolver.resolve(listOf("x-private")) { LikelySubtags("", "") }
+      }
+
+    // Matches iOS, where `x-private` canonicalizes non-empty and then fails the
+    // Vision supported-language check as OCR_LANGUAGE_NOT_SUPPORTED.
+    assertEquals("OCR_LANGUAGE_NOT_SUPPORTED", error.code)
+  }
+
+  @Test
+  fun `malformed empty region subtag rejects before likely script resolution`() {
+    // Given
+    var resolutionCount = 0
+
+    // When
+    val error =
+      assertThrows(OcrLanguageException::class.java) {
+        OcrLanguageResolver.resolve(listOf("en--US")) {
+          resolutionCount += 1
+          LikelySubtags("en", "Latn")
+        }
+      }
+
+    // Then
+    assertEquals("INVALID_OCR_LANGUAGE", error.code)
+    assertEquals(0, resolutionCount)
+  }
+
+  @Test
+  fun `malformed punctuation rejects before likely script resolution`() {
+    // Given
+    var resolutionCount = 0
+
+    // When
+    val error =
+      assertThrows(OcrLanguageException::class.java) {
+        OcrLanguageResolver.resolve(listOf("invalid!!")) {
+          resolutionCount += 1
+          LikelySubtags("invalid", "Latn")
+        }
+      }
+
+    // Then
+    assertEquals("INVALID_OCR_LANGUAGE", error.code)
+    assertEquals(0, resolutionCount)
+  }
+
+  @Test
+  fun `extension without a value rejects before likely script resolution`() {
+    // Given
+    var resolutionCount = 0
+
+    // When
+    val error =
+      assertThrows(OcrLanguageException::class.java) {
+        OcrLanguageResolver.resolve(listOf("en-u")) {
+          resolutionCount += 1
+          LikelySubtags("en", "Latn")
+        }
+      }
+
+    // Then
+    assertEquals("INVALID_OCR_LANGUAGE", error.code)
+    assertEquals(0, resolutionCount)
+  }
+
+  @Test
+  fun `duplicate variant rejects before likely script resolution`() {
+    // Given
+    var resolutionCount = 0
+
+    // When
+    val error =
+      assertThrows(OcrLanguageException::class.java) {
+        OcrLanguageResolver.resolve(listOf("sl-rozaj-rozaj")) {
+          resolutionCount += 1
+          LikelySubtags("sl", "Latn")
+        }
+      }
+
+    // Then
+    assertEquals("INVALID_OCR_LANGUAGE", error.code)
+    assertEquals(0, resolutionCount)
+  }
+
+  @Test
+  fun `duplicate extension singleton rejects before likely script resolution`() {
+    // Given
+    var resolutionCount = 0
+
+    // When
+    val error =
+      assertThrows(OcrLanguageException::class.java) {
+        OcrLanguageResolver.resolve(listOf("en-a-foo-a-bar")) {
+          resolutionCount += 1
+          LikelySubtags("en", "Latn")
+        }
+      }
+
+    // Then
+    assertEquals("INVALID_OCR_LANGUAGE", error.code)
+    assertEquals(0, resolutionCount)
+  }
+
+  @Test
+  fun `private use subtags may repeat`() {
+    val script =
+      OcrLanguageResolver.resolve(listOf("x-private-private")) {
+        LikelySubtags("en", "Latn")
+      }
+
+    assertEquals(OcrScript.LATIN, script)
+  }
+
+  @Test
+  fun `valid language script and region reaches likely script resolution`() {
+    // Given
+    var resolvedTag: String? = null
+
+    // When
+    val script =
+      OcrLanguageResolver.resolve(listOf("zh-Hant-TW")) { tag ->
+        resolvedTag = tag
+        LikelySubtags("zh", "Hant")
+      }
+
+    // Then
+    assertEquals(OcrScript.CHINESE, script)
+    assertEquals("zh-Hant-TW", resolvedTag)
+  }
+
+  @Test
+  fun `empty languages reject explicitly`() {
+    val error =
+      assertThrows(OcrLanguageException::class.java) {
+        OcrLanguageResolver.resolve(emptyList(), ::likelySubtagsFor)
+      }
+
+    assertEquals("INVALID_OCR_LANGUAGE", error.code)
+  }
+
+  private fun likelySubtagsFor(tag: String): LikelySubtags =
+    when (tag) {
+      "ko-KR" -> LikelySubtags("ko", "Kore")
+      "en-US", "es-ES", "fr-FR" -> LikelySubtags("en", "Latn")
+      "ja-JP" -> LikelySubtags("ja", "Jpan")
+      "hi-IN" -> LikelySubtags("hi", "Deva")
+      "zh-Hans" -> LikelySubtags("zh", "Hans")
+      "zh-Hant" -> LikelySubtags("zh", "Hant")
+      "ar" -> LikelySubtags("ar", "Arab")
+      "invalid" -> LikelySubtags("", "")
+      else -> error("Unexpected language tag: $tag")
+    }
+}

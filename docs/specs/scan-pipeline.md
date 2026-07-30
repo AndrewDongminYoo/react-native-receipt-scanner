@@ -10,6 +10,13 @@ scan(options)
   │
   ├─ apply default options
   │
+  ├─ when OCR is enabled: validate ordered BCP 47 `ocrLanguages` before scanner UI
+  │    iOS: canonicalize against the active Vision request's supported identifiers
+  │    Android: resolve one script recognizer; Latin may accompany one non-Latin script
+  │
+  ├─ [Android] prepare the resolved non-default OCR model before acquisition
+  │    (may download through ML Kit before scanner UI is presented)
+  │
   ├─ [Android] camera: GmsDocumentScanner
   │    options: setGalleryImportAllowed(false)  // camera only; gallery → CropEditorActivity (ADR-005)
   │             setPageLimit(maxPages)
@@ -39,10 +46,9 @@ scan(options)
   │    GPS stripped unless includeGpsExif=true
   │
   ├─ OCR  (only if options.ocr === true)
-  │    Android: ML Kit TextRecognition
-  │               .getClient(KoreanTextRecognizerOptions())
+  │    Android: ML Kit TextRecognition with the preflight-selected script recognizer
   │    iOS:     VNRecognizeTextRequest
-  │               recognitionLanguages: ["ko-KR", "en-US"]
+  │               recognitionLanguages: ordered validated identifiers
   │               recognitionLevel: .accurate
   │
   ├─ build ReceiptImage result map per image
@@ -63,13 +69,16 @@ scan(options)
 - `ExifInterface` from `androidx.exifinterface` for EXIF read/write
 - Use `InputImage.fromFilePath()` for ML Kit OCR input
 - ActivityResult API (`registerForActivityResult`) — do not use deprecated `startActivityForResult`
+- Capability discovery reports installed-model state only. It never starts a model installation.
+- Non-default models are prepared before the scanner UI opens, so a required ML Kit download completes or rejects before image acquisition.
 
 ### iOS
 
 - Camera path uses `VNDocumentCameraViewController` (VisionKit framework)
 - Gallery path uses `PHPickerViewController` (PhotosUI framework, no permission prompt on iOS 14+)
 - `VNDetectRectanglesRequest` with `minimumConfidence: 0.7` for rectangle detection
-- `VNRecognizeTextRequest` supports `ko-KR` from iOS 16+; fall back to `en-US` on older versions
+- iOS 16+ is required for the Korean-first OCR baseline; there is no Latin-only compatibility tier.
+- OCR passes the caller's validated BCP 47 hints to Vision in caller order.
 - All JPEG operations via `ImageIO` / `CoreGraphics` — never UIImageJPEGRepresentation (lossy metadata loss)
 
 ## Temp File Policy

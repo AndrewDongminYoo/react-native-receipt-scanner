@@ -1,4 +1,5 @@
-import type { ScanReceiptOptions, ScanReceiptResult } from "./types";
+import { DEFAULT_OCR_LANGUAGES } from "./types";
+import type { OcrCapabilities, ScanReceiptOptions, ScanReceiptResult } from "./types";
 
 /**
  * Web / non-native fallback for {@link scan}. The package targets iOS and
@@ -11,4 +12,13 @@ import type { ScanReceiptOptions, ScanReceiptResult } from "./types";
  */
 export async function scan(_options?: ScanReceiptOptions): Promise<ScanReceiptResult> {
   return { status: "cancelled", images: [], rejectedImages: [] };
+}
+
+/** Returns the web fallback's lack of native OCR support. */
+export async function getOcrCapabilities(): Promise<OcrCapabilities> {
+  return {
+    platform: "web",
+    defaultLanguages: DEFAULT_OCR_LANGUAGES,
+    supported: false,
+  };
 }

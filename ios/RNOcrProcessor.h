@@ -6,7 +6,7 @@
 NS_ASSUME_NONNULL_BEGIN
 
 /**
- * Result of `+[RNOcrProcessor recognizeAndDetectRotationInImage:error:]`.
+ * Result of `+[RNOcrProcessor recognizeAndDetectRotationInImage:minimumTextHeight:languages:error:]`.
  * Field shape feeds directly into `ReceiptImage.ocrText` and
  * `ReceiptImage.ocrQuality` in `src/types.ts`.
  */
@@ -48,14 +48,18 @@ NS_ASSUME_NONNULL_BEGIN
  * On-device OCR via Vision `VNRecognizeTextRequest`, plus a 4-pass
  * rotation-detection pipeline.
  *
- * Languages: `ko-KR` + `en-US`. The package targets iOS 16+ — Korean
- * recognition was added in iOS 16 and there is no Latin-only fallback
- * (see ADR-006).
+ * The caller supplies ordered language hints that were validated against the
+ * active accurate Vision request.
  *
  * Threading: blocking on `VNImageRequestHandler performRequests:`. Call
  * from a background queue.
  */
 @interface RNOcrProcessor : NSObject
+
++ (nullable NSArray<NSString *> *)supportedRecognitionLanguages:(NSError **)error;
+
++ (nullable NSArray<NSString *> *)validateRecognitionLanguages:(NSArray<NSString *> *)languages
+                                                         error:(NSError **)error;
 
 /**
  * Run text recognition with `0° / 90° / 180° / 270°` rotation detection.
@@ -71,6 +75,8 @@ NS_ASSUME_NONNULL_BEGIN
  *              recognition.
  * @param minimumTextHeight Vision `minimumTextHeight` as a fraction of image
  *              height in `(0, 1]`; `0` uses the package default (1/32).
+ * @param languages Canonical ordered language hints validated for the active
+ *              accurate Vision request.
  * @param error Out-error pointer for `VNImageRequestHandler` failures.
  *              The probe passes are best-effort and do not propagate
  *              errors here — only Pass 1 / Pass 3 do.
@@ -81,6 +87,7 @@ NS_ASSUME_NONNULL_BEGIN
  */
 + (nullable RNOcrResult *)recognizeAndDetectRotationInImage:(UIImage *)image
                                           minimumTextHeight:(double)minimumTextHeight
+                                                   languages:(NSArray<NSString *> *)languages
                                                        error:(NSError **)error;
 
 @end

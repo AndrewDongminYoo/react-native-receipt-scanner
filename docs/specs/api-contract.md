@@ -29,12 +29,57 @@ and the system cannot show the rationale dialog).
 | `includeExif`       | `boolean`               | `true`               | Attach EXIF metadata to each image result.                                                                                                                                                                                                                                                                                |
 | `includeGpsExif`    | `boolean`               | `false`              | Include GPS coordinates in EXIF. **Leave false** — GPS is a privacy risk and irrelevant to OCR quality.                                                                                                                                                                                                                   |
 | `ocr`               | `boolean`               | `true`               | Run on-device OCR and return `ocrText`.                                                                                                                                                                                                                                                                                   |
+| `ocrLanguages`      | `readonly string[]`     | `["ko-KR", "en-US"]` | Ordered BCP 47 hints that select native OCR. Empty arrays or entries reject while OCR is enabled. These hints do not infer a receipt country or parse receipt / invoice fields.                                                                                                                                           |
 | `cropAutoConfirm`   | `boolean`               | `false`              | (iOS gallery only) Skip the crop editor when detection confidence is high (≥ 0.85).                                                                                                                                                                                                                                       |
 | `ocrFloor`          | `OcrFloor \| false`     | conservative default | Reject images whose OCR result falls below the floor (see "OCR floor" below). Pass `false` to disable. Only applies when `ocr === true`.                                                                                                                                                                                  |
 | `autoRotate`        | `boolean`               | `true`               | Detect 90° / 180° / 270° content rotation via OCR confidence and rotate the output JPEG to the upright orientation (see "Auto-rotate" below). Effective only when `ocr === true`.                                                                                                                                         |
 | `includeRawExif`    | `boolean`               | `false`              | Include the full raw EXIF / TIFF / GPS dictionary on `exif.raw`. Off by default to keep IPC payloads small (raw maps are typically 30–60 fields). Effective only when `includeExif === true`. GPS keys are excluded from `raw` whenever `includeGpsExif === false`.                                                       |
 | `minimumTextHeight` | `number` (0.0–1.0)      | `0`                  | **iOS only.** Vision `minimumTextHeight` as a fraction of image height; text shorter than this is skipped during recognition. Lowering it (e.g. `0.02`) can recover small receipt line items at the cost of more noise. `0` uses the package default (≈ 1/32). Android (ML Kit) has no equivalent and ignores this field. |
 | `ocrGeometry`       | `boolean`               | `false`              | Attach per-line OCR boxes to `ReceiptImage.ocrLines` (see "OCR line geometry" below). Effective only when `ocr === true`.                                                                                                                                                                                                 |
+
+### Multilingual OCR and capabilities
+
+Use BCP 47 hints to select the native OCR configuration, then query the active platform without opening scanner UI:
+
+```ts
+const capabilities = await getOcrCapabilities();
+const result = await scan({
+  ocrLanguages: ["es-ES", "en-US"],
+  ocrFloor: false,
+});
+```
+
+`ocrLanguages` defaults to `["ko-KR", "en-US"]`. The hints select native OCR only. They do not infer a receipt country and do not parse receipt or invoice fields.
+
+```ts
+type OcrCapabilities =
+  | {
+      platform: "ios";
+      defaultLanguages: ["ko-KR", "en-US"];
+      supportedLanguages: string[];
+    }
+  | {
+      platform: "android";
+      defaultLanguages: ["ko-KR", "en-US"];
+      models: Array<{ script: string; status: "ready" | "download-required" }>;
+    }
+  | {
+      platform: "web";
+      defaultLanguages: ["ko-KR", "en-US"];
+      supported: false;
+    };
+```
+
+The web fallback always returns the `platform: "web"` shape above and does not provide native OCR. Android capability discovery reports state without installing a model. Provider-supported non-Korean and non-English scripts remain uncalibrated until fixture coverage exists.
+
+### Multilingual OCR errors
+
+| Code                                     | Trigger                                                                        |
+| ---------------------------------------- | ------------------------------------------------------------------------------ |
+| `INVALID_OCR_LANGUAGE`                   | OCR is enabled and a hint is empty or not a valid BCP 47 tag.                  |
+| `OCR_LANGUAGE_NOT_SUPPORTED`             | A requested language or script is not supported by the active native provider. |
+| `OCR_LANGUAGE_COMBINATION_NOT_SUPPORTED` | Android receives more than one non-Latin script.                               |
+| `OCR_MODEL_INSTALL_FAILED`               | Android cannot prepare the selected OCR model before scanner UI is presented.  |
 
 ### OCR line geometry
 

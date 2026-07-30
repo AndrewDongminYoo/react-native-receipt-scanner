@@ -32,6 +32,7 @@ static double RNDoubleFromValue(id value, double defaultValue) {
         opts.includeExif      = YES;
         opts.includeGpsExif   = NO;
         opts.ocr              = YES;
+        opts.ocrLanguages     = @[@"ko-KR", @"en-US"];
         opts.cropAutoConfirm  = NO;
         opts.autoRotate       = YES;
         opts.includeRawExif   = NO;
@@ -55,6 +56,17 @@ static double RNDoubleFromValue(id value, double defaultValue) {
     opts.autoRotate       = RNBoolFromValue(dict[@"autoRotate"], YES);
     opts.includeRawExif   = RNBoolFromValue(dict[@"includeRawExif"], NO);
     opts.ocrGeometry      = RNBoolFromValue(dict[@"ocrGeometry"], NO);
+
+    id rawOcrLanguages = RNNullToNil(dict[@"ocrLanguages"]);
+    if ([rawOcrLanguages isKindOfClass:[NSArray class]]) {
+        NSMutableArray<NSString *> *ocrLanguages = [NSMutableArray new];
+        for (id value in rawOcrLanguages) {
+            if ([value isKindOfClass:[NSString class]]) [ocrLanguages addObject:value];
+        }
+        opts.ocrLanguages = [ocrLanguages copy];
+    } else {
+        opts.ocrLanguages = @[@"ko-KR", @"en-US"];
+    }
 
     // iOS-only Vision tuning knob; absent/0 → use the package default (1/32).
     opts.minimumTextHeight = MAX(0.0, MIN(1.0, RNDoubleFromValue(dict[@"minimumTextHeight"], 0.0)));

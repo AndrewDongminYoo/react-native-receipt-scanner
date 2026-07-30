@@ -25,6 +25,7 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, assign) BOOL       includeGpsExif;
 /** Whether to run on-device OCR (Vision `VNRecognizeTextRequest`). */
 @property (nonatomic, assign) BOOL       ocr;
+@property (nonatomic, copy) NSArray<NSString *> *ocrLanguages;
 /**
  * Skip the in-package crop editor when document detection confidence is high
  * enough. Effective only for `source: "gallery"` — the camera path uses

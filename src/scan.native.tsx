@@ -1,6 +1,7 @@
 import NativeReceiptScanner from "./NativeReceiptScanner";
 import { DEFAULT_OCR_FLOOR, DEFAULT_SCAN_OPTIONS } from "./types";
 import type {
+  OcrCapabilities,
   OcrFloor,
   OcrQuality,
   ReceiptImage,
@@ -20,10 +21,17 @@ import type {
  *          (empty when nothing was rejected).
  */
 export async function scan(options?: ScanReceiptOptions): Promise<ScanReceiptResult> {
-  const merged = { ...DEFAULT_SCAN_OPTIONS, ...options };
+  const merged = {
+    ...DEFAULT_SCAN_OPTIONS,
+    ...options,
+    ocrLanguages: options?.ocrLanguages ?? DEFAULT_SCAN_OPTIONS.ocrLanguages,
+  };
+  const forwardedOptions = merged.ocr
+    ? { ...merged, ocrLanguages: normalizeOcrLanguages(merged.ocrLanguages) }
+    : merged;
   // Type assertion is intentional: the TurboModule Spec uses `Object` for Phase 1.
   // Phase 2 will tighten this once the native shape is stabilized.
-  const native = (await NativeReceiptScanner.scan(merged)) as ScanReceiptResult;
+  const native = (await NativeReceiptScanner.scan(forwardedOptions)) as ScanReceiptResult;
 
   if (native.status !== "success") {
     return { ...native, rejectedImages: native.rejectedImages ?? [] };
@@ -48,6 +56,54 @@ export async function scan(options?: ScanReceiptOptions): Promise<ScanReceiptRes
     return { status: "rejected", images: [], rejectedImages: rejected };
   }
   return { status: "success", images: passed, rejectedImages: rejected };
+}
+
+/** Returns the active native OCR capability without presenting scanner UI. */
+export async function getOcrCapabilities(): Promise<OcrCapabilities> {
+  return (await NativeReceiptScanner.getOcrCapabilities()) as OcrCapabilities;
+}
+
+/** Typed validation error for OCR language hints rejected at the JS boundary. */
+class InvalidOcrLanguageError extends Error {
+  readonly code: "INVALID_OCR_LANGUAGE" = "INVALID_OCR_LANGUAGE";
+
+  constructor(message: string) {
+    super(message);
+    this.name = "InvalidOcrLanguageError";
+  }
+}
+
+/** Trims, validates, and de-duplicates OCR language hints in caller order. */
+function normalizeOcrLanguages(languages: readonly string[]): string[] {
+  // Guard the container for the same reason as each entry below: the type is a
+  // compile-time promise, and `ocrLanguages: 1` would otherwise reach the
+  // for-of and throw an untyped TypeError instead of INVALID_OCR_LANGUAGE.
+  if (!Array.isArray(languages)) {
+    throw new InvalidOcrLanguageError("OCR language hints must be an array.");
+  }
+  if (languages.length === 0) {
+    throw new InvalidOcrLanguageError("OCR language hints must not be empty.");
+  }
+
+  const normalized: string[] = [];
+  const seen = new Set<string>();
+  for (const language of languages) {
+    // The array type is only a compile-time promise; untyped JS callers and
+    // runtime-derived options reach here with anything. Fail through the
+    // documented error contract rather than an untyped TypeError from .trim().
+    if (typeof language !== "string") {
+      throw new InvalidOcrLanguageError("OCR language hints must be strings.");
+    }
+    const trimmed = language.trim();
+    if (trimmed.length === 0) {
+      throw new InvalidOcrLanguageError("OCR language hints must not contain empty values.");
+    }
+    if (!seen.has(trimmed)) {
+      seen.add(trimmed);
+      normalized.push(trimmed);
+    }
+  }
+  return normalized;
 }
 
 /**
@@ -77,8 +133,9 @@ function annotateQuality(image: ReceiptImage): ReceiptImage {
 
 /**
  * Computes {@link OcrQuality} metrics from the joined OCR text. Confidence
- * passes through from the native layer on both platforms (iOS Vision, Android
- * ML Kit per-line); it is `undefined` only when OCR didn't run.
+ * passes through from the native layer (iOS Vision, Android ML Kit per-line);
+ * it is `undefined` when OCR didn't run, and on Android also when the
+ * recognizer's provider cannot supply a real value.
  */
 function deriveQuality(text: string, confidence?: number): OcrQuality {
   const trimmedLength = text.trim().length;
@@ -92,19 +149,20 @@ function deriveQuality(text: string, confidence?: number): OcrQuality {
 }
 
 /**
- * Predicate for the {@link OcrFloor} gate. `confidence` is populated on both
- * platforms when OCR runs; absent confidence (OCR off or no text) is
- * treated as "satisfied" so the gate never rejects on a field that wasn't
- * produced. Confidence stays reporting-only — not a cross-platform enforcement
- * signal until validated comparable.
+ * Predicate for the {@link OcrFloor} gate. Absent confidence is treated as
+ * "satisfied" so the gate never rejects on a field that wasn't produced — it is
+ * absent when OCR is off or found no text, and also on Android when the
+ * Play-services-delivered recognizer cannot supply a real value (see
+ * `OcrProcessor.meanLineConfidence`). Confidence stays reporting-only — not a
+ * cross-platform enforcement signal until validated comparable.
  */
 function meetsFloor(image: ReceiptImage, floor: Required<OcrFloor>): boolean {
   const q = image.ocrQuality;
   if (!q) return false;
   if (q.textLength < floor.minTextLength) return false;
   if (q.lineCount < floor.minLines) return false;
-  // Absent confidence => satisfied: present on both platforms when OCR runs
-  // but undefined when OCR is off / no text — don't gate on that.
+  // Absent confidence => satisfied: undefined when OCR is off / no text, or
+  // when the provider can't supply one — don't gate on that.
   if (q.confidence !== undefined && q.confidence < floor.minConfidence) return false;
   return true;
 }

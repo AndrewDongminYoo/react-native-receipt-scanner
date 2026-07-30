@@ -6,6 +6,7 @@ import android.net.Uri
 import android.util.Log
 import androidx.core.net.toUri
 import com.facebook.react.bridge.ActivityEventListener
+import com.facebook.react.bridge.Arguments
 import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.ReadableMap
@@ -15,6 +16,58 @@ import com.google.mlkit.vision.documentscanner.GmsDocumentScanning
 import com.google.mlkit.vision.documentscanner.GmsDocumentScanningResult
 import java.io.File
 import java.util.concurrent.Executors
+import java.util.concurrent.RejectedExecutionException
+
+internal class PendingScanLifecycle {
+  internal class Token
+
+  private var activeToken: Token? = null
+
+  fun tryBegin(): Token? =
+    synchronized(this) {
+      if (activeToken != null) return@synchronized null
+      Token().also { activeToken = it }
+    }
+
+  fun isCurrent(token: Token): Boolean = synchronized(this) { activeToken === token }
+
+  val isActive: Boolean
+    get() = synchronized(this) { activeToken != null }
+
+  fun current(): Token? = synchronized(this) { activeToken }
+
+  /**
+   * Runs [action] under the monitor iff [token] still owns the scan, and
+   * reports whether it ran. Callers that *take ownership* of something on the
+   * strength of the check — storing a resource into pending state — must use
+   * this rather than [isCurrent] followed by the assignment: [complete] can run
+   * between the two and clear the pending state, stranding whatever the
+   * assignment then writes with nothing left to release it.
+   */
+  fun runIfCurrent(
+    token: Token,
+    action: () -> Unit,
+  ): Boolean =
+    synchronized(this) {
+      if (activeToken !== token) return@synchronized false
+      action()
+      true
+    }
+
+  fun complete(
+    token: Token,
+    terminalAction: () -> Unit,
+  ): Boolean =
+    synchronized(this) {
+      if (activeToken !== token) return@synchronized false
+      try {
+        terminalAction()
+      } finally {
+        activeToken = null
+      }
+      true
+    }
+}
 
 /**
  * Android TurboModule entry for the `ReceiptScanner` package.
@@ -24,8 +77,8 @@ import java.util.concurrent.Executors
  * [CropEditorActivity]. Both paths funnel through [ImageProcessor] for
  * recompression / EXIF handling and optionally [OcrProcessor] for text
  * recognition + rotation detection. All heavy work runs on a single-thread
- * [Executors.newSingleThreadExecutor]; the React thread only holds the
- * `pendingPromise` while the native UI is on screen.
+ * [Executors.newSingleThreadExecutor]; [PendingScanLifecycle] keeps the
+ * single-scan guard through native UI, image processing, and Promise settlement.
  *
  * @see com.receiptscanner.ImageProcessor
  * @see com.receiptscanner.OcrProcessor
@@ -37,8 +90,20 @@ class ReceiptScannerModule(
   ActivityEventListener {
   private val executor = Executors.newSingleThreadExecutor()
   private val imageProcessor = ImageProcessor(reactContext)
-  private var pendingPromise: Promise? = null
-  private var pendingOptions: ScanOptions? = null
+  private val ocrModelManager = OcrModelManager(reactContext)
+  private val pendingScanLifecycle = PendingScanLifecycle()
+
+  // Written on the caller's thread in scan(), read from the UI thread in
+  // onActivityResult and from the executor in finishPendingScan/invalidate.
+  // PendingScanLifecycle's token owns the hand-off; @Volatile only publishes the
+  // writes, which happen outside its monitor.
+  @Volatile private var pendingPromise: Promise? = null
+
+  @Volatile private var pendingOptions: ScanOptions? = null
+
+  @Volatile private var pendingOcrPreparation: OcrPreparation? = null
+
+  @Volatile private var pendingOcrProcessor: OcrProcessor? = null
 
   init {
     reactContext.addActivityEventListener(this)
@@ -48,30 +113,110 @@ class ReceiptScannerModule(
     options: ReadableMap,
     promise: Promise,
   ) {
-    if (pendingPromise != null) {
-      promise.reject("SCAN_IN_PROGRESS", "A scan is already in progress")
-      return
-    }
-
-    val activity =
-      reactApplicationContext.getCurrentActivity() ?: run {
-        promise.reject("NO_ACTIVITY", "No foreground activity found")
+    val token =
+      pendingScanLifecycle.tryBegin() ?: run {
+        promise.reject("SCAN_IN_PROGRESS", "A scan is already in progress")
         return
       }
 
-    val scanOptions = ScanOptions.from(options)
-    executor.execute { imageProcessor.deletePreviousSessionFiles() }
     pendingPromise = promise
+    val scanOptions =
+      try {
+        ScanOptions.from(options)
+      } catch (e: Exception) {
+        rejectPendingScan(token, "SCAN_FAILED", e.message ?: "Invalid scan options", e)
+        return
+      }
     pendingOptions = scanOptions
 
-    if (scanOptions.source == "gallery") {
-      @Suppress("DEPRECATION")
-      activity.startActivityForResult(
-        Intent(activity, CropEditorActivity::class.java).apply {
-          putExtra(CropEditorActivity.EXTRA_MAX_IMAGES, scanOptions.maxPages)
+    val activity =
+      reactApplicationContext.getCurrentActivity() ?: run {
+        rejectPendingScan(token, "NO_ACTIVITY", "No foreground activity found")
+        return
+      }
+
+    executor.execute { imageProcessor.deletePreviousSessionFiles() }
+
+    if (!scanOptions.ocr) {
+      launchScan(activity, scanOptions, token)
+      return
+    }
+
+    val script =
+      try {
+        OcrLanguageResolver.resolve(scanOptions.ocrLanguages)
+      } catch (e: OcrLanguageException) {
+        rejectPendingScan(token, e.code, e.message, e)
+        return
+      }
+
+    val preparation =
+      ocrModelManager.prepare(
+        script,
+        onReady = { processor ->
+          // Check and hand-off must be atomic: invalidate() can complete the
+          // token between them, and the processor would then be stored into
+          // torn-down state with nothing left to close it.
+          val owned =
+            pendingScanLifecycle.runIfCurrent(token) {
+              pendingOcrPreparation = null
+              pendingOcrProcessor = processor
+            }
+          if (!owned) {
+            processor.close()
+            return@prepare
+          }
+          // A first-time model download can outlive the Activity captured before
+          // preparation started (host recreates it while backgrounded), so read
+          // the foreground one again instead of launching against a dead
+          // Activity. finishPendingScan closes the processor on the reject path.
+          val readyActivity =
+            reactApplicationContext.getCurrentActivity() ?: run {
+              rejectPendingScan(token, "NO_ACTIVITY", "No foreground activity found")
+              return@prepare
+            }
+          launchScan(readyActivity, scanOptions, token)
         },
-        GALLERY_REQUEST_CODE,
+        onFailure = { error ->
+          if (!pendingScanLifecycle.isCurrent(token)) return@prepare
+          pendingOcrPreparation = null
+          rejectPendingScan(
+            token,
+            "OCR_MODEL_INSTALL_FAILED",
+            error.message ?: "Failed to prepare OCR model",
+            error,
+          )
+        },
       )
+    if (pendingScanLifecycle.isCurrent(token) && pendingOcrProcessor == null) {
+      pendingOcrPreparation = preparation
+    } else {
+      preparation.cancel()
+    }
+  }
+
+  private fun launchScan(
+    activity: Activity,
+    scanOptions: ScanOptions,
+    token: PendingScanLifecycle.Token,
+  ) {
+    // Reached from a Play-services callback on the OCR path, so the scan may
+    // already have been torn down; don't present UI for a dead scan. The camera
+    // branch re-checks again after its own async getStartScanIntent hop.
+    if (!pendingScanLifecycle.isCurrent(token)) return
+
+    if (scanOptions.source == "gallery") {
+      try {
+        @Suppress("DEPRECATION")
+        activity.startActivityForResult(
+          Intent(activity, CropEditorActivity::class.java).apply {
+            putExtra(CropEditorActivity.EXTRA_MAX_IMAGES, scanOptions.maxPages)
+          },
+          GALLERY_REQUEST_CODE,
+        )
+      } catch (e: Exception) {
+        rejectScannerInitialization(token, e)
+      }
       return
     }
 
@@ -89,30 +234,72 @@ class ReceiptScannerModule(
         .setScannerMode(GmsDocumentScannerOptions.SCANNER_MODE_FULL)
         .build()
 
-    val scanner: GmsDocumentScanner = GmsDocumentScanning.getClient(scannerOptions)
+    val scanner: GmsDocumentScanner =
+      try {
+        GmsDocumentScanning.getClient(scannerOptions)
+      } catch (e: Exception) {
+        rejectScannerInitialization(token, e)
+        return
+      }
     scanner
       .getStartScanIntent(activity)
       .addOnSuccessListener { intentSender ->
-        activity.startIntentSenderForResult(intentSender, SCAN_REQUEST_CODE, null, 0, 0, 0)
+        if (!pendingScanLifecycle.isCurrent(token)) return@addOnSuccessListener
+        try {
+          activity.startIntentSenderForResult(intentSender, SCAN_REQUEST_CODE, null, 0, 0, 0)
+        } catch (e: Exception) {
+          rejectScannerInitialization(token, e)
+        }
       }.addOnFailureListener { e ->
-        val p = pendingPromise
-        pendingPromise = null
-        pendingOptions = null
-
-        val message = e.message ?: "Failed to initialize ML Kit scanner"
-        val userFriendlyMessage =
-          if (message.contains("GmsNetworkStack") || message.contains("AuthPII")) {
-            "Google Play Services network error. Please check your internet connection, Google account, and device date/time settings."
-          } else {
-            message
-          }
-
-        p?.reject(
-          "SCANNER_INIT_FAILED",
-          userFriendlyMessage,
-          e,
-        )
+        rejectScannerInitialization(token, e)
       }
+  }
+
+  private fun rejectScannerInitialization(
+    token: PendingScanLifecycle.Token,
+    error: Exception,
+  ) {
+    val message = error.message ?: "Failed to initialize ML Kit scanner"
+    val userFriendlyMessage =
+      if (message.contains("GmsNetworkStack") || message.contains("AuthPII")) {
+        "Google Play Services network error. Please check your internet connection, Google account, and device date/time settings."
+      } else {
+        message
+      }
+
+    rejectPendingScan(token, "SCANNER_INIT_FAILED", userFriendlyMessage, error)
+  }
+
+  override fun getOcrCapabilities(promise: Promise) {
+    ocrModelManager.capabilities(
+      onResult = { states ->
+        val modelStateArray =
+          Arguments.createArray().apply {
+            states.forEach { state ->
+              pushMap(
+                Arguments.createMap().apply {
+                  putString("script", state.script)
+                  putString("status", state.status)
+                },
+              )
+            }
+          }
+        promise.resolve(
+          Arguments.createMap().apply {
+            putString("platform", "android")
+            putArray("defaultLanguages", Arguments.fromList(listOf("ko-KR", "en-US")))
+            putArray("models", modelStateArray)
+          },
+        )
+      },
+      onFailure = { error ->
+        promise.reject(
+          "OCR_MODEL_INSTALL_FAILED",
+          error.message ?: "Failed to query OCR model availability",
+          error,
+        )
+      },
+    )
   }
 
   override fun onActivityResult(
@@ -131,17 +318,21 @@ class ReceiptScannerModule(
     resultCode: Int,
     data: Intent?,
   ) {
-    val promise = pendingPromise ?: return
-    val scanOptions = pendingOptions ?: return
-    pendingPromise = null
-    pendingOptions = null
+    val token = pendingScanLifecycle.current() ?: return
+    if (pendingPromise == null) return
+    val scanOptions =
+      pendingOptions ?: run {
+        finishPendingScan(token)
+        return
+      }
+    val ocrProcessor = takePendingOcrProcessor()
 
     if (resultCode == Activity.RESULT_CANCELED) {
-      promise.resolve(ResultBuilder.buildCancelled())
+      resolvePendingScan(token, ResultBuilder.buildCancelled(), ocrProcessor)
       return
     }
     if (resultCode != Activity.RESULT_OK || data == null) {
-      promise.reject("SCAN_FAILED", "Unexpected result code: $resultCode")
+      rejectPendingScan(token, "SCAN_FAILED", "Unexpected result code: $resultCode", processor = ocrProcessor)
       return
     }
 
@@ -149,131 +340,33 @@ class ReceiptScannerModule(
       try {
         GmsDocumentScanningResult.fromActivityResultIntent(data)
       } catch (e: Exception) {
-        promise.reject("SCAN_RESULT_ERROR", "Failed to parse scanning result: ${e.message}", e)
+        rejectPendingScan(
+          token,
+          "SCAN_RESULT_ERROR",
+          "Failed to parse scanning result: ${e.message}",
+          e,
+          ocrProcessor,
+        )
         return
       }
 
     // Do not rely solely on ML Kit honoring its configured page limit.
     val pages = scanningResult?.pages?.take(scanOptions.maxPages) ?: emptyList()
 
-    executor.execute {
-      var ocrProcessor: OcrProcessor? = null
-      try {
-        ocrProcessor = if (scanOptions.ocr) OcrProcessor() else null
-        val imageResults =
-          pages.map { page ->
-            val processed =
-              imageProcessor.process(
-                page.imageUri,
-                scanOptions.quality,
-                scanOptions.includeExif,
-                scanOptions.includeGpsExif,
-                includeRawExif = scanOptions.includeRawExif,
-                synthesizeDeviceInfo = true,
-              )
-            val outcome = runOcrAndAutoRotate(ocrProcessor, processed.file, scanOptions)
-            val ocr = outcome.result
-            val finalDims = outcome.rotatedDims ?: Pair(processed.width, processed.height)
-            // Write the parsed EXIF back onto the final JPEG (after any
-            // autoRotate re-compress) so server-side file readers see it on
-            // Android too — parity with iOS.
-            processed.exifData?.let { imageProcessor.writeExifToFile(processed.file, it) }
-            ResultBuilder.buildImage(
-              file = processed.file,
-              width = finalDims.first,
-              height = finalDims.second,
-              ocrText = ocr?.text,
-              exifData = processed.exifData,
-              imageOrigin = "camera",
-              confidence = ocr?.confidence?.toDouble(),
-              ocrLines =
-                ocrLinesFor(
-                  scanOptions,
-                  ocr,
-                  processed.width,
-                  processed.height,
-                  outcome.rotatedDims,
-                  outcome.remapDegrees,
-                ),
-            )
-          }
-
-        promise.resolve(ResultBuilder.buildSuccess(imageResults))
-      } catch (e: OutOfMemoryError) {
-        // Report under the documented PROCESSING_FAILED code (the public error
-        // contract has no OUT_OF_MEMORY); the message still names the cause.
-        promise.reject(
-          "PROCESSING_FAILED",
-          "Image too large to process: ${e.message ?: "out of memory"}",
-          e,
-        )
-      } catch (e: Exception) {
-        promise.reject("PROCESSING_FAILED", e.message ?: "Image processing failed", e)
-      } finally {
-        ocrProcessor?.close()
-      }
-    }
-  }
-
-  private fun handleGalleryResult(
-    resultCode: Int,
-    data: Intent?,
-  ) {
-    val promise = pendingPromise ?: return
-    val scanOptions = pendingOptions ?: return
-    pendingPromise = null
-    pendingOptions = null
-
-    Log.i(
-      "ReceiptScanner.Gallery",
-      "handleGalleryResult resultCode=$resultCode dataNull=${data == null}",
-    )
-
-    if (resultCode == Activity.RESULT_CANCELED || data == null) {
-      promise.resolve(ResultBuilder.buildCancelled())
-      return
-    }
-
-    // The crop editor reports an enforced-limit failure (e.g. oversized image)
-    // as RESULT_OK + EXTRA_ERROR so it is not mistaken for a user cancel.
-    data.getStringExtra(CropEditorActivity.EXTRA_ERROR)?.let { error ->
-      promise.reject("PROCESSING_FAILED", error)
-      return
-    }
-
-    val originalUriStrs = data.getStringArrayExtra(CropEditorActivity.EXTRA_ORIGINAL_URIS)
-    val allCorners = data.getFloatArrayExtra(CropEditorActivity.EXTRA_ALL_CORNERS)
-    Log.i(
-      "ReceiptScanner.Gallery",
-      "handleGalleryResult uris=${originalUriStrs?.size} corners=${allCorners?.size}",
-    )
-    if (resultCode != Activity.RESULT_OK || originalUriStrs.isNullOrEmpty() || allCorners == null) {
-      promise.resolve(ResultBuilder.buildCancelled())
-      return
-    }
-
-    executor.execute {
-      val ocrProcessor = if (scanOptions.ocr) OcrProcessor() else null
-      try {
-        val imageResults =
-          originalUriStrs.mapIndexed { i, uriStr ->
-            val originalUri = uriStr.toUri()
-            try {
-              val corners =
-                allCorners.copyOfRange(
-                  i * CropEditorActivity.CORNERS_PER_IMAGE,
-                  (i + 1) * CropEditorActivity.CORNERS_PER_IMAGE,
-                )
+    val processingTask =
+      Runnable {
+        try {
+          val imageResults =
+            pages.map { page ->
               val processed =
-                imageProcessor.processGallery(
-                  originalUri,
-                  corners,
+                imageProcessor.process(
+                  page.imageUri,
                   scanOptions.quality,
                   scanOptions.includeExif,
                   scanOptions.includeGpsExif,
                   includeRawExif = scanOptions.includeRawExif,
+                  synthesizeDeviceInfo = true,
                 )
-              val imageOrigin = imageProcessor.inferOrigin(originalUri, processed.exifData)
               val outcome = runOcrAndAutoRotate(ocrProcessor, processed.file, scanOptions)
               val ocr = outcome.result
               val finalDims = outcome.rotatedDims ?: Pair(processed.width, processed.height)
@@ -287,7 +380,7 @@ class ReceiptScannerModule(
                 height = finalDims.second,
                 ocrText = ocr?.text,
                 exifData = processed.exifData,
-                imageOrigin = imageOrigin,
+                imageOrigin = "camera",
                 confidence = ocr?.confidence?.toDouble(),
                 ocrLines =
                   ocrLinesFor(
@@ -299,26 +392,207 @@ class ReceiptScannerModule(
                     outcome.remapDegrees,
                   ),
               )
-            } finally {
-              originalUri.path?.let { File(it).delete() }
             }
-          }
 
-        promise.resolve(ResultBuilder.buildSuccess(imageResults))
-      } catch (e: OutOfMemoryError) {
-        // OOM is Error, not Exception — convert to reject instead of killing the executor.
-        // Report under the documented PROCESSING_FAILED code (the public error
-        // contract has no OUT_OF_MEMORY); the message still names the cause.
-        promise.reject(
-          "PROCESSING_FAILED",
-          "Image too large to process: ${e.message ?: "out of memory"}",
-          e,
-        )
-      } catch (e: Exception) {
-        promise.reject("PROCESSING_FAILED", e.message ?: "Gallery processing failed", e)
-      } finally {
-        ocrProcessor?.close()
-        originalUriStrs.forEach { uri -> uri.toUri().path?.let { File(it).delete() } }
+          resolvePendingScan(token, ResultBuilder.buildSuccess(imageResults))
+        } catch (e: OutOfMemoryError) {
+          // Report under the documented PROCESSING_FAILED code (the public error
+          // contract has no OUT_OF_MEMORY); the message still names the cause.
+          rejectPendingScan(
+            token,
+            "PROCESSING_FAILED",
+            "Image too large to process: ${e.message ?: "out of memory"}",
+            e,
+          )
+        } catch (e: Exception) {
+          rejectPendingScan(token, "PROCESSING_FAILED", e.message ?: "Image processing failed", e)
+        } finally {
+          ocrProcessor?.close()
+        }
+      }
+    try {
+      executor.execute(processingTask)
+    } catch (e: RejectedExecutionException) {
+      rejectPendingScan(
+        token,
+        "PROCESSING_FAILED",
+        e.message ?: "Image processing was interrupted",
+        e,
+        ocrProcessor,
+      )
+    }
+  }
+
+  private fun handleGalleryResult(
+    resultCode: Int,
+    data: Intent?,
+  ) {
+    val token = pendingScanLifecycle.current() ?: return
+    if (pendingPromise == null) return
+    val scanOptions =
+      pendingOptions ?: run {
+        finishPendingScan(token)
+        return
+      }
+    val ocrProcessor = takePendingOcrProcessor()
+
+    Log.i(
+      "ReceiptScanner.Gallery",
+      "handleGalleryResult resultCode=$resultCode dataNull=${data == null}",
+    )
+
+    if (resultCode == Activity.RESULT_CANCELED || data == null) {
+      resolvePendingScan(token, ResultBuilder.buildCancelled(), ocrProcessor)
+      return
+    }
+
+    // The crop editor reports an enforced-limit failure (e.g. oversized image)
+    // as RESULT_OK + EXTRA_ERROR so it is not mistaken for a user cancel.
+    data.getStringExtra(CropEditorActivity.EXTRA_ERROR)?.let { error ->
+      rejectPendingScan(token, "PROCESSING_FAILED", error, processor = ocrProcessor)
+      return
+    }
+
+    val originalUriStrs = data.getStringArrayExtra(CropEditorActivity.EXTRA_ORIGINAL_URIS)
+    val allCorners = data.getFloatArrayExtra(CropEditorActivity.EXTRA_ALL_CORNERS)
+    Log.i(
+      "ReceiptScanner.Gallery",
+      "handleGalleryResult uris=${originalUriStrs?.size} corners=${allCorners?.size}",
+    )
+    if (resultCode != Activity.RESULT_OK || originalUriStrs.isNullOrEmpty() || allCorners == null) {
+      resolvePendingScan(token, ResultBuilder.buildCancelled(), ocrProcessor)
+      return
+    }
+
+    val processingTask =
+      Runnable {
+        try {
+          val imageResults =
+            originalUriStrs.mapIndexed { i, uriStr ->
+              val originalUri = uriStr.toUri()
+              try {
+                val corners =
+                  allCorners.copyOfRange(
+                    i * CropEditorActivity.CORNERS_PER_IMAGE,
+                    (i + 1) * CropEditorActivity.CORNERS_PER_IMAGE,
+                  )
+                val processed =
+                  imageProcessor.processGallery(
+                    originalUri,
+                    corners,
+                    scanOptions.quality,
+                    scanOptions.includeExif,
+                    scanOptions.includeGpsExif,
+                    includeRawExif = scanOptions.includeRawExif,
+                  )
+                val imageOrigin = imageProcessor.inferOrigin(originalUri, processed.exifData)
+                val outcome = runOcrAndAutoRotate(ocrProcessor, processed.file, scanOptions)
+                val ocr = outcome.result
+                val finalDims = outcome.rotatedDims ?: Pair(processed.width, processed.height)
+                // Write the parsed EXIF back onto the final JPEG (after any
+                // autoRotate re-compress) so server-side file readers see it on
+                // Android too — parity with iOS.
+                processed.exifData?.let { imageProcessor.writeExifToFile(processed.file, it) }
+                ResultBuilder.buildImage(
+                  file = processed.file,
+                  width = finalDims.first,
+                  height = finalDims.second,
+                  ocrText = ocr?.text,
+                  exifData = processed.exifData,
+                  imageOrigin = imageOrigin,
+                  confidence = ocr?.confidence?.toDouble(),
+                  ocrLines =
+                    ocrLinesFor(
+                      scanOptions,
+                      ocr,
+                      processed.width,
+                      processed.height,
+                      outcome.rotatedDims,
+                      outcome.remapDegrees,
+                    ),
+                )
+              } finally {
+                originalUri.path?.let { File(it).delete() }
+              }
+            }
+
+          resolvePendingScan(token, ResultBuilder.buildSuccess(imageResults))
+        } catch (e: OutOfMemoryError) {
+          // OOM is Error, not Exception — convert to reject instead of killing the executor.
+          // Report under the documented PROCESSING_FAILED code (the public error
+          // contract has no OUT_OF_MEMORY); the message still names the cause.
+          rejectPendingScan(
+            token,
+            "PROCESSING_FAILED",
+            "Image too large to process: ${e.message ?: "out of memory"}",
+            e,
+          )
+        } catch (e: Exception) {
+          rejectPendingScan(token, "PROCESSING_FAILED", e.message ?: "Gallery processing failed", e)
+        } finally {
+          ocrProcessor?.close()
+          originalUriStrs.forEach { uri -> uri.toUri().path?.let { File(it).delete() } }
+        }
+      }
+    try {
+      executor.execute(processingTask)
+    } catch (e: RejectedExecutionException) {
+      originalUriStrs.forEach { uri -> uri.toUri().path?.let { File(it).delete() } }
+      rejectPendingScan(
+        token,
+        "PROCESSING_FAILED",
+        e.message ?: "Gallery processing was interrupted",
+        e,
+        ocrProcessor,
+      )
+    }
+  }
+
+  private fun takePendingOcrProcessor(): OcrProcessor? {
+    val processor = pendingOcrProcessor
+    pendingOcrProcessor = null
+    return processor
+  }
+
+  private fun finishPendingScan(
+    token: PendingScanLifecycle.Token,
+    terminalAction: (Promise?) -> Unit = {},
+  ) {
+    pendingScanLifecycle.complete(token) {
+      val promise = pendingPromise
+      pendingOcrPreparation?.cancel()
+      pendingOcrPreparation = null
+      takePendingOcrProcessor()?.close()
+      pendingPromise = null
+      pendingOptions = null
+      terminalAction(promise)
+    }
+  }
+
+  private fun resolvePendingScan(
+    token: PendingScanLifecycle.Token,
+    value: Any?,
+    processor: OcrProcessor? = null,
+  ) {
+    finishPendingScan(token) { promise ->
+      processor?.close()
+      promise?.resolve(value)
+    }
+  }
+
+  private fun rejectPendingScan(
+    token: PendingScanLifecycle.Token,
+    code: String,
+    message: String?,
+    error: Throwable? = null,
+    processor: OcrProcessor? = null,
+  ) {
+    finishPendingScan(token) { promise ->
+      processor?.close()
+      if (error == null) {
+        promise?.reject(code, message)
+      } else {
+        promise?.reject(code, message, error)
       }
     }
   }
@@ -466,6 +740,7 @@ class ReceiptScannerModule(
 
   override fun invalidate() {
     super.invalidate()
+    pendingScanLifecycle.current()?.let(::finishPendingScan)
     executor.shutdown()
     reactApplicationContext.removeActivityEventListener(this)
   }

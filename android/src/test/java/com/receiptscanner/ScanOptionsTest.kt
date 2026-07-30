@@ -1,5 +1,6 @@
 package com.receiptscanner
 
+import com.facebook.react.bridge.JavaOnlyArray
 import com.facebook.react.bridge.JavaOnlyMap
 import org.junit.Assert.assertEquals
 import org.junit.Test
@@ -16,6 +17,7 @@ class ScanOptionsTest {
     assertEquals(false, opts.includeGpsExif)
     assertEquals(true, opts.ocr)
     assertEquals(false, opts.ocrGeometry)
+    assertEquals(listOf("ko-KR", "en-US"), opts.ocrLanguages)
   }
 
   @Test
@@ -65,6 +67,32 @@ class ScanOptionsTest {
   fun `from reads ocr false`() {
     val map = JavaOnlyMap().apply { putBoolean("ocr", false) }
     assertEquals(false, ScanOptions.from(map).ocr)
+  }
+
+  @Test
+  fun `from preserves ocr language order`() {
+    val languages =
+      JavaOnlyArray().apply {
+        pushString("ja-JP")
+        pushString("en-US")
+      }
+    val map = JavaOnlyMap().apply { putArray("ocrLanguages", languages) }
+
+    assertEquals(listOf("ja-JP", "en-US"), ScanOptions.from(map).ocrLanguages)
+  }
+
+  @Test
+  fun `from preserves explicit empty ocr languages`() {
+    val map = JavaOnlyMap().apply { putArray("ocrLanguages", JavaOnlyArray()) }
+
+    assertEquals(emptyList<String>(), ScanOptions.from(map).ocrLanguages)
+  }
+
+  @Test
+  fun `from defaults ocr languages when bridge value is not an array`() {
+    val map = JavaOnlyMap().apply { putString("ocrLanguages", "ja-JP") }
+
+    assertEquals(listOf("ko-KR", "en-US"), ScanOptions.from(map).ocrLanguages)
   }
 
   @Test

@@ -19,6 +19,8 @@ export interface Spec extends TurboModule {
    * @returns Promise resolving to a {@link import("./types").ScanReceiptResult}-shaped object.
    */
   scan(options: Object): Promise<Object>;
+  /** Returns OCR capability without opening scanner UI or downloading models. */
+  getOcrCapabilities(): Promise<Object>;
 }
 
 /**
