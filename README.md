@@ -153,6 +153,26 @@ const result = await scan({ ocr: true });
 const result = await scan({ ocr: false });
 ```
 
+### Multilingual OCR and capability discovery
+
+Choose native OCR with ordered BCP 47 hints, and inspect the active platform without opening scanner UI:
+
+```ts
+import { getOcrCapabilities, scan } from "react-native-receipt-scanner";
+
+const capabilities = await getOcrCapabilities();
+const result = await scan({
+  ocrLanguages: ["es-ES", "en-US"],
+  ocrFloor: false,
+});
+```
+
+`ocrLanguages` defaults to `["ko-KR", "en-US"]`. These hints select native OCR only. They do not infer a receipt country or parse receipt / invoice fields.
+
+On iOS, `capabilities` contains the ordered Vision identifiers currently supported by the active request. On Android, it contains script model states (`"ready"` or `"download-required"`); querying it never starts a download. The web fallback returns `{ platform: "web", defaultLanguages: ["ko-KR", "en-US"], supported: false }`.
+
+Non-Korean and non-English scripts exposed by a provider are provider-supported but uncalibrated until fixture coverage exists.
+
 ### EXIF metadata
 
 ```ts
@@ -243,6 +263,7 @@ if (result.status === "success") {
 | `includeExif`       | `boolean`               | `true`                                    | Attach EXIF metadata to each result image                                                                                                                                                                                                   |
 | `includeGpsExif`    | `boolean`               | `false`                                   | Include GPS coordinates in EXIF (off by default — privacy risk)                                                                                                                                                                             |
 | `ocr`               | `boolean`               | `true`                                    | Run on-device text recognition and return `ocrText`                                                                                                                                                                                         |
+| `ocrLanguages`      | `readonly string[]`     | `["ko-KR", "en-US"]`                      | Ordered BCP 47 hints that select native OCR. Empty arrays or entries reject while OCR is enabled. These hints do not infer a receipt country or parse receipt / invoice fields.                                                             |
 | `cropAutoConfirm`   | `boolean`               | `false`                                   | iOS gallery only: skip the crop editor when document detection confidence is ≥ 0.85 and apply the detected corners automatically                                                                                                            |
 | `ocrFloor`          | `OcrFloor \| false`     | conservative default (12 chars / 2 lines) | Reject blank / non-text captures (e.g. landscape photo of a wall). Pass `false` to disable. Only applies when `ocr: true`.                                                                                                                  |
 | `autoRotate`        | `boolean`               | `true`                                    | Detect 90° / 180° / 270° content rotation via OCR confidence and rotate the output JPEG to upright. Only applies when `ocr: true`.                                                                                                          |
@@ -346,15 +367,19 @@ console.log(result.images[0].exif?.raw);
 
 ### Error codes
 
-| Code                  | Trigger                                                             |
-| --------------------- | ------------------------------------------------------------------- |
-| `SCAN_IN_PROGRESS`    | `scan()` called while a previous call has not yet resolved          |
-| `NO_ACTIVITY`         | No foreground activity / view controller found (Android)            |
-| `NOT_SUPPORTED`       | `VNDocumentCameraViewController` not supported on this device (iOS) |
-| `SCANNER_INIT_FAILED` | ML Kit scanner failed to initialize (Android)                       |
-| `SCAN_FAILED`         | Unexpected activity result code (Android)                           |
-| `PROCESSING_FAILED`   | Image processing or OCR failed                                      |
-| `CAMERA_FAILED`       | `VNDocumentCameraViewController` reported an error (iOS)            |
+| Code                                     | Trigger                                                             |
+| ---------------------------------------- | ------------------------------------------------------------------- |
+| `SCAN_IN_PROGRESS`                       | `scan()` called while a previous call has not yet resolved          |
+| `NO_ACTIVITY`                            | No foreground activity / view controller found (Android)            |
+| `NOT_SUPPORTED`                          | `VNDocumentCameraViewController` not supported on this device (iOS) |
+| `SCANNER_INIT_FAILED`                    | ML Kit scanner failed to initialize (Android)                       |
+| `SCAN_FAILED`                            | Unexpected activity result code (Android)                           |
+| `PROCESSING_FAILED`                      | Image processing or OCR failed                                      |
+| `CAMERA_FAILED`                          | `VNDocumentCameraViewController` reported an error (iOS)            |
+| `INVALID_OCR_LANGUAGE`                   | OCR is enabled and a hint is empty or not a valid BCP 47 tag        |
+| `OCR_LANGUAGE_NOT_SUPPORTED`             | A requested language or script is not supported by the provider     |
+| `OCR_LANGUAGE_COMBINATION_NOT_SUPPORTED` | Android receives more than one non-Latin script                     |
+| `OCR_MODEL_INSTALL_FAILED`               | Android cannot prepare the selected OCR model before scanner UI     |
 
 ---
 

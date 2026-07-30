@@ -14,7 +14,7 @@ ios/
 ├── RNGalleryPickerDelegate.{h,m}  PHPicker → Vision detect → optional crop UI → process
 ├── RNCropEditorViewController.{h,m}  Custom 4-handle perspective crop editor (ADR-004)
 ├── RNImageProcessor.{h,m}         Orientation normalize + JPEG + EXIF + perspective correction
-└── RNOcrProcessor.{h,m}           VNRecognizeTextRequest (ko-KR + en-US, iOS 16+)
+└── RNOcrProcessor.{h,m}           VNRecognizeTextRequest with ordered caller BCP 47 hints (iOS 16+)
 ```
 
 ## WHERE TO LOOK
@@ -31,7 +31,7 @@ ios/
 | EXIF synthesis on camera scans                         | `RNImageProcessor.m:119-128`                        |
 | Perspective correction (orientation baked first)       | `RNImageProcessor.m:163-192`                        |
 | Localizable string keys                                | `RNCropEditorViewController.m:94-110`               |
-| Korean OCR availability gating                         | `RNOcrProcessor.m:18-23`                            |
+| OCR language validation and Vision availability        | `RNOcrProcessor.m:18-23, 130-180`                   |
 
 ## CONVENTIONS
 
