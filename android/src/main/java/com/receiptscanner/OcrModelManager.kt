@@ -199,7 +199,13 @@ internal class OcrModelManager(
     onReady: (OcrProcessor) -> Unit,
     onFailure: (Exception) -> Unit,
   ): OcrPreparation {
-    val recognizer = recognizerFactory.create(script)
+    val recognizer =
+      try {
+        recognizerFactory.create(script)
+      } catch (error: Exception) {
+        onFailure(error)
+        return OcrPreparation {}
+      }
     val isTerminal = AtomicBoolean(false)
     val installLock = Any()
     var installPreparation: OcrPreparation? = null

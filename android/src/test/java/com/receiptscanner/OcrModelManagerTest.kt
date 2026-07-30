@@ -142,6 +142,28 @@ class OcrModelManagerTest {
   }
 
   @Test
+  fun `synchronous recognizer factory failure is delivered once with a cancelable preparation`() {
+    // Given
+    val expected = IllegalStateException("recognizer creation failed")
+    val manager =
+      OcrModelManager(
+        UnusedModuleInstaller,
+        OcrRecognizerFactory { throw expected },
+      )
+    var readyCount = 0
+    val failures = mutableListOf<Exception>()
+
+    // When
+    val preparation = manager.prepare(OcrScript.JAPANESE, { readyCount += 1 }, failures::add)
+    preparation.cancel()
+    preparation.cancel()
+
+    // Then
+    assertEquals(0, readyCount)
+    assertEquals(listOf(expected), failures)
+  }
+
+  @Test
   fun `canceling preparation unregisters installation and closes the recognizer`() {
     // Given
     val fixture = ManagerFixture()
@@ -226,6 +248,20 @@ class OcrModelManagerTest {
     val recognizers = FakeRecognizerFactory()
     val installer = FakeModuleInstaller(recognizers, availableScripts)
     val manager = OcrModelManager(installer, recognizers)
+  }
+
+  private object UnusedModuleInstaller : OcrModuleInstaller {
+    override fun check(
+      recognizer: TextRecognizer,
+      onResult: (Boolean) -> Unit,
+      onFailure: (Exception) -> Unit,
+    ): Unit = error("Installer check must not run when recognizer creation fails")
+
+    override fun install(
+      recognizer: TextRecognizer,
+      onInstalled: () -> Unit,
+      onFailure: (Exception) -> Unit,
+    ): OcrPreparation = error("Installer install must not run when recognizer creation fails")
   }
 
   private class FakeRecognizerFactory : OcrRecognizerFactory {
