@@ -1,8 +1,7 @@
 # react-native-receipt-scanner — Knowledge Base
 
-**Generated:** 2026-05-03
-**Commit:** 872976e
-**Branch:** main
+Freshness is deliberately not stamped here — `git log -1 -- AGENTS.md` is the honest answer, and it cannot rot.
+A hand-written "generated at commit X" line is precisely the rotting premise this file warns about under CONVENTIONS: it stays valid Markdown while quietly becoming a lie, and it reads as a freshness guarantee it never had. This one sat at `2026-05-03 / 872976e` for three months across two feature releases.
 
 ## OVERVIEW
 
