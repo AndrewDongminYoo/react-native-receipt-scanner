@@ -82,8 +82,8 @@ internal class CropEditorActivity : ComponentActivity() {
 
     /**
      * Longer-side cap (in pixels) for the on-screen preview decode. Lower than
-     * `ImageProcessor.GALLERY_MAX_DIM` because the editor only needs a display-
-     * resolution bitmap; the final crop re-decodes at the larger cap.
+     * `ImageProcessor.MAX_PROCESSING_DIM` because the editor only needs a
+     * display-resolution bitmap; the final crop re-decodes at the larger cap.
      */
     private const val PREVIEW_MAX_DIM = 2048
   }
