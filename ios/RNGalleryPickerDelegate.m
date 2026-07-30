@@ -335,6 +335,7 @@ static NSString * _Nullable OriginFromExifFields(NSString *make, NSString *model
         RNOcrResult *ocr =
             [RNOcrProcessor recognizeAndDetectRotationInImage:croppedUIImage
                                             minimumTextHeight:self.options.minimumTextHeight
+                                                    languages:self.options.ocrLanguages
                                                         error:NULL];
         if (ocr) {
             ocrText = ocr.text;

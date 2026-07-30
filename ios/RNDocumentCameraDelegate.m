@@ -55,6 +55,7 @@
                 RNOcrResult *ocr =
                     [RNOcrProcessor recognizeAndDetectRotationInImage:normalized
                                                     minimumTextHeight:strongSelf.options.minimumTextHeight
+                                                            languages:strongSelf.options.ocrLanguages
                                                                 error:&ocrErr];
                 if (ocr) {
                     ocrText = ocr.text;

@@ -9,6 +9,8 @@
 // lower it once on-device experiments quantify the small-line recall vs. noise
 // trade-off.
 static const CGFloat kReceiptMinTextHeight = 1.0f / 32.0f;
+static const NSUInteger kReceiptTextRecognitionRevision = VNRecognizeTextRequestRevision3;
+static NSString *const kRNOcrErrorCodeKey = @"code";
 
 // Count-only rotation routing. PROVISIONAL — biased against rotating
 // (a false rotation is worse than a missed one); calibrate with corpus logs.
@@ -21,8 +23,14 @@ static const double kRotateCommitRatio = 1.3;            // probe must find >= r
 + (nullable NSString *)runOcrOnCIImage:(CIImage *)ciImage
                                   level:(VNRequestTextRecognitionLevel)level
                       minimumTextHeight:(double)minimumTextHeight
+                              languages:(NSArray<NSString *> *)languages
                              outResults:(NSMutableArray<VNRecognizedTextObservation *> * _Nullable)outResults
                                   error:(NSError **)error;
+
++ (VNRecognizeTextRequest *)recognitionRequestWithLevel:(VNRequestTextRecognitionLevel)level
+                                               languages:(nullable NSArray<NSString *> *)languages;
+
++ (NSError *)languageErrorWithCode:(NSString *)code message:(NSString *)message;
 
 /** Number of observations whose top candidate has non-empty text. This is the
  *  count-only rotation signal: recognition-level-comparable, unlike
@@ -59,6 +67,7 @@ static const double kRotateCommitRatio = 1.3;            // probe must find >= r
 + (RNOcrResult *)resultByRotating:(CIImage *)ciImage
                        ccwDegrees:(NSInteger)ccwDegrees
                 minimumTextHeight:(double)minimumTextHeight
+                         languages:(NSArray<NSString *> *)languages
                   fallbackResults:(NSArray<VNRecognizedTextObservation *> *)fallbackResults
                             error:(NSError **)error;
 
@@ -77,8 +86,74 @@ static const double kRotateCommitRatio = 1.3;            // probe must find >= r
 
 @implementation RNOcrProcessor
 
++ (nullable NSArray<NSString *> *)supportedRecognitionLanguages:(NSError **)error {
+    VNRecognizeTextRequest *request =
+        [self recognitionRequestWithLevel:VNRequestTextRecognitionLevelAccurate languages:nil];
+    return [request supportedRecognitionLanguagesAndReturnError:error];
+}
+
++ (nullable NSArray<NSString *> *)validateRecognitionLanguages:(NSArray<NSString *> *)languages
+                                                         error:(NSError **)error {
+    if (languages.count == 0) {
+        if (error) {
+            *error = [self languageErrorWithCode:@"INVALID_OCR_LANGUAGE"
+                                          message:@"At least one OCR language is required"];
+        }
+        return nil;
+    }
+
+    NSError *supportError = nil;
+    NSArray<NSString *> *supportedLanguages = [self supportedRecognitionLanguages:&supportError];
+    if (!supportedLanguages) {
+        if (error) *error = supportError;
+        return nil;
+    }
+    NSSet<NSString *> *supportedLanguageSet = [NSSet setWithArray:supportedLanguages];
+    NSMutableOrderedSet<NSString *> *validatedLanguages = [NSMutableOrderedSet new];
+    NSCharacterSet *whitespace = [NSCharacterSet whitespaceAndNewlineCharacterSet];
+    for (NSString *language in languages) {
+        NSString *trimmed = [language stringByTrimmingCharactersInSet:whitespace];
+        NSString *canonical = [NSLocale canonicalLanguageIdentifierFromString:trimmed];
+        if (trimmed.length == 0 || canonical.length == 0) {
+            if (error) {
+                *error = [self languageErrorWithCode:@"INVALID_OCR_LANGUAGE"
+                                              message:@"OCR language must be a valid BCP 47 identifier"];
+            }
+            return nil;
+        }
+        if (![supportedLanguageSet containsObject:canonical]) {
+            if (error) {
+                *error = [self languageErrorWithCode:@"OCR_LANGUAGE_NOT_SUPPORTED"
+                                              message:[NSString stringWithFormat:@"OCR language %@ is not supported", canonical]];
+            }
+            return nil;
+        }
+        [validatedLanguages addObject:canonical];
+    }
+    return validatedLanguages.array;
+}
+
++ (NSError *)languageErrorWithCode:(NSString *)code message:(NSString *)message {
+    return [NSError errorWithDomain:@"RNOcrProcessor" code:1
+                           userInfo:@{
+                               NSLocalizedDescriptionKey: message,
+                               kRNOcrErrorCodeKey: code,
+                           }];
+}
+
++ (VNRecognizeTextRequest *)recognitionRequestWithLevel:(VNRequestTextRecognitionLevel)level
+                                               languages:(nullable NSArray<NSString *> *)languages {
+    VNRecognizeTextRequest *request = [[VNRecognizeTextRequest alloc] init];
+    request.revision = kReceiptTextRecognitionRevision;
+    request.recognitionLevel = level;
+    request.recognitionLanguages = languages ?: @[];
+    request.automaticallyDetectsLanguage = NO;
+    return request;
+}
+
 + (nullable RNOcrResult *)recognizeAndDetectRotationInImage:(UIImage *)image
                                           minimumTextHeight:(double)minimumTextHeight
+                                                   languages:(NSArray<NSString *> *)languages
                                                        error:(NSError **)error {
     CIImage *ciImage = [[CIImage alloc] initWithImage:image];
     if (!ciImage) {
@@ -98,6 +173,7 @@ static const double kRotateCommitRatio = 1.3;            // probe must find >= r
     NSString *t0 = [self runOcrOnCIImage:ciImage
                                    level:VNRequestTextRecognitionLevelAccurate
                        minimumTextHeight:minimumTextHeight
+                               languages:languages
                               outResults:r0
                                    error:error];
     if (!t0) return nil;
@@ -146,6 +222,7 @@ static const double kRotateCommitRatio = 1.3;            // probe must find >= r
             RNOcrResult *rotatedResult = [self resultByRotating:ciImage
                                                      ccwDegrees:(360 - correction) % 360
                                               minimumTextHeight:minimumTextHeight
+                                                       languages:languages
                                                 fallbackResults:nil
                                                           error:&rotateErr];
             if (rotatedResult) return rotatedResult;
@@ -185,6 +262,7 @@ static const double kRotateCommitRatio = 1.3;            // probe must find >= r
         [self runOcrOnCIImage:rotated
                         level:VNRequestTextRecognitionLevelFast
             minimumTextHeight:minimumTextHeight
+                     languages:languages
                    outResults:rN
                         error:&probeErr];
         NSInteger cN = [self nonEmptyCountFromResults:rN];
@@ -212,6 +290,7 @@ static const double kRotateCommitRatio = 1.3;            // probe must find >= r
     RNOcrResult *rotatedResult = [self resultByRotating:ciImage
                                              ccwDegrees:bestDegrees
                                       minimumTextHeight:minimumTextHeight
+                                              languages:languages
                                         fallbackResults:bestResults
                                                   error:error];
     return rotatedResult ?: result;
@@ -222,6 +301,7 @@ static const double kRotateCommitRatio = 1.3;            // probe must find >= r
 + (RNOcrResult *)resultByRotating:(CIImage *)ciImage
                        ccwDegrees:(NSInteger)ccwDegrees
                 minimumTextHeight:(double)minimumTextHeight
+                         languages:(NSArray<NSString *> *)languages
                   fallbackResults:(NSArray<VNRecognizedTextObservation *> *)fallbackResults
                             error:(NSError **)error {
     CIImage *rotated = [self rotate:ciImage byDegrees:ccwDegrees];
@@ -229,6 +309,7 @@ static const double kRotateCommitRatio = 1.3;            // probe must find >= r
     NSString *t3 = [self runOcrOnCIImage:rotated
                                    level:VNRequestTextRecognitionLevelAccurate
                        minimumTextHeight:minimumTextHeight
+                               languages:languages
                               outResults:r3
                                    error:error];
 
@@ -265,11 +346,10 @@ static const double kRotateCommitRatio = 1.3;            // probe must find >= r
 + (nullable NSString *)runOcrOnCIImage:(CIImage *)ciImage
                                   level:(VNRequestTextRecognitionLevel)level
                       minimumTextHeight:(double)minimumTextHeight
+                              languages:(NSArray<NSString *> *)languages
                              outResults:(NSMutableArray<VNRecognizedTextObservation *> * _Nullable)outResults
                                   error:(NSError **)error {
-    VNRecognizeTextRequest *request = [[VNRecognizeTextRequest alloc] init];
-    request.recognitionLanguages = @[@"ko-KR", @"en-US"];
-    request.recognitionLevel = level;
+    VNRecognizeTextRequest *request = [self recognitionRequestWithLevel:level languages:languages];
     // Receipts: disable language correction. Prices, product codes, and short
     // tokens are not dictionary words, so correction over-corrects and distorts
     // them. Applies to both .fast and .accurate passes.
