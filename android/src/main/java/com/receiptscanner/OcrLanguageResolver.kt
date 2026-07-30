@@ -76,10 +76,13 @@ internal object OcrLanguageResolver {
       throw invalidLanguageTag(tag)
     }
 
+    val subtags = tag.lowercase(Locale.ROOT).split("-")
+    if (subtags.first() == "x") return
+
     val variants = mutableSetOf<String>()
     val extensionSingletons = mutableSetOf<String>()
     var inExtension = false
-    tag.lowercase(Locale.ROOT).split("-").drop(1).forEach { subtag ->
+    subtags.drop(1).forEach { subtag ->
       if (subtag.length == 1) {
         if (subtag == "x") return
         if (!extensionSingletons.add(subtag)) throw invalidLanguageTag(tag)

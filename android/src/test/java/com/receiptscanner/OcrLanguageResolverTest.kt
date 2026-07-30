@@ -171,6 +171,16 @@ class OcrLanguageResolverTest {
   }
 
   @Test
+  fun `private use subtags may repeat`() {
+    val script =
+      OcrLanguageResolver.resolve(listOf("x-private-private")) {
+        LikelySubtags("en", "Latn")
+      }
+
+    assertEquals(OcrScript.LATIN, script)
+  }
+
+  @Test
   fun `valid language script and region reaches likely script resolution`() {
     // Given
     var resolvedTag: String? = null
