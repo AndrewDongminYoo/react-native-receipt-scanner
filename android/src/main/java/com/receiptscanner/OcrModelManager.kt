@@ -15,11 +15,16 @@ import com.google.mlkit.vision.text.japanese.JapaneseTextRecognizerOptions
 import com.google.mlkit.vision.text.korean.KoreanTextRecognizerOptions
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
 import java.util.concurrent.CancellationException
+import java.util.concurrent.atomic.AtomicBoolean
 
 internal data class OcrModelState(
   val script: String,
   val status: String,
 )
+
+internal fun interface OcrPreparation {
+  fun cancel()
+}
 
 internal fun interface OcrRecognizerFactory {
   fun create(script: OcrScript): TextRecognizer
@@ -61,7 +66,7 @@ internal interface OcrModuleInstaller {
     recognizer: TextRecognizer,
     onInstalled: () -> Unit,
     onFailure: (Exception) -> Unit,
-  )
+  ): OcrPreparation
 }
 
 private class PlayServicesOcrModuleInstaller(
@@ -84,20 +89,18 @@ private class PlayServicesOcrModuleInstaller(
     recognizer: TextRecognizer,
     onInstalled: () -> Unit,
     onFailure: (Exception) -> Unit,
-  ) {
+  ): OcrPreparation {
     lateinit var listener: InstallStatusListener
-    var isTerminal = false
+    val isTerminal = AtomicBoolean(false)
 
     fun finishInstalled() {
-      if (isTerminal) return
-      isTerminal = true
+      if (!isTerminal.compareAndSet(false, true)) return
       client.unregisterListener(listener)
       onInstalled()
     }
 
     fun finishFailed(error: Exception) {
-      if (isTerminal) return
-      isTerminal = true
+      if (!isTerminal.compareAndSet(false, true)) return
       client.unregisterListener(listener)
       onFailure(error)
     }
@@ -135,6 +138,12 @@ private class PlayServicesOcrModuleInstaller(
           finishInstalled()
         }
       }.addOnFailureListener(::finishFailed)
+
+    return OcrPreparation {
+      if (isTerminal.compareAndSet(false, true)) {
+        client.unregisterListener(listener)
+      }
+    }
   }
 }
 
@@ -189,34 +198,68 @@ internal class OcrModelManager(
     script: OcrScript,
     onReady: (OcrProcessor) -> Unit,
     onFailure: (Exception) -> Unit,
-  ) {
+  ): OcrPreparation {
     val recognizer = recognizerFactory.create(script)
-    if (script == OcrScript.KOREAN) {
+    val isTerminal = AtomicBoolean(false)
+    val installLock = Any()
+    var installPreparation: OcrPreparation? = null
+
+    fun cancelInstall() {
+      synchronized(installLock) {
+        installPreparation?.cancel()
+      }
+    }
+
+    fun finishReady() {
+      if (!isTerminal.compareAndSet(false, true)) return
+      cancelInstall()
       onReady(OcrProcessor(recognizer))
-      return
+    }
+
+    fun finishFailed(error: Exception) {
+      if (!isTerminal.compareAndSet(false, true)) return
+      cancelInstall()
+      recognizer.close()
+      onFailure(error)
+    }
+
+    val preparation =
+      OcrPreparation {
+        if (isTerminal.compareAndSet(false, true)) {
+          cancelInstall()
+          recognizer.close()
+        }
+      }
+
+    if (script == OcrScript.KOREAN) {
+      finishReady()
+      return preparation
     }
 
     installer.check(
       recognizer,
       onResult = { isReady ->
         if (isReady) {
-          onReady(OcrProcessor(recognizer))
+          finishReady()
         } else {
-          installer.install(
-            recognizer,
-            onInstalled = { onReady(OcrProcessor(recognizer)) },
-            onFailure = { error ->
-              recognizer.close()
-              onFailure(error)
-            },
-          )
+          synchronized(installLock) {
+            if (!isTerminal.get()) {
+              installPreparation =
+                installer.install(
+                  recognizer,
+                  onInstalled = ::finishReady,
+                  onFailure = ::finishFailed,
+                )
+              if (isTerminal.get()) {
+                installPreparation?.cancel()
+              }
+            }
+          }
         }
       },
-      onFailure = { error ->
-        recognizer.close()
-        onFailure(error)
-      },
+      onFailure = ::finishFailed,
     )
+    return preparation
   }
 
   private fun OcrScript.toStates(isReady: Boolean): List<OcrModelState> {

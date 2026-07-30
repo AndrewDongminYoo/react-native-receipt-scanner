@@ -142,6 +142,66 @@ class OcrModelManagerTest {
   }
 
   @Test
+  fun `canceling preparation unregisters installation and closes the recognizer`() {
+    // Given
+    val fixture = ManagerFixture()
+    var readyCount = 0
+    var failureCount = 0
+    val preparation =
+      fixture.manager.prepare(
+        OcrScript.JAPANESE,
+        { readyCount += 1 },
+        { failureCount += 1 },
+      )
+
+    // When
+    preparation.cancel()
+    fixture.installer.completeInstall()
+
+    // Then
+    assertEquals(1, fixture.installer.cancelInstallCount)
+    assertEquals(1, fixture.recognizers.latest(OcrScript.JAPANESE).closeCount)
+    assertEquals(0, readyCount)
+    assertEquals(0, failureCount)
+  }
+
+  @Test
+  fun `successful installation callback delivers one processor`() {
+    // Given
+    val fixture = ManagerFixture()
+    val processors = mutableListOf<OcrProcessor>()
+    fixture.manager.prepare(OcrScript.JAPANESE, processors::add, ::unexpectedFailure)
+
+    // When
+    fixture.installer.completeInstall()
+    fixture.installer.completeInstall()
+
+    // Then
+    assertEquals(1, processors.size)
+    processors.single().close()
+  }
+
+  @Test
+  fun `failed installation callback is terminal`() {
+    // Given
+    val fixture = ManagerFixture()
+    val expected = IllegalStateException("model install failed")
+    var readyCount = 0
+    val failures = mutableListOf<Exception>()
+    fixture.manager.prepare(OcrScript.DEVANAGARI, { readyCount += 1 }, failures::add)
+
+    // When
+    fixture.installer.failInstall(expected)
+    fixture.installer.completeInstall()
+    fixture.installer.failInstall(IllegalStateException("late failure"))
+
+    // Then
+    assertEquals(0, readyCount)
+    assertEquals(listOf(expected), failures)
+    assertEquals(1, fixture.recognizers.latest(OcrScript.DEVANAGARI).closeCount)
+  }
+
+  @Test
   fun `capability check closes every temporary dynamic recognizer`() {
     // Given
     val fixture = ManagerFixture(OcrScript.entries.toSet())
@@ -190,6 +250,8 @@ class OcrModelManagerTest {
   ) : OcrModuleInstaller {
     val checks = mutableListOf<OcrScript>()
     val installs = mutableListOf<OcrScript>()
+    var cancelInstallCount = 0
+      private set
     private var onInstalled: (() -> Unit)? = null
     private var onInstallFailure: ((Exception) -> Unit)? = null
 
@@ -207,10 +269,11 @@ class OcrModelManagerTest {
       recognizer: TextRecognizer,
       onInstalled: () -> Unit,
       onFailure: (Exception) -> Unit,
-    ) {
+    ): OcrPreparation {
       installs += recognizers.scriptFor(recognizer)
       this.onInstalled = onInstalled
       onInstallFailure = onFailure
+      return OcrPreparation { cancelInstallCount += 1 }
     }
 
     fun completeInstall() {
@@ -225,8 +288,10 @@ class OcrModelManagerTest {
   private class FakeRecognizer(
     val script: OcrScript,
   ) {
-    var isClosed = false
+    var closeCount = 0
       private set
+    val isClosed: Boolean
+      get() = closeCount > 0
 
     val client: TextRecognizer =
       Proxy.newProxyInstance(
@@ -235,7 +300,7 @@ class OcrModelManagerTest {
       ) { proxy, method, args ->
         when (method.name) {
           "close" -> {
-            isClosed = true
+            closeCount += 1
             null
           }
 
