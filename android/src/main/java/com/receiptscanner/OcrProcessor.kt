@@ -23,6 +23,13 @@ import java.util.Locale
  */
 class OcrProcessor(
   private val recognizer: TextRecognizer,
+  /**
+   * Whether [recognizer]'s provider is guaranteed to report real per-line
+   * confidence. True for the bundled Korean recognizer; false for the
+   * Play-services-delivered ones, whose confidence is a `0` sentinel on
+   * Play Services < 22.30. See [meanLineConfidence].
+   */
+  private val reportsConfidence: Boolean,
 ) {
   /**
    * One recognized line with the box it occupies, in the coordinates of the
@@ -304,9 +311,13 @@ class OcrProcessor(
    * null when no line reports a finite value. Mirrors the iOS per-observation
    * mean; reporting only, never used for routing.
    *
-   * The bundled Korean recognizer reports confidence; the *unbundled* library on
-   * Play Services < 22.30 returns 0 (indistinguishable here) — this package ships
-   * the bundled recognizer, so values are real.
+   * The bundled Korean recognizer reports confidence; the *unbundled*
+   * Play-services recognizers on Play Services < 22.30 return 0 for every line.
+   * Per-line that sentinel is indistinguishable from a real score, but a mean of
+   * exactly 0 over recognized text is not a value the recognizer produces, so it
+   * is reported as "not available" rather than as a score of zero — otherwise a
+   * caller with `ocrFloor.minConfidence > 0` would reject perfectly good scans.
+   * Absent confidence satisfies that floor by design.
    */
   private fun meanLineConfidence(result: Text): Float? {
     var sum = 0f
@@ -320,7 +331,12 @@ class OcrProcessor(
         }
       }
     }
-    return if (count > 0) sum / count else null
+    if (count == 0) return null
+    val mean = sum / count
+    // ponytail: exact-zero sentinel test, not a version probe. Upgrade path is
+    // querying the Play Services module version (>= 22.30 reports real values).
+    if (!reportsConfidence && mean == 0f) return null
+    return mean
   }
 
   /**

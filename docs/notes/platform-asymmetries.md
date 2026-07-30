@@ -79,12 +79,15 @@
 
 ### 2.2 per-line confidence 노출
 
-| 플랫폼                | per-line confidence                                                                                   |
-| --------------------- | ----------------------------------------------------------------------------------------------------- |
-| iOS Vision            | ✅ `VNRecognizedText.confidence` 노출                                                                 |
-| Android ML Kit Korean | ✅ `Text.Line.getConfidence()` 노출 (**번들** 인식기 기준. unbundled 라이브러리는 0을 반환할 수 있음) |
+| 플랫폼                           | per-line confidence                                                                              |
+| -------------------------------- | ------------------------------------------------------------------------------------------------ |
+| iOS Vision                       | ✅ `VNRecognizedText.confidence` 항상 노출                                                       |
+| Android ML Kit Korean (번들)     | ✅ `Text.Line.getConfidence()` 노출                                                              |
+| Android ML Kit 그 외 (unbundled) | ⚠️ Play Services < 22.30에서 전 라인 `0` 센티넬 → 이 패키지는 confidence를 **absent로 보고**한다 |
 
 **Resolution path.** 해소됨 (0.5.0). 이 표는 원래 "Android 미노출"로 기록돼 있었으나 0.5.0이 `meanLineConfidence`로 양 플랫폼 모두 `ocrQuality.confidence`를 채우도록 바꿨고, 표만 갱신되지 않았다 (2026-07-18 정정). `ocrFloor.minConfidence`는 여전히 absent 시 satisfied로 간주한다(ADR-006 D6) — OCR 미실행이나 무텍스트에서는 양 플랫폼 모두 absent이기 때문.
+
+**다국어 확장 이후 (Phase 8).** Latin/Japanese/Chinese/Devanagari는 Play services로 전달되는 unbundled 인식기라 위 센티넬에 걸린다. `meanLineConfidence`는 unbundled 인식기의 평균이 정확히 `0`일 때 이를 점수가 아니라 "미보고"로 처리한다 — 그렇지 않으면 `ocrFloor.minConfidence > 0`을 설정한 호출자가 멀쩡한 스캔을 거부하게 된다. 따라서 **Android는 iOS와 달리 OCR이 텍스트를 찾았는데도 confidence가 absent일 수 있다.** 기본 언어(`["ko-KR", "en-US"]`)는 번들 Korean 인식기로 해석되므로 영향받지 않는다.
 
 ⚠️ 다만 두 값의 **분포는 비교 가능하다고 검증되지 않았다**. `api-contract.md`가 명시한 대로 confidence는 reporting-only이며, cross-platform 임계값으로 쓰지 말 것.
 

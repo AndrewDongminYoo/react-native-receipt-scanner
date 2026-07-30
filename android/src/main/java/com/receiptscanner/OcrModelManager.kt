@@ -225,7 +225,9 @@ internal class OcrModelManager(
     fun finishReady() {
       if (!isTerminal.compareAndSet(false, true)) return
       cancelInstall()
-      onReady(OcrProcessor(recognizer))
+      // Korean is the only bundled recognizer; the rest arrive through Play
+      // services and may not report real confidence. See OcrProcessor.
+      onReady(OcrProcessor(recognizer, reportsConfidence = script == OcrScript.KOREAN))
     }
 
     fun finishFailed(error: Exception) {

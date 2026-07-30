@@ -127,8 +127,9 @@ function annotateQuality(image: ReceiptImage): ReceiptImage {
 
 /**
  * Computes {@link OcrQuality} metrics from the joined OCR text. Confidence
- * passes through from the native layer on both platforms (iOS Vision, Android
- * ML Kit per-line); it is `undefined` only when OCR didn't run.
+ * passes through from the native layer (iOS Vision, Android ML Kit per-line);
+ * it is `undefined` when OCR didn't run, and on Android also when the
+ * recognizer's provider cannot supply a real value.
  */
 function deriveQuality(text: string, confidence?: number): OcrQuality {
   const trimmedLength = text.trim().length;
@@ -142,19 +143,20 @@ function deriveQuality(text: string, confidence?: number): OcrQuality {
 }
 
 /**
- * Predicate for the {@link OcrFloor} gate. `confidence` is populated on both
- * platforms when OCR runs; absent confidence (OCR off or no text) is
- * treated as "satisfied" so the gate never rejects on a field that wasn't
- * produced. Confidence stays reporting-only — not a cross-platform enforcement
- * signal until validated comparable.
+ * Predicate for the {@link OcrFloor} gate. Absent confidence is treated as
+ * "satisfied" so the gate never rejects on a field that wasn't produced — it is
+ * absent when OCR is off or found no text, and also on Android when the
+ * Play-services-delivered recognizer cannot supply a real value (see
+ * `OcrProcessor.meanLineConfidence`). Confidence stays reporting-only — not a
+ * cross-platform enforcement signal until validated comparable.
  */
 function meetsFloor(image: ReceiptImage, floor: Required<OcrFloor>): boolean {
   const q = image.ocrQuality;
   if (!q) return false;
   if (q.textLength < floor.minTextLength) return false;
   if (q.lineCount < floor.minLines) return false;
-  // Absent confidence => satisfied: present on both platforms when OCR runs
-  // but undefined when OCR is off / no text — don't gate on that.
+  // Absent confidence => satisfied: undefined when OCR is off / no text, or
+  // when the provider can't supply one — don't gate on that.
   if (q.confidence !== undefined && q.confidence < floor.minConfidence) return false;
   return true;
 }
