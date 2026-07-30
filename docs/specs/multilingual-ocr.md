@@ -99,7 +99,14 @@ export type AndroidOcrCapabilities = {
   models: OcrModelState[];
 };
 
-export type OcrCapabilities = IosOcrCapabilities | AndroidOcrCapabilities;
+export type WebOcrCapabilities = {
+  platform: "web";
+  defaultLanguages: readonly ["ko-KR", "en-US"];
+  /** The web fallback does not provide native OCR. */
+  supported: false;
+};
+
+export type OcrCapabilities = IosOcrCapabilities | AndroidOcrCapabilities | WebOcrCapabilities;
 
 export function getOcrCapabilities(): Promise<OcrCapabilities>;
 ```
