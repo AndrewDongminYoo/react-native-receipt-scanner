@@ -115,6 +115,11 @@ class ReceiptScannerModule(
       }
   }
 
+  // Task 4 replaces this compile-only bridge stub with capability resolution.
+  override fun getOcrCapabilities(promise: Promise) {
+    promise.reject("NOT_SUPPORTED", "OCR capabilities are not implemented on Android yet")
+  }
+
   override fun onActivityResult(
     activity: Activity,
     requestCode: Int,

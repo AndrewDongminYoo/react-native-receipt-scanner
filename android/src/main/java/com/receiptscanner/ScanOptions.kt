@@ -1,6 +1,7 @@
 package com.receiptscanner
 
 import com.facebook.react.bridge.ReadableMap
+import com.facebook.react.bridge.ReadableType
 
 /**
  * Typed mirror of the JS-side `ScanReceiptOptions`. Produced by [from] from
@@ -15,6 +16,7 @@ import com.facebook.react.bridge.ReadableMap
  * @property includeExif Whether to read and forward source EXIF.
  * @property includeGpsExif Whether to forward the GPS dictionary specifically.
  * @property ocr Whether to run on-device OCR.
+ * @property ocrLanguages Ordered BCP 47 tags that select the OCR script.
  * @property autoRotate Whether to bake OCR-detected rotation into output pixels.
  * @property includeRawExif Whether to attach the flat raw EXIF map under `exif.raw`.
  * @property ocrGeometry Whether to attach per-line OCR boxes under `ocrLines`.
@@ -26,6 +28,7 @@ data class ScanOptions(
   val includeExif: Boolean,
   val includeGpsExif: Boolean,
   val ocr: Boolean,
+  val ocrLanguages: List<String>,
   val autoRotate: Boolean,
   val includeRawExif: Boolean,
   val ocrGeometry: Boolean,
@@ -55,11 +58,29 @@ data class ScanOptions(
         includeExif = if (map.hasKey("includeExif")) map.getBoolean("includeExif") else true,
         includeGpsExif = if (map.hasKey("includeGpsExif")) map.getBoolean("includeGpsExif") else false,
         ocr = if (map.hasKey("ocr")) map.getBoolean("ocr") else true,
+        ocrLanguages = ocrLanguagesFrom(map),
         autoRotate = if (map.hasKey("autoRotate")) map.getBoolean("autoRotate") else true,
         includeRawExif = if (map.hasKey("includeRawExif")) map.getBoolean("includeRawExif") else false,
         ocrGeometry = if (map.hasKey("ocrGeometry")) map.getBoolean("ocrGeometry") else false,
       )
 
     internal const val MAX_PAGES = 10
+
+    private val DEFAULT_OCR_LANGUAGES = listOf("ko-KR", "en-US")
+
+    private fun ocrLanguagesFrom(map: ReadableMap): List<String> {
+      if (!map.hasKey("ocrLanguages") || map.getType("ocrLanguages") != ReadableType.Array) {
+        return DEFAULT_OCR_LANGUAGES
+      }
+
+      val languages = map.getArray("ocrLanguages") ?: return DEFAULT_OCR_LANGUAGES
+      return List(languages.size()) { index ->
+        if (languages.getType(index) == ReadableType.String) {
+          languages.getString(index).orEmpty()
+        } else {
+          ""
+        }
+      }
+    }
   }
 }
