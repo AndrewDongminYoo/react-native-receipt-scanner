@@ -142,7 +142,16 @@ class ReceiptScannerModule(
           }
           pendingOcrPreparation = null
           pendingOcrProcessor = processor
-          launchScan(activity, scanOptions, token)
+          // A first-time model download can outlive the Activity captured before
+          // preparation started (host recreates it while backgrounded), so read
+          // the foreground one again instead of launching against a dead
+          // Activity. finishPendingScan closes the processor on the reject path.
+          val readyActivity =
+            reactApplicationContext.getCurrentActivity() ?: run {
+              rejectPendingScan(token, "NO_ACTIVITY", "No foreground activity found")
+              return@prepare
+            }
+          launchScan(readyActivity, scanOptions, token)
         },
         onFailure = { error ->
           if (!pendingScanLifecycle.isCurrent(token)) return@prepare
