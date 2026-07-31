@@ -44,5 +44,8 @@ A spec is **normative** when it defines a contract the code must satisfy, rather
 - `docs/specs/api-contract.md` — the public `scan()` API, types, and error codes
 - `docs/specs/scan-pipeline.md` — the internal processing pipeline per platform
 - `docs/specs/multilingual-ocr.md` — `ocrLanguages`, `getOcrCapabilities()`, language resolution and its error contract
+- `docs/specs/long-receipt-ocr-merge.md` — `mergeOcrPages`, the seam-matching algorithm and its thresholds, completeness diagnostics
+
+A per-feature normative spec beside `api-contract.md` is not a competing document, and the last two entries are the pattern: `api-contract.md` carries the public option row, result shape, and error code, while the feature spec owns the algorithm and the thresholds that would bloat it. Competing means redefining the same contract differently, not describing more of it.
 
 Apply the criterion rather than trusting this list to stay complete: a new spec that defines a contract is normative whether or not anyone updated this section.
