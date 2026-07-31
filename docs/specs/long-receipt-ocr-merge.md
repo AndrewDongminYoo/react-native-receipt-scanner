@@ -163,18 +163,19 @@ A page whose result is empty (or whose `ocrText` is absent) is added to `rejecte
 
 ### Seam matching
 
-For each adjacent pair, compare the previous page's **suffix** windows against the next page's **prefix** windows, 1 through 8 lines each.
+For each adjacent pair, compare the previous page's trailing lines against the next page's leading lines at **equal depth**, starting from the deepest depth both pages allow (`min(previousLineCount, nextLineCount)`) and descending to one.
+The first depth that satisfies both rules below wins, and the scan stops there.
 
-Comparison text for a window is its lines lowercased, with runs of whitespace collapsed to a single space, trimmed, and joined by a single space.
+| Step         | Rule                                                                                                       |
+| ------------ | ---------------------------------------------------------------------------------------------------------- |
+| Match        | The two line sequences are **equal**, line for line, after normalization. Nothing else counts as evidence. |
+| Length floor | The matched text reaches 24 characters at depth 1, otherwise 12.                                           |
+
+There is **no depth ceiling**, and that is load-bearing rather than a convenience. A shallow suffix/prefix pair can coincide _inside_ a deeper true overlap — a receipt repeating a separator and a section header at both ends of a nine-line overlapped region matches at depth 2 exactly as well as at depth 9. Under a capped, shallow-first search that shallow match wins, two lines are dropped, seven stay duplicated, and the seam is still reported proven. Descending from the deepest available depth removes that class outright; equality alone does not, because both matches are exact.
+
+Each line is normalized once for comparison — lowercased, runs of whitespace collapsed to a single space, trimmed.
 This normalization is used **only** for comparison; emitted text is always the original trimmed lines.
-Comparison is over UTF-16 code units, matching the Dart implementation — Korean syllables are BMP, so there is no surrogate-pair divergence between the two packages.
-
-A candidate pair is accepted only when both conditions hold:
-
-| Step         | Rule                                                                                                     |
-| ------------ | -------------------------------------------------------------------------------------------------------- |
-| Match        | The two comparison texts are **equal**. Nothing else counts as evidence — there is no approximate match. |
-| Length floor | The matched text reaches 24 characters when either window is a single line, otherwise 12.                |
+Comparison is over UTF-16 code units; Korean syllables are BMP, so there is no surrogate-pair edge case.
 
 ### Why equality, and not a similarity threshold
 
@@ -183,7 +184,7 @@ On receipt text an edit-distance threshold cannot separate _the same line, misre
 
 Two measured false positives, both of which deleted real rows while reporting `isComplete: true`:
 
-| Case                                                                | Window         | Similarity | Old floor |
+| Case                                                                | Depth / length | Similarity | Old floor |
 | ------------------------------------------------------------------- | -------------- | ---------- | --------- |
 | One product at quantity 1 vs quantity 2, `서울우유 1L 흰우유 990ml` | 1 line, 25 ch  | 0.9200     | 0.92      |
 | The same product at quantities 1,2 then 3,4                         | 2 lines, 39 ch | 0.8974     | 0.85      |
@@ -199,13 +200,13 @@ If device data shows too many unproven seams, the upgrade path is a **digit-awar
 
 ### Candidate selection
 
-Every accepted candidate is an exact match, so they are ranked by the **longer** matched text — a longer proven overlap is stronger evidence than a shorter one.
-Ties keep the first candidate found. Iteration is `rightCount` ascending in the outer loop and `leftCount` ascending in the inner loop, so a tie removes the **fewest** lines from the next page. This ordering is part of the contract: the result must be deterministic.
+There is no ranking pass and no tie-break: the descending scan returns the first — therefore deepest — depth that matches and clears its length floor.
+Depth is the only ordering, it is total, and the scan is deterministic. This is part of the contract.
 
 An accepted seam keeps the previous page's suffix in full and removes only the matched prefix lines from the next page.
 An unmatched seam appends every line of the next page and records the boundary index.
 
-> **Divergence from `flutter_receipt_scanner` spec 0001.** That package accepts approximate seam matches (0.85 multi-line, 0.92 single-line) with a Levenshtein pass, a 512-character cost guard, and a length-ratio prefilter. This package started as a port of it and then removed the whole approximate path — see "Why equality" above for the two measured false positives that motivated it. **The same false positives apply to `flutter_receipt_scanner` as shipped**; it has not been changed, and that is filed as a follow-up rather than assumed.
+> **Divergence from `flutter_receipt_scanner` spec 0001.** That package matches seams approximately (0.85 multi-line, 0.92 single-line) with a Levenshtein pass, a 512-character cost guard and a length-ratio prefilter, over windows capped at eight lines and ranked by similarity then compared-character count. This package started as a port of it and now shares none of that: no approximate matching (see "Why equality"), no depth ceiling, no ranking pass. **All three measured defects apply to `flutter_receipt_scanner` as shipped** — both approximate-match false positives and the shallow-coincidence merge. It has not been changed; that is filed in §Follow-Ups rather than assumed.
 
 ### Completeness
 
@@ -255,7 +256,7 @@ Pure unit tests in `src/__tests__/`:
 2. Invalid `ocr` and `maxPages` combinations throw before the mocked native module is called.
 3. Exact two-line overlap is removed exactly once.
 4. Normalization absorbs case and whitespace-run differences, but a single misread character leaves the seam unproven.
-5. A pair with no matching window is preserved and records an unmatched boundary.
+5. A pair with no matching depth is preserved and records an unmatched boundary.
 6. A single-line candidate needs 24 characters; a repeat purchase differing only in quantity and amount is preserved, at both one and two lines wide.
 7. An overlap of any depth merges, and a shallow coincidence inside a deeper overlap (a repeated separator and section header at both ends) does not win over the deeper match.
 8. Repeated totals away from the adjacent suffix and prefix are preserved.
@@ -278,9 +279,9 @@ The example app should still exercise the flag once manually before release.
 
 ## Follow-Ups
 
-1. Report natively dropped pages (the Flutter package's `discardedPageCount`) so `isComplete` can account for them. Requires a native change on both platforms.
+1. Report natively dropped pages (the Flutter package's `discardedPageCount`) so `isComplete` can account for them. Requires an iOS-gallery native change; Android already rejects the whole scan instead of returning a partial batch.
 2. Set `PHPickerConfiguration.selection = PHPickerConfigurationSelectionOrdered` (iOS 15+, and this package targets iOS 16) so the gallery path returns user selection order instead of library order. One native line; deferred to keep this change JS-only.
-3. **Carry the approximate-match removal to `flutter_receipt_scanner`.** Its shipped `ocr_page_merger.dart` still accepts 0.85 multi-line and 0.92 single-line matches, so both false positives measured here apply to it unchanged — the quantity-1-vs-2 row is a Korean receipt case, not a synthetic one. Not assumed fixed; not yet filed there.
+3. **Carry all three fixes to `flutter_receipt_scanner`.** Its shipped `ocr_page_merger.dart` still accepts 0.85 multi-line and 0.92 single-line approximate matches over windows capped at eight lines, so every defect measured here applies to it unchanged: both approximate-match false positives (the quantity-1-vs-2 row is a Korean receipt case, not a synthetic one) and the shallow-coincidence merge that leaves a deeper overlap duplicated while reporting completeness. Not assumed fixed; not yet filed there.
 4. Reconcile that package's spec 0001 tie-break prose with its shipped implementation, so the two specs do not describe different algorithms.
 5. Measure how often a real recognizer reproduces a line character-identically across two captures. That number decides whether the digit-aware comparison in "Why equality" is needed.
 6. Consider ordered gallery selection with a review-and-reorder surface only as its own spec.
