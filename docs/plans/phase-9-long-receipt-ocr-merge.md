@@ -45,7 +45,8 @@ New: `src/mergeOcrPages.ts` (pure merger, no imports beyond types) and its unit-
 Modified, by layer:
 
 - **JS** — `types.ts` (`MergedOcrResult`, `ScanReceiptOptions.mergeOcrPages`, `ScanReceiptResult.mergedOcr`, defaults), `scan.native.tsx` (validation, order snapshot and restore, merge delegation), `index.tsx` (exports), `__tests__`.
-- **Docs** — `specs/api-contract.md`, `specs/scan-pipeline.md`, `README.md`, `CLAUDE.md`, `AGENTS.md`.
+- **Example app** — `example/src/App.tsx`: the option toggle plus a result section rendering `mergedOcr`. The example app is this repo's only integration test, so shipping the option without a way to exercise it would leave the feature unverified against real native output. The toggle forwards an invalid combination as-is on purpose, so the demo surfaces the real `INVALID_MERGE_OPTION` rejection rather than hiding it.
+- **Docs** — `specs/api-contract.md`, `specs/scan-pipeline.md`, `README.md`, `CLAUDE.md`, `AGENTS.md`, `docs/AGENTS.md` (normative-spec list).
 
 `src/scan.tsx` (web) is unchanged: it always resolves `"cancelled"`, and a cancelled result carries no `mergedOcr`.
 No native file is touched, so `android/AGENTS.md` and `ios/AGENTS.md` are unchanged.
@@ -64,4 +65,6 @@ No native build is required for correctness, since no native file changes.
 Required test cases are enumerated in the spec's §Testing Strategy.
 The ten-page merge timing bound is set from a measured value, not an assumed one.
 
-Not observed, and not claimed: real long-receipt OCR against physical fixtures on either platform, and the example app's manual pass. Both are pre-release work, not correctness gates for this change.
+Not observed, and not claimed: **the feature has never run against real OCR output.** The example-app control exists but was not launched — `example/ios` has a pre-existing `Podfile.lock` versus `Pods/Manifest.lock` mismatch that blocks the iOS run, and a device pass is a heavy job the machine takes one at a time. Every claim here rests on unit tests over synthetic OCR strings.
+
+That gap matters most where synthetic text is least like real output: whether the 0.85 / 0.92 similarity thresholds hold when both platforms' recognizers segment the _same_ physical line differently on either side of a seam. Run the example app on one device per platform with a genuinely long receipt before release, and treat an unmatched boundary there as a threshold-calibration finding, not a test failure.

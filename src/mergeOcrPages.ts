@@ -36,8 +36,8 @@ type Overlap = {
  * and records its boundary index, so enabling the merge never loses text.
  *
  * @param pages - Pages in native capture order.
- * @param rejectedPageIndexes - Pages the {@link OcrFloor} gate rejected. Pages
- *                              with no usable text are added automatically.
+ * @param rejectedPageIndexes - Pages the `ocrFloor` gate rejected. Pages with
+ *                              no usable text are added automatically.
  * @returns The merged text and its completeness diagnostics.
  * @throws RangeError when an index falls outside `pages`.
  * @see `docs/specs/long-receipt-ocr-merge.md` for the normative contract.

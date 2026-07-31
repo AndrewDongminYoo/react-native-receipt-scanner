@@ -211,6 +211,7 @@ The sibling Flutter package solved this with a native `discardedPageCount`; addi
 - Invalid option combinations throw before any native UI is presented.
 - Cancellation is not an error.
 - Missing OCR, floor-rejected pages, and unmatched seams never throw after a completed capture — they produce an incomplete merged result.
+- Two internal invariants are the deliberate exception and do reject the promise after capture: a duplicate page URI, and a snapshot URI missing from the post-gate result. Both mean the page identity the order restoration depends on is broken, so any merged text would be silently wrong about which page it came from. Neither is reachable from user input; both indicate a defect in this package or the native layer. Everything a user can cause is reported, not thrown.
 - The merger must not delete uncertain content to make a result appear complete.
 - Input arrays, `ocrText` values, and image URIs are not mutated.
 
