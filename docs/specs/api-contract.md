@@ -36,6 +36,7 @@ and the system cannot show the rationale dialog).
 | `includeRawExif`    | `boolean`               | `false`              | Include the full raw EXIF / TIFF / GPS dictionary on `exif.raw`. Off by default to keep IPC payloads small (raw maps are typically 30–60 fields). Effective only when `includeExif === true`. GPS keys are excluded from `raw` whenever `includeGpsExif === false`.                                                       |
 | `minimumTextHeight` | `number` (0.0–1.0)      | `0`                  | **iOS only.** Vision `minimumTextHeight` as a fraction of image height; text shorter than this is skipped during recognition. Lowering it (e.g. `0.02`) can recover small receipt line items at the cost of more noise. `0` uses the package default (≈ 1/32). Android (ML Kit) has no equivalent and ignores this field. |
 | `ocrGeometry`       | `boolean`               | `false`              | Attach per-line OCR boxes to `ReceiptImage.ocrLines` (see "OCR line geometry" below). Effective only when `ocr === true`.                                                                                                                                                                                                 |
+| `mergeOcrPages`     | `boolean`               | `false`              | Assemble the pages' OCR text into one ordered string on `ScanReceiptResult.mergedOcr` (see "Long receipt OCR merge" below). Requires `ocr: true` and `maxPages >= 2`; page JPEGs are never combined.                                                                                                                      |
 
 ### Multilingual OCR and capabilities
 
@@ -125,6 +126,33 @@ Floor evaluation rules:
 - When `ocr: true` and `ocrFloor: false` the floor is a no-op but `ocrQuality` is still derived and exposed for the consumer to inspect.
 - When the floor is active, every image has `ocrQuality` populated. Images that fail the thresholds are moved to `rejectedImages`. If no image passes, `status` becomes `"rejected"`.
 
+### Long receipt OCR merge
+
+A receipt too long for one frame is captured across several overlapping pages — by camera, or as a set of screenshots picked from the gallery. With `mergeOcrPages: true`, the JS layer assembles those pages' OCR text into one ordered string and removes the text duplicated at each seam.
+
+Page JPEGs are never combined. A single tall image would lose text resolution on both platforms — see [`../notes/adr-008-long-receipt-merge-boundary.md`](../notes/adr-008-long-receipt-merge-boundary.md) for the measurements.
+
+```ts
+type MergedOcrResult = {
+  text: string; // merged text, proven overlap removed once
+  isComplete: boolean; // only covers the pages that came back — see below
+  pageUris: string[]; // native capture order; the index space below
+  unmatchedBoundaryIndexes: number[]; // i = the seam between pageUris[i] and pageUris[i + 1]
+  rejectedPageIndexes: number[]; // no usable text, or rejected by the floor
+};
+```
+
+Rules:
+
+- Requires `ocr: true` and `maxPages >= 2`. An invalid combination throws before any scanner UI opens.
+- `mergedOcr` is attached whenever the native scan captured something — including a `"rejected"` result, where the diagnostics are what tell a consumer to prompt for a re-shoot. A `"cancelled"` scan has no `mergedOcr`.
+- Pages are merged in native capture order and never reordered. Only adjacent pages are compared, and repeated lines away from a seam (totals, headers) are always preserved.
+- A seam whose overlap cannot be proven contributes both pages' lines in full and records its boundary index. Enabling the merge never loses text.
+- Per-page `ocrLines` geometry is **not** merged. Boxes from different pages live in different pixel spaces, so `mergedOcr.text` has no corresponding geometry.
+- `isComplete` cannot see a page the native layer dropped before returning, so it means "everything returned joined up", not "the whole receipt is here".
+
+The algorithm and its thresholds are normative in [`long-receipt-ocr-merge.md`](./long-receipt-ocr-merge.md).
+
 ### Auto-rotate
 
 When `ocr: true` and `autoRotate: true` (default), the package detects 90° / 180° / 270° content rotation during OCR and rotates the output JPEG pixels to the upright orientation. The OCR text is also returned in upright form. `exif.orientation` remains `1` regardless — the rotation is baked into the pixels, not the metadata.
@@ -172,16 +200,17 @@ type ScanReceiptResult = {
   status: "success" | "cancelled" | "rejected";
   images: ReceiptImage[];
   rejectedImages: ReceiptImage[];
+  mergedOcr?: MergedOcrResult; // only with mergeOcrPages: true
 };
 ```
 
 `images` and `rejectedImages` are **always arrays** — empty when there are no items. Consumers can read `.length` on both without a null-check.
 
-| `status`      | `images`                            | `rejectedImages`                                             |
-| ------------- | ----------------------------------- | ------------------------------------------------------------ |
-| `"success"`   | At least one image passed the floor | Empty when nothing was rejected; populated on partial reject |
-| `"cancelled"` | `[]` (user dismissed the scanner)   | `[]`                                                         |
-| `"rejected"`  | `[]` (every image failed the floor) | All captured images so the consumer can prompt for a re-take |
+| `status`      | `images`                            | `rejectedImages`                                             | `mergedOcr`                        |
+| ------------- | ----------------------------------- | ------------------------------------------------------------ | ---------------------------------- |
+| `"success"`   | At least one image passed the floor | Empty when nothing was rejected; populated on partial reject | Present with `mergeOcrPages: true` |
+| `"cancelled"` | `[]` (user dismissed the scanner)   | `[]`                                                         | Absent — nothing was captured      |
+| `"rejected"`  | `[]` (every image failed the floor) | All captured images so the consumer can prompt for a re-take | Present with `mergeOcrPages: true` |
 
 ## `ReceiptImage`
 

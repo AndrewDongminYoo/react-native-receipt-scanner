@@ -43,6 +43,7 @@ describe("DEFAULT_SCAN_OPTIONS", () => {
       includeRawExif: false,
       minimumTextHeight: 0,
       ocrGeometry: false,
+      mergeOcrPages: false,
     });
   });
 });

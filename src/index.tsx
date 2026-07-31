@@ -9,6 +9,7 @@ export { getOcrCapabilities, scan } from "./scan";
 export type {
   AndroidOcrCapabilities,
   IosOcrCapabilities,
+  MergedOcrResult,
   OcrCapabilities,
   ScanReceiptOptions,
   ScanReceiptResult,

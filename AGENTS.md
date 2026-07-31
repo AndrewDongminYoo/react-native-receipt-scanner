@@ -27,17 +27,18 @@ OCR languages are **caller-provided BCP 47 hints** (`ScanReceiptOptions.ocrLangu
 
 ## WHERE TO LOOK
 
-| Task                       | Files                                                                                                                            |
-| -------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| Public API contract        | `src/types.ts`, `docs/specs/api-contract.md`                                                                                     |
-| Cross-platform flow trace  | `docs/specs/scan-pipeline.md`                                                                                                    |
-| Add a scan option          | `src/types.ts` → `android/.../ScanOptions.kt` → `ios/RNScanOptions.{h,m}` → consumer files                                       |
-| Change result shape        | `src/types.ts` → `android/.../ResultBuilder.kt` → `ios/RN{Document,Gallery}*Delegate.m`                                          |
-| Modify OCR                 | `android/.../OcrProcessor.kt` / `ios/RNOcrProcessor.m`                                                                           |
-| Adjust iOS crop UI         | `ios/RNCropEditorViewController.m` (**read ADR-004 first**)                                                                      |
-| Change JPEG/EXIF           | `android/.../ImageProcessor.kt` / `ios/RNImageProcessor.m`                                                                       |
-| TurboModule wiring         | `src/NativeReceiptScanner.ts`, `package.json#codegenConfig`, `android/.../ReceiptScannerPackage.kt`, `ios/ReceiptScanner.{h,mm}` |
-| ADRs (decisions of record) | `docs/notes/adr-001..004-*.md`                                                                                                   |
+| Task                       | Files                                                                                                                                                                                           |
+| -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Public API contract        | `src/types.ts`, `docs/specs/api-contract.md`                                                                                                                                                    |
+| Cross-platform flow trace  | `docs/specs/scan-pipeline.md`                                                                                                                                                                   |
+| Add a scan option          | `src/types.ts` → `android/.../ScanOptions.kt` → `ios/RNScanOptions.{h,m}` → consumer files                                                                                                      |
+| Add a JS-only scan option  | `src/types.ts` → `src/scan.native.tsx` only. Both native parsers read a key whitelist and ignore the rest, so nothing else needs touching. `ocrFloor` and `mergeOcrPages` are the two examples. |
+| Change result shape        | `src/types.ts` → `android/.../ResultBuilder.kt` → `ios/RN{Document,Gallery}*Delegate.m`                                                                                                         |
+| Modify OCR                 | `android/.../OcrProcessor.kt` / `ios/RNOcrProcessor.m`                                                                                                                                          |
+| Adjust iOS crop UI         | `ios/RNCropEditorViewController.m` (**read ADR-004 first**)                                                                                                                                     |
+| Change JPEG/EXIF           | `android/.../ImageProcessor.kt` / `ios/RNImageProcessor.m`                                                                                                                                      |
+| TurboModule wiring         | `src/NativeReceiptScanner.ts`, `package.json#codegenConfig`, `android/.../ReceiptScannerPackage.kt`, `ios/ReceiptScanner.{h,mm}`                                                                |
+| ADRs (decisions of record) | `docs/notes/adr-*.md`                                                                                                                                                                           |
 
 ## CODE MAP
 
@@ -46,6 +47,7 @@ OCR languages are **caller-provided BCP 47 hints** (`ScanReceiptOptions.ocrLangu
 | `scan(options?)`             | function         | `src/scan.native.tsx`, `src/scan.tsx` | Public API; native impl + web fallback                                 |
 | `Spec.scan`                  | TurboModule spec | `src/NativeReceiptScanner.ts`         | Codegen input; module name `"ReceiptScanner"`                          |
 | `DEFAULT_SCAN_OPTIONS`       | const            | `src/types.ts`                        | Option defaults (mirrored in `ScanOptions.kt` + `RNScanOptions.m`)     |
+| `mergeOcrPages`              | function         | `src/mergeOcrPages.ts`                | Pure cross-page OCR merge; JS-only by design (ADR-008)                 |
 | `ReceiptScannerModule`       | class            | `android/.../ReceiptScannerModule.kt` | Android entry; scan lifecycle + OCR model prep                         |
 | `PendingScanLifecycle`       | class            | `android/.../ReceiptScannerModule.kt` | Single-scan token; owns the Promise hand-off (see `android/AGENTS.md`) |
 | `ImageProcessor`             | class            | `android/.../ImageProcessor.kt`       | Android JPEG + EXIF + temp cleanup                                     |
@@ -63,7 +65,7 @@ OCR languages are **caller-provided BCP 47 hints** (`ScanReceiptOptions.ocrLangu
 - **TypeScript strict + extras**: `noUncheckedIndexedAccess`, `noUnusedLocals/Parameters`, `verbatimModuleSyntax`, `customConditions: ["react-native-strict-api"]`.
 - **ESLint flat config only** (`eslint.config.mjs`); extends `@react-native` + `prettier`; Prettier violations = errors.
 - **Prettier**: 100-col, double quotes, semicolons, trailing-comma `es5`, LF.
-- **Jest** preset `@react-native/jest-preset`, no setup files. Tests in `src/__tests__/*.test.tsx` only (not colocated).
+- **Jest** preset `@react-native/jest-preset`, no setup files. Tests live in `src/__tests__/` only (not colocated); `.ts` and `.tsx` both run, and `src/__tests__/fixtures/` is ignored.
 - **Pre-commit/push** is **Trunk** (`.trunk/trunk.yaml`) — not Husky/Lefthook.
 - **Commits**: Conventional Commits + emoji (`feat: ✨`, `fix: 🐛`, `chore: 🔨`, `docs: 📝`); `release-it` consumes them. Do NOT add `Co-authored-by: Claude` trailers.
 - **Module name string `"ReceiptScanner"`** must stay identical in `NativeReceiptScanner.ts`, `ReceiptScannerPackage.kt`, and `ReceiptScanner.mm`.
@@ -99,7 +101,7 @@ yarn                           # Install (Yarn Berry; no npm/pnpm)
 yarn prepare                   # Build library to lib/{module,typescript}
 yarn typecheck                 # tsc --noEmit
 yarn lint                      # ESLint over **/*.{js,ts,tsx}
-yarn test                      # Jest (only src/__tests__/*.test.tsx)
+yarn test                      # Jest over src/__tests__ (.ts and .tsx; fixtures/ is ignored)
 
 trunk check                    # All trunk-managed linters (ktlint, osv-scanner, shellcheck, yamllint, …)
 trunk fmt                      # Auto-format every file the trunk formatters own

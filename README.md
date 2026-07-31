@@ -141,6 +141,30 @@ if (result.status === "success") {
 }
 ```
 
+### Long receipts — merging OCR across pages
+
+A receipt too long for one frame is captured across several overlapping pages, or saved as a run of screenshots and picked from the gallery.
+`mergeOcrPages` assembles their OCR text into one ordered string and removes the text duplicated where two captures overlap.
+
+```ts
+const result = await scan({ maxPages: 6, mergeOcrPages: true });
+
+const merged = result.mergedOcr;
+if (merged && !merged.isComplete) {
+  // A seam that could not be proven; both pages' text is still in merged.text.
+  console.log(`unproven seams: ${merged.unmatchedBoundaryIndexes.join(", ")}`);
+}
+```
+
+Capture each page so it overlaps the previous one by roughly a fifth of its height — the merge proves a seam from repeated text, so with no overlap there is nothing to match.
+
+The page JPEGs are never combined into one tall image. Android caps the processed long edge at 3,072 px and iOS Vision's minimum text height is a fraction of the whole image height, so a taller composite recovers _less_ text, not more. See [ADR-008](docs/notes/adr-008-long-receipt-merge-boundary.md).
+
+Two behaviours worth knowing:
+
+- Nothing is ever dropped to make the result look clean. An unproven seam emits both pages' lines in full and reports its boundary index.
+- `isComplete` only covers the pages that came back. Both platforms can silently drop a page that fails to decode, and the JS layer cannot see that — so it means "everything returned joined up", not "the whole receipt is here".
+
 ### OCR — extract text from the document
 
 OCR runs on-device and is enabled by default. Set `ocr: false` to skip it (faster, smaller result):
@@ -270,6 +294,7 @@ if (result.status === "success") {
 | `includeRawExif`    | `boolean`               | `false`                                   | Include the full raw EXIF / TIFF / GPS dictionary on `exif.raw`. Off by default to keep IPC payloads small. GPS keys excluded when `includeGpsExif: false`.                                                                                 |
 | `minimumTextHeight` | `number` (0.0–1.0)      | `0`                                       | iOS only: minimum text height as a fraction of image height for Vision OCR (`0` = platform default ≈ 1/32). Lower it to recover small receipt line items; Android (ML Kit) has no equivalent and ignores it. Only applies when `ocr: true`. |
 | `ocrGeometry`       | `boolean`               | `false`                                   | Attach per-line text boxes to `ocrLines`, in output-image pixels. Enable it to draw text-region overlays. Off by default because a long receipt can carry hundreds of lines. Only applies when `ocr: true`.                                 |
+| `mergeOcrPages`     | `boolean`               | `false`                                   | Assemble the pages' OCR text into one ordered string on `mergedOcr`, removing text duplicated where captures overlap. For a receipt too long for one frame. Requires `ocr: true` and `maxPages >= 2`; page JPEGs are never combined.        |
 
 ### Result types
 
@@ -278,6 +303,15 @@ type ScanReceiptResult = {
   status: "success" | "cancelled" | "rejected";
   images: ReceiptImage[]; // always an array — empty when none
   rejectedImages: ReceiptImage[]; // always an array — empty when none
+  mergedOcr?: MergedOcrResult; // present when options.mergeOcrPages === true
+};
+
+type MergedOcrResult = {
+  text: string; // pages joined in capture order, proven overlap removed once
+  isComplete: boolean; // covers only the pages that came back — see "Long receipts" above
+  pageUris: string[]; // native capture order; the index space for both arrays below
+  unmatchedBoundaryIndexes: number[]; // i = the seam between pageUris[i] and pageUris[i + 1]
+  rejectedPageIndexes: number[]; // no usable text, or rejected by the OCR floor
 };
 
 type ReceiptImage = {
@@ -381,6 +415,7 @@ console.log(result.images[0].exif?.raw);
 | `OCR_LANGUAGE_NOT_SUPPORTED`             | A requested language or script is not supported by the provider     |
 | `OCR_LANGUAGE_COMBINATION_NOT_SUPPORTED` | Android receives more than one non-Latin script                     |
 | `OCR_MODEL_INSTALL_FAILED`               | Android cannot prepare the selected OCR model before scanner UI     |
+| `INVALID_MERGE_OPTION`                   | `mergeOcrPages` is set with `ocr: false` or `maxPages < 2`          |
 
 ---
 
@@ -390,10 +425,11 @@ console.log(result.images[0].exif?.raw);
 - [Scan pipeline](docs/specs/scan-pipeline.md) — internal processing flow (contributors)
 - [Multilingual OCR](docs/specs/multilingual-ocr.md) — `ocrLanguages`, `getOcrCapabilities()`, per-platform language resolution
 - [OCR line geometry](docs/specs/ocr-line-geometry.md) — `ocrLines` coordinate contract
+- [Long receipt OCR merge](docs/specs/long-receipt-ocr-merge.md) — `mergeOcrPages`, seam-matching thresholds, completeness diagnostics
 - [OCR 180° orientation correction](docs/specs/ocr-orientation-correction.md) — confidence-based 2-pass detection (iOS)
 - [Platform asymmetries](docs/notes/platform-asymmetries.md) — living record of every iOS/Android behavioural difference
-- Phase plans: [1 JS wrapper](docs/plans/phase-1-js-wrapper.md) · [2 Android](docs/plans/phase-2-android.md) · [3 iOS](docs/plans/phase-3-ios.md) · [4 OCR orientation](docs/plans/phase-4-ocr-orientation-correction.md) · [5 autoflip/mirror](docs/plans/phase-5-autoflip-mirror-detection.md) · [6 data quality](docs/plans/phase-6-receipt-data-quality-hardening.md) · [7 line geometry](docs/plans/phase-7-ocr-line-geometry.md) · [8 multilingual OCR](docs/plans/phase-8-multilingual-ocr.md)
-- ADRs: [001 Android ML Kit](docs/notes/adr-001-android-mlkit.md) · [002 iOS gallery crop](docs/notes/adr-002-ios-gallery-crop.md) · [003 package boundaries](docs/notes/adr-003-package-boundaries.md) · [004 iOS crop editor real-device fixes](docs/notes/adr-004-ios-crop-editor-realdevice-fixes.md) · [005 Android gallery strategy](docs/notes/adr-005-android-gallery-strategy.md) · [006 design audit + iOS 16 baseline](docs/notes/adr-006-design-audit-and-ios16-baseline.md) · [007 v0.4.2→v0.4.3 diff](docs/notes/adr-007-v042-v043-code-diff.md)
+- Phase plans: [1 JS wrapper](docs/plans/phase-1-js-wrapper.md) · [2 Android](docs/plans/phase-2-android.md) · [3 iOS](docs/plans/phase-3-ios.md) · [4 OCR orientation](docs/plans/phase-4-ocr-orientation-correction.md) · [5 autoflip/mirror](docs/plans/phase-5-autoflip-mirror-detection.md) · [6 data quality](docs/plans/phase-6-receipt-data-quality-hardening.md) · [7 line geometry](docs/plans/phase-7-ocr-line-geometry.md) · [8 multilingual OCR](docs/plans/phase-8-multilingual-ocr.md) · [9 long receipt OCR merge](docs/plans/phase-9-long-receipt-ocr-merge.md)
+- ADRs: [001 Android ML Kit](docs/notes/adr-001-android-mlkit.md) · [002 iOS gallery crop](docs/notes/adr-002-ios-gallery-crop.md) · [003 package boundaries](docs/notes/adr-003-package-boundaries.md) · [004 iOS crop editor real-device fixes](docs/notes/adr-004-ios-crop-editor-realdevice-fixes.md) · [005 Android gallery strategy](docs/notes/adr-005-android-gallery-strategy.md) · [006 design audit + iOS 16 baseline](docs/notes/adr-006-design-audit-and-ios16-baseline.md) · [007 v0.4.2→v0.4.3 diff](docs/notes/adr-007-v042-v043-code-diff.md) · [008 long receipt merge boundary](docs/notes/adr-008-long-receipt-merge-boundary.md)
 
 ---
 

@@ -1,6 +1,8 @@
+import { mergeOcrPages } from "./mergeOcrPages";
 import NativeReceiptScanner from "./NativeReceiptScanner";
 import { DEFAULT_OCR_FLOOR, DEFAULT_SCAN_OPTIONS } from "./types";
 import type {
+  MergedOcrResult,
   OcrCapabilities,
   OcrFloor,
   OcrQuality,
@@ -12,13 +14,16 @@ import type {
 /**
  * Native (iOS / Android) entry point for {@link scan}. Merges caller options
  * with {@link DEFAULT_SCAN_OPTIONS}, delegates to the TurboModule, and post-
- * processes the result on the JS side: derives {@link OcrQuality} metrics
- * and partitions images by the {@link OcrFloor} acceptance gate.
+ * processes the result on the JS side: derives {@link OcrQuality} metrics,
+ * partitions images by the {@link OcrFloor} acceptance gate, and optionally
+ * assembles cross-page OCR text.
  *
  * @param options - Caller-supplied options. Missing fields are filled from
  *                  {@link DEFAULT_SCAN_OPTIONS}.
  * @returns A {@link ScanReceiptResult}. `rejectedImages` is always an array
  *          (empty when nothing was rejected).
+ * @throws When {@link ScanReceiptOptions.mergeOcrPages} is combined with
+ *         `ocr: false` or `maxPages < 2` — before any scanner UI opens.
  */
 export async function scan(options?: ScanReceiptOptions): Promise<ScanReceiptResult> {
   const merged = {
@@ -26,6 +31,9 @@ export async function scan(options?: ScanReceiptOptions): Promise<ScanReceiptRes
     ...options,
     ocrLanguages: options?.ocrLanguages ?? DEFAULT_SCAN_OPTIONS.ocrLanguages,
   };
+  // Validate before dispatch so an impossible request never costs the user a capture.
+  if (merged.mergeOcrPages) validateMergeOptions(merged);
+
   const forwardedOptions = merged.ocr
     ? { ...merged, ocrLanguages: normalizeOcrLanguages(merged.ocrLanguages) }
     : merged;
@@ -38,17 +46,31 @@ export async function scan(options?: ScanReceiptOptions): Promise<ScanReceiptRes
   }
 
   const withQuality = native.images.map(annotateQuality);
+  // Snapshot capture order before the floor gate partitions the array — the
+  // merge needs page order, and `images` / `rejectedImages` no longer carry it.
+  const nativePageUris = merged.mergeOcrPages ? snapshotPageUris(withQuality) : null;
 
   // Floor only applies when OCR ran. Without OCR there's nothing to measure.
   // ocrFloor === false explicitly disables the check.
   const floor = resolveFloor(merged.ocr, options?.ocrFloor);
-  if (!floor) {
-    return { ...native, images: withQuality, rejectedImages: [] };
-  }
+  const gated: ScanReceiptResult = floor
+    ? partitionByFloor(withQuality, floor)
+    : { ...native, images: withQuality, rejectedImages: [] };
 
+  if (nativePageUris === null) return gated;
+  // Attached even when the gate downgraded the status to "rejected": that is
+  // exactly when the consumer needs the diagnostics to prompt a re-shoot.
+  return { ...gated, mergedOcr: buildMergedOcr(nativePageUris, gated) };
+}
+
+/** Splits images by the {@link OcrFloor} gate into the accepted / rejected result shape. */
+function partitionByFloor(
+  images: readonly ReceiptImage[],
+  floor: Required<OcrFloor>
+): ScanReceiptResult {
   const passed: ReceiptImage[] = [];
   const rejected: ReceiptImage[] = [];
-  for (const img of withQuality) {
+  for (const img of images) {
     (meetsFloor(img, floor) ? passed : rejected).push(img);
   }
 
@@ -104,6 +126,80 @@ function normalizeOcrLanguages(languages: readonly string[]): string[] {
     }
   }
   return normalized;
+}
+
+/** Typed validation error for `mergeOcrPages` combinations rejected at the JS boundary. */
+class InvalidMergeOptionError extends Error {
+  readonly code: "INVALID_MERGE_OPTION" = "INVALID_MERGE_OPTION";
+
+  constructor(message: string) {
+    super(message);
+    this.name = "InvalidMergeOptionError";
+  }
+}
+
+/**
+ * Rejects `mergeOcrPages` combinations that cannot produce a merge, before the
+ * native module is called so no scanner UI opens on a request that cannot work.
+ */
+function validateMergeOptions(options: Required<ScanReceiptOptions>): void {
+  if (!options.ocr) {
+    throw new InvalidMergeOptionError(
+      "mergeOcrPages requires ocr: true — there is no recognized text to merge."
+    );
+  }
+  if (options.maxPages < 2) {
+    throw new InvalidMergeOptionError(
+      "mergeOcrPages requires maxPages >= 2 — a merge needs at least one page boundary."
+    );
+  }
+}
+
+/**
+ * Records native capture order and refuses a duplicate URI, which would make
+ * the order restoration below ambiguous. Duplicates are an internal state
+ * error, not something to silently reorder around.
+ */
+function snapshotPageUris(images: readonly ReceiptImage[]): string[] {
+  const uris: string[] = [];
+  const seen = new Set<string>();
+  for (const image of images) {
+    if (seen.has(image.uri)) {
+      throw new Error(`Duplicate receipt page URI: ${image.uri}`);
+    }
+    seen.add(image.uri);
+    uris.push(image.uri);
+  }
+  return uris;
+}
+
+/**
+ * Rebuilds the pages in native capture order from the post-gate result, then
+ * merges their OCR text. Floor-rejected pages stay in the page list — they
+ * still contribute text and still count against completeness.
+ */
+function buildMergedOcr(
+  nativePageUris: readonly string[],
+  gated: ScanReceiptResult
+): MergedOcrResult {
+  const annotatedByUri = new Map<string, ReceiptImage>();
+  for (const image of [...gated.images, ...gated.rejectedImages]) {
+    annotatedByUri.set(image.uri, image);
+  }
+
+  const rejectedUris = new Set(gated.rejectedImages.map((image) => image.uri));
+  const orderedPages: ReceiptImage[] = [];
+  const rejectedPageIndexes: number[] = [];
+  for (const uri of nativePageUris) {
+    const page = annotatedByUri.get(uri);
+    if (!page) {
+      throw new Error(`OCR floor result is missing receipt page URI: ${uri}`);
+    }
+    if (rejectedUris.has(uri)) rejectedPageIndexes.push(orderedPages.length);
+    orderedPages.push(page);
+  }
+
+  return mergeOcrPages(orderedPages, rejectedPageIndexes);
 }
 
 /**
