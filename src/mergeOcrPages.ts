@@ -11,23 +11,17 @@ import type { MergedOcrResult, ReceiptImage } from "./types";
  * in this value.
  */
 const MAX_WINDOW_LINES = 8;
-/** Shorter window must reach this many characters for a multi-line match. */
+/** A multi-line window pair must reach this many characters to prove a seam. */
 const MIN_WINDOW_CHARACTERS = 12;
-/** Similarity a multi-line window pair must reach to be accepted. */
-const MIN_WINDOW_SIMILARITY = 0.85;
-/** Shorter window must reach this many characters when either side is one line. */
+/** A single-line pair must reach this many characters — one short line repeats by coincidence. */
 const MIN_SINGLE_LINE_CHARACTERS = 24;
-/** Longest non-identical pair still worth an O(n·m) edit-distance pass. */
-const MAX_COMPARISON_CHARACTERS = 512;
 
-/** An accepted seam candidate. Only `rightLineCount` affects the output; the rest rank candidates. */
+/** An accepted seam candidate. Only `rightLineCount` affects the output; `matchedCharacters` ranks. */
 type Overlap = {
   /** Lines to drop from the start of the later page. */
   rightLineCount: number;
-  /** Characters actually compared — the shorter window's length. */
-  comparedCharacters: number;
-  /** `1 - editDistance / longerLength`, or exactly `1` for an identical pair. */
-  similarity: number;
+  /** Length of the matched window — longer is stronger evidence. */
+  matchedCharacters: number;
 };
 
 /**
@@ -138,41 +132,31 @@ function findOverlap(leftLines: readonly string[], rightLines: readonly string[]
     const rightCount = rightIndex + 1;
     for (const [leftIndex, left] of leftWindows.entries()) {
       const leftCount = leftIndex + 1;
-      const singleLine = leftCount === 1 || rightCount === 1;
-      const minimumCharacters = singleLine ? MIN_SINGLE_LINE_CHARACTERS : MIN_WINDOW_CHARACTERS;
+      // Equality is the only evidence accepted. Approximate matching was tried
+      // and removed: on receipt text an edit-distance threshold cannot tell
+      // "the same line, misread" from "a different purchase". Two rows for one
+      // product at quantities 1 and 2 differ only in digits, which carry all
+      // the meaning and almost none of the edit distance — measured at 0.9200
+      // for a lone 25-character row and 0.8974 for a 39-character two-line
+      // window, both above any floor that still merges anything. Both deleted
+      // real rows while reporting isComplete.
+      //
+      // ponytail: exact-only trades merges for safety — a genuine seam whose
+      // OCR differs by one character is reported unproven instead of merged,
+      // which is visible to the consumer, where a deleted row is not. If device
+      // data shows too many unproven seams, the upgrade path is a digit-aware
+      // comparison (equal digit runs, fuzzy elsewhere), never a looser floor.
+      if (left !== right) continue;
 
-      const shorterLength = Math.min(left.length, right.length);
-      if (shorterLength < minimumCharacters) continue;
-      const longerLength = Math.max(left.length, right.length);
-      const exactMatch = left === right;
+      const matchedCharacters = left.length;
+      const minimumCharacters =
+        leftCount === 1 || rightCount === 1 ? MIN_SINGLE_LINE_CHARACTERS : MIN_WINDOW_CHARACTERS;
+      if (matchedCharacters < minimumCharacters) continue;
 
-      // One line is the weakest evidence there is, and a fuzzy threshold reads
-      // the wrong signal on receipts: two purchases of the same product differ
-      // only in quantity and amount, so a few digits out of ~25 characters
-      // score above any workable similarity floor and a real row gets deleted
-      // as a duplicate. Digits carry the meaning while contributing almost
-      // nothing to edit distance, so a lone line must match exactly. An
-      // unproven seam is reported, and reporting beats deleting.
-      if (singleLine && !exactMatch) continue;
-
-      let similarity = 1;
-      if (!exactMatch) {
-        // A length gap this wide already costs more edits than the threshold
-        // allows, so the distance pass cannot rescue it.
-        if ((longerLength - shorterLength) / longerLength > 1 - MIN_WINDOW_SIMILARITY) continue;
-        // Edit distance is O(n·m); skip the pathological pairs instead of paying it.
-        if (longerLength > MAX_COMPARISON_CHARACTERS) continue;
-        similarity = 1 - levenshteinDistance(left, right) / longerLength;
-        if (similarity < MIN_WINDOW_SIMILARITY) continue;
-      }
-
-      const better =
-        best === null ||
-        similarity > best.similarity ||
-        // Equal similarity: a longer proven overlap is stronger evidence.
-        (similarity === best.similarity && shorterLength > best.comparedCharacters);
-      if (better) {
-        best = { rightLineCount: rightCount, comparedCharacters: shorterLength, similarity };
+      // A longer match is stronger evidence; a tie keeps the incumbent, which
+      // by the loop order drops the fewest lines from the later page.
+      if (best === null || matchedCharacters > best.matchedCharacters) {
+        best = { rightLineCount: rightCount, matchedCharacters };
       }
     }
   }
@@ -186,39 +170,4 @@ function findOverlap(leftLines: readonly string[], rightLines: readonly string[]
  */
 function comparisonText(lines: readonly string[]): string {
   return lines.map((line) => line.toLowerCase().replace(/\s+/g, " ").trim()).join(" ");
-}
-
-/**
- * Levenshtein distance over UTF-16 code units, matching the sibling Dart
- * implementation's `codeUnitAt` comparison. Korean syllables are BMP, so the
- * two agree on receipt text.
- */
-function levenshteinDistance(left: string, right: string): number {
-  if (left === right) return 0;
-  if (left.length === 0) return right.length;
-  if (right.length === 0) return left.length;
-
-  // One row of the DP matrix plus two scalar carries, so each cell is read from
-  // the array exactly once. Bounded by MAX_COMPARISON_CHARACTERS + 1.
-  const row = new Uint32Array(right.length + 1);
-  for (let index = 0; index <= right.length; index++) row[index] = index;
-  // Correct for an empty left string; the loop below always overwrites it.
-  let distance = right.length;
-
-  for (let leftIndex = 0; leftIndex < left.length; leftIndex++) {
-    let diagonal = leftIndex; // row[0] before the write below
-    let leftCell = leftIndex + 1;
-    row[0] = leftCell;
-    for (let rightIndex = 0; rightIndex < right.length; rightIndex++) {
-      // In range by the loop bound; the fallback only satisfies noUncheckedIndexedAccess.
-      const above = row[rightIndex + 1] ?? 0;
-      const substitutionCost = left.charCodeAt(leftIndex) === right.charCodeAt(rightIndex) ? 0 : 1;
-      const cell = Math.min(above + 1, leftCell + 1, diagonal + substitutionCost);
-      row[rightIndex + 1] = cell;
-      diagonal = above;
-      leftCell = cell;
-    }
-    distance = leftCell;
-  }
-  return distance;
 }

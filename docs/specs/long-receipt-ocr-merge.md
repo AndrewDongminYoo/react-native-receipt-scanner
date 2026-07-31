@@ -77,10 +77,10 @@ Both native option parsers read a fixed key whitelist (`ScanOptions.from` via `h
 
 When `mergeOcrPages === true`, `scan()` throws **before** the native module is called — no scanner UI opens:
 
-| Condition      | Reason                                               |
-| -------------- | ---------------------------------------------------- |
-| `ocr !== true` | There is no text to merge.                           |
-| `maxPages < 2` | A merge needs at least two pages to have a boundary. |
+| Condition                           | Reason                                                                                                                                                                                              |
+| ----------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ocr !== true`                      | There is no text to merge.                                                                                                                                                                          |
+| `maxPages` is not an integer `>= 2` | A merge needs at least one page boundary. The integer check is load-bearing: `NaN < 2` is false, so a bare comparison would let a non-finite value reach native, where it coerces to a single page. |
 
 The thrown error follows the existing single-class convention set by `InvalidOcrLanguageError` in `src/scan.native.tsx` — a typed `Error` subclass carrying a literal `code`. No new error hierarchy is introduced.
 
@@ -169,31 +169,43 @@ Comparison text for a window is its lines lowercased, with runs of whitespace co
 This normalization is used **only** for comparison; emitted text is always the original trimmed lines.
 Comparison is over UTF-16 code units, matching the Dart implementation — Korean syllables are BMP, so there is no surrogate-pair divergence between the two packages.
 
-A candidate pair is evaluated as follows, with `shorter` / `longer` being the two windows' comparison-text lengths:
+A candidate pair is accepted only when both conditions hold:
 
-| Step               | Rule                                                                                                    |
-| ------------------ | ------------------------------------------------------------------------------------------------------- |
-| Threshold select   | Either window is a single line → 24 chars and **exact equality**. Otherwise 12 chars / 0.85 similarity. |
-| Length floor       | `shorter < minChars` → skip.                                                                            |
-| Length-ratio guard | `(longer - shorter) / longer > 1 - minSimilarity` → skip; the edit distance cannot pass.                |
-| Cost guard         | Not an exact string match and `longer > 512` → skip, to bound the Levenshtein cost.                     |
-| Similarity         | Exact match → `1.0`. Otherwise `1 - levenshteinDistance(left, right) / longer`.                         |
-| Accept             | `similarity >= minSimilarity`.                                                                          |
+| Step         | Rule                                                                                                     |
+| ------------ | -------------------------------------------------------------------------------------------------------- |
+| Match        | The two comparison texts are **equal**. Nothing else counts as evidence — there is no approximate match. |
+| Length floor | The matched text reaches 24 characters when either window is a single line, otherwise 12.                |
 
-A single line is the weakest evidence available, and a fuzzy threshold reads the wrong signal on receipt text.
-Two purchases of the same product differ only in quantity and amount, so a handful of digits out of roughly 25 characters scores above any workable similarity floor: `서울우유 1L 흰우유 990ml 1 2,000` against the same row at quantity 2 scores exactly 0.9200 over 25 normalized characters.
-Digits carry the meaning while contributing almost nothing to edit distance, so a lone line must match exactly.
-The cost is that a genuine single-line seam carrying one OCR error is reported unproven instead of merged — the right direction, because a reported seam is visible and a deleted row is not.
+### Why equality, and not a similarity threshold
+
+Approximate matching was implemented, measured, and removed.
+On receipt text an edit-distance threshold cannot separate _the same line, misread_ from _a different purchase_, because the digits that carry all the meaning contribute almost none of the edit distance.
+
+Two measured false positives, both of which deleted real rows while reporting `isComplete: true`:
+
+| Case                                                                | Window         | Similarity | Old floor |
+| ------------------------------------------------------------------- | -------------- | ---------- | --------- |
+| One product at quantity 1 vs quantity 2, `서울우유 1L 흰우유 990ml` | 1 line, 25 ch  | 0.9200     | 0.92      |
+| The same product at quantities 1,2 then 3,4                         | 2 lines, 39 ch | 0.8974     | 0.85      |
+
+Tightening the single-line floor did not close this: the second case cleared the _multi-line_ floor by the identical mechanism.
+No floor separates the two populations, so equality is the rule.
+
+The cost is real and deliberate: a genuine seam whose OCR differs by one character is reported unproven instead of merged.
+That is the correct direction — a reported seam is visible in `unmatchedBoundaryIndexes` and the text is all still there, while a deleted row is invisible.
+Normalization still absorbs the common variation (case, whitespace runs), so spacing differences between two captures do not break a seam.
+
+If device data shows too many unproven seams, the upgrade path is a **digit-aware** comparison — require the digit runs to match, allow fuzz elsewhere — never a looser similarity floor.
 
 ### Candidate selection
 
-Among accepted candidates, pick the highest similarity; break ties by the **larger** compared character count — a longer proven overlap is stronger evidence than a shorter one.
-Remaining ties keep the first candidate found. Iteration is `rightCount` ascending in the outer loop and `leftCount` ascending in the inner loop, so a full tie removes the **fewest** lines from the next page. This ordering is part of the contract: the result must be deterministic.
+Every accepted candidate is an exact match, so they are ranked by the **longer** matched text — a longer proven overlap is stronger evidence than a shorter one.
+Ties keep the first candidate found. Iteration is `rightCount` ascending in the outer loop and `leftCount` ascending in the inner loop, so a tie removes the **fewest** lines from the next page. This ordering is part of the contract: the result must be deterministic.
 
 An accepted seam keeps the previous page's suffix in full and removes only the matched prefix lines from the next page.
 An unmatched seam appends every line of the next page and records the boundary index.
 
-> **Divergence from `flutter_receipt_scanner` spec 0001.** That spec's prose describes the tie-break as "then the shorter normalized character count, then minimizes prefix lines removed, then minimizes suffix lines consumed", but its shipped `_Overlap.isBetterThan` breaks ties on the **larger** compared character count and stops there. This spec ports the shipped implementation, which is the behaviour its tests fix. The two guards above (`512`-character cost guard, length-ratio prefilter) are likewise in the Dart implementation but absent from its spec text.
+> **Divergence from `flutter_receipt_scanner` spec 0001.** That package accepts approximate seam matches (0.85 multi-line, 0.92 single-line) with a Levenshtein pass, a 512-character cost guard, and a length-ratio prefilter. This package started as a port of it and then removed the whole approximate path — see "Why equality" above for the two measured false positives that motivated it. **The same false positives apply to `flutter_receipt_scanner` as shipped**; it has not been changed, and that is filed as a follow-up rather than assumed.
 
 ### Completeness
 
@@ -229,7 +241,7 @@ The sibling Flutter package solved this with a native `discardedPageCount`; addi
 4. Globally removing repeated lines such as headers, taxes, or totals.
 5. Structured receipt parsing of any kind — merchant, item, tax, total, date, payment.
 6. Merging `ocrLines` geometry across pages.
-7. Exposing the similarity thresholds as public configuration; they stay private in v1.
+7. Exposing the length floors as public configuration; they stay private in v1.
 8. A guided overlap-capture UI. `VNDocumentCameraViewController` and the GMS document scanner are closed UIs with no previous-frame overlay or per-frame callback; building one would mean a custom camera on both platforms and would reverse ADR-001 and ADR-002.
 9. Any claimed maximum receipt length or aspect ratio. The Flutter package's 11.0 ratio claim is backed by image fixtures and physical-device acceptance runs; this package has run neither, so it claims neither.
 
@@ -242,9 +254,9 @@ Pure unit tests in `src/__tests__/`:
 1. Flag defaults to disabled and the result is byte-identical to today's.
 2. Invalid `ocr` and `maxPages` combinations throw before the mocked native module is called.
 3. Exact two-line overlap is removed exactly once.
-4. Fuzzy Korean-plus-Latin overlap at or above threshold is removed once.
-5. A candidate below threshold is preserved and records an unmatched boundary.
-6. A single-line candidate needs 24 characters and exact equality; a repeat purchase differing only in quantity and amount is preserved, not merged away.
+4. Normalization absorbs case and whitespace-run differences, but a single misread character leaves the seam unproven.
+5. A pair with no matching window is preserved and records an unmatched boundary.
+6. A single-line candidate needs 24 characters; a repeat purchase differing only in quantity and amount is preserved, at both one and two lines wide.
 7. An overlap deeper than the eight-line window is reported unproven with every line preserved, never partially merged from a shifted window.
 8. Repeated totals away from the adjacent suffix and prefix are preserved.
 9. Absent or empty `ocrText` marks the page rejected and both its boundaries unmatched.
@@ -268,5 +280,7 @@ The example app should still exercise the flag once manually before release.
 
 1. Report natively dropped pages (the Flutter package's `discardedPageCount`) so `isComplete` can account for them. Requires a native change on both platforms.
 2. Set `PHPickerConfiguration.selection = PHPickerConfigurationSelectionOrdered` (iOS 15+, and this package targets iOS 16) so the gallery path returns user selection order instead of library order. One native line; deferred to keep this change JS-only.
-3. Reconcile the `flutter_receipt_scanner` spec 0001 tie-break prose with its shipped implementation, so the two packages' specs do not describe different algorithms.
-4. Consider ordered gallery selection with a review-and-reorder surface only as its own spec.
+3. **Carry the approximate-match removal to `flutter_receipt_scanner`.** Its shipped `ocr_page_merger.dart` still accepts 0.85 multi-line and 0.92 single-line matches, so both false positives measured here apply to it unchanged — the quantity-1-vs-2 row is a Korean receipt case, not a synthetic one. Not assumed fixed; not yet filed there.
+4. Reconcile that package's spec 0001 tie-break prose with its shipped implementation, so the two specs do not describe different algorithms.
+5. Measure how often a real recognizer reproduces a line character-identically across two captures. That number decides whether the digit-aware comparison in "Why equality" is needed.
+6. Consider ordered gallery selection with a review-and-reorder surface only as its own spec.

@@ -47,21 +47,52 @@ describe("mergeOcrPages", () => {
     expect(merged.rejectedPageIndexes).toEqual([]);
   });
 
-  it("removes a fuzzy Korean-plus-Latin overlap once", () => {
-    // The same two lines re-recognized with plausible OCR noise — the letter O
-    // for two zeros — so the seam is proven by similarity, not string equality.
-    const merged = mergeOcrPages([
+  it("matches across whitespace and case differences but not a misread character", () => {
+    // Normalization absorbs spacing and case, so this seam still proves.
+    const spaced = mergeOcrPages([
+      page(0, "영수증 상단\nAmericano  HOT   4,500원\n카페라떼 ICE 5,000원"),
+      page(1, "americano HOT 4,500원\n카페라떼   ICE 5,000원\n합계 9,500원"),
+    ]);
+    expect(spaced.isComplete).toBe(true);
+    expect(spaced.text).toBe(
+      ["영수증 상단", "Americano  HOT   4,500원", "카페라떼 ICE 5,000원", "합계 9,500원"].join("\n")
+    );
+
+    // One misread character (the letter O for two zeros) is no longer merged.
+    // Approximate matching was removed because no similarity floor separates
+    // "the same line, misread" from "a different purchase" on receipt text.
+    // The seam is reported instead, which the consumer can see.
+    const misread = mergeOcrPages([
       page(0, "영수증 상단\nAmericano HOT 4,500원\n카페라떼 ICE 5,000원"),
       page(1, "Americano HOT 4,5OO원\n카페라떼 ICE 5,000원\n합계 9,500원"),
     ]);
-
-    expect(merged.text).toBe(
-      ["영수증 상단", "Americano HOT 4,500원", "카페라떼 ICE 5,000원", "합계 9,500원"].join("\n")
-    );
-    expect(merged.isComplete).toBe(true);
+    expect(misread.unmatchedBoundaryIndexes).toEqual([0]);
+    expect(misread.isComplete).toBe(false);
+    // Nothing dropped.
+    expect(misread.text).toContain("Americano HOT 4,500원");
+    expect(misread.text).toContain("Americano HOT 4,5OO원");
   });
 
-  it("keeps both pages and records the boundary when similarity is below threshold", () => {
+  it("does not delete later purchases that merely look like the previous rows", () => {
+    // Regression: a two-line window of similarly formatted purchase rows scored
+    // 0.8974 over 39 normalized characters and cleared the old 0.85 multi-line
+    // floor, deleting both later purchases while reporting isComplete. The
+    // single-line exact-match guard did not cover this — the whole approximate
+    // path had to go.
+    const earlier = ["서울우유 1L 흰우유 1 2,000", "서울우유 1L 흰우유 2 4,000"];
+    const later = ["서울우유 1L 흰우유 3 6,000", "서울우유 1L 흰우유 4 8,000"];
+
+    const merged = mergeOcrPages([
+      page(0, ["구매 내역 시작", ...earlier].join("\n")),
+      page(1, [...later, "합계 20,000원"].join("\n")),
+    ]);
+
+    expect(merged.text).toBe(["구매 내역 시작", ...earlier, ...later, "합계 20,000원"].join("\n"));
+    expect(merged.unmatchedBoundaryIndexes).toEqual([0]);
+    expect(merged.isComplete).toBe(false);
+  });
+
+  it("keeps both pages and records the boundary when no window matches", () => {
     const merged = mergeOcrPages([
       page(0, "첫 번째 페이지 내용입니다\n두 번째 줄입니다"),
       page(1, "완전히 다른 문장이 여기 있다\n또 다른 줄이 이어진다"),
@@ -246,7 +277,17 @@ describe("scan (mergeOcrPages orchestration)", () => {
   });
 
   it("throws before calling native when maxPages is below two", async () => {
-    await expect(scan({ mergeOcrPages: true })).rejects.toThrow(/requires maxPages >= 2/);
+    await expect(scan({ mergeOcrPages: true })).rejects.toThrow(/maxPages to be an integer >= 2/);
+    expect(mockNative.scan).not.toHaveBeenCalled();
+  });
+
+  it("throws before calling native when maxPages is not a finite integer", async () => {
+    // `NaN < 2` is false, so a bare comparison would dispatch to the scanner.
+    for (const maxPages of [Number.NaN, Number.POSITIVE_INFINITY, 2.5]) {
+      await expect(scan({ mergeOcrPages: true, maxPages })).rejects.toThrow(
+        /maxPages to be an integer >= 2/
+      );
+    }
     expect(mockNative.scan).not.toHaveBeenCalled();
   });
 

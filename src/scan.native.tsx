@@ -148,9 +148,12 @@ function validateMergeOptions(options: Required<ScanReceiptOptions>): void {
       "mergeOcrPages requires ocr: true — there is no recognized text to merge."
     );
   }
-  if (options.maxPages < 2) {
+  // `NaN < 2` is false, so a bare comparison lets a non-finite value through to
+  // native, where it is coerced to a single page and a one-page result could be
+  // reported as a complete merge. Require a real integer instead.
+  if (!Number.isInteger(options.maxPages) || options.maxPages < 2) {
     throw new InvalidMergeOptionError(
-      "mergeOcrPages requires maxPages >= 2 — a merge needs at least one page boundary."
+      "mergeOcrPages requires maxPages to be an integer >= 2 — a merge needs at least one page boundary."
     );
   }
 }

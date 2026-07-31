@@ -68,4 +68,6 @@ The ten-page merge timing bound is set from a measured value, not an assumed one
 
 Not observed, and not claimed: **the feature has never run against real OCR output.** The example-app control exists but was not launched — `example/ios` has a pre-existing `Podfile.lock` versus `Pods/Manifest.lock` mismatch that blocks the iOS run, and a device pass is a heavy job the machine takes one at a time. Every claim here rests on unit tests over synthetic OCR strings.
 
-That gap matters most where synthetic text is least like real output: whether the 0.85 / 0.92 similarity thresholds hold when both platforms' recognizers segment the _same_ physical line differently on either side of a seam. Run the example app on one device per platform with a genuinely long receipt before release, and treat an unmatched boundary there as a threshold-calibration finding, not a test failure.
+That gap matters most in one specific way: seam matching requires the two captures' OCR to be **character-identical** after normalization, and no synthetic fixture can tell you how often a real recognizer reproduces a line exactly across two photographs of it. Run the example app on one device per platform with a genuinely long receipt before release and count how many seams prove.
+
+Read the outcome as a design input, not a test failure. Frequent unproven seams do not mean the thresholds need loosening — that path was measured and removed (see the spec's "Why equality"). They would mean the next step is a digit-aware comparison: require the digit runs to match, allow fuzz elsewhere.
