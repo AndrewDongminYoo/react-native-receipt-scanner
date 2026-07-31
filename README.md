@@ -303,7 +303,7 @@ type ScanReceiptResult = {
   status: "success" | "cancelled" | "rejected";
   images: ReceiptImage[]; // always an array — empty when none
   rejectedImages: ReceiptImage[]; // always an array — empty when none
-  mergedOcr?: MergedOcrResult; // present when options.mergeOcrPages === true
+  mergedOcr?: MergedOcrResult; // with mergeOcrPages: true, unless the scan was cancelled
 };
 
 type MergedOcrResult = {

@@ -244,7 +244,7 @@ Pure unit tests in `src/__tests__/`:
 9. Floor-rejected pages appear in `pageUris` and in `rejectedPageIndexes`, and make the merge incomplete.
 10. Native page order is restored after the floor gate partitions the images.
 11. A duplicate page URI throws rather than being silently reordered.
-12. Cancelled and rejected results carry no `mergedOcr`.
+12. A cancelled result carries no `mergedOcr`, while a floor-rejected one still does — the two statuses diverge here, and the pair of tests is what holds them apart.
 13. Inputs are not mutated.
 14. A ten-page, 200-lines-per-page merge completes within a recorded time bound. The bound is set from the measured value on the development machine; no performance number is documented before it is measured.
 
