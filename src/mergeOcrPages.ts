@@ -1,6 +1,15 @@
 import type { MergedOcrResult, ReceiptImage } from "./types";
 
-/** Longest suffix / prefix window compared at a seam, in lines. */
+/**
+ * Longest suffix / prefix window compared at a seam, in lines.
+ *
+ * ponytail: hard ceiling on provable overlap — an overlap deeper than this
+ * cannot be matched, so the seam is reported unproven rather than merged. That
+ * is the safe direction (nothing is deleted), and it is why the capture
+ * guidance asks for a few overlapping lines rather than a fraction of the page.
+ * Raise it if real receipts turn out to overlap more deeply; cost is quadratic
+ * in this value.
+ */
 const MAX_WINDOW_LINES = 8;
 /** Shorter window must reach this many characters for a multi-line match. */
 const MIN_WINDOW_CHARACTERS = 12;
@@ -8,8 +17,6 @@ const MIN_WINDOW_CHARACTERS = 12;
 const MIN_WINDOW_SIMILARITY = 0.85;
 /** Shorter window must reach this many characters when either side is one line. */
 const MIN_SINGLE_LINE_CHARACTERS = 24;
-/** Similarity a single-line window pair must reach — one short line matches by coincidence too easily. */
-const MIN_SINGLE_LINE_SIMILARITY = 0.92;
 /** Longest non-identical pair still worth an O(n·m) edit-distance pass. */
 const MAX_COMPARISON_CHARACTERS = 512;
 
@@ -133,20 +140,31 @@ function findOverlap(leftLines: readonly string[], rightLines: readonly string[]
       const leftCount = leftIndex + 1;
       const singleLine = leftCount === 1 || rightCount === 1;
       const minimumCharacters = singleLine ? MIN_SINGLE_LINE_CHARACTERS : MIN_WINDOW_CHARACTERS;
-      const minimumSimilarity = singleLine ? MIN_SINGLE_LINE_SIMILARITY : MIN_WINDOW_SIMILARITY;
 
       const shorterLength = Math.min(left.length, right.length);
       if (shorterLength < minimumCharacters) continue;
       const longerLength = Math.max(left.length, right.length);
-      // A length gap this wide already costs more edits than the threshold
-      // allows, so the distance pass cannot rescue it.
-      if ((longerLength - shorterLength) / longerLength > 1 - minimumSimilarity) continue;
-
       const exactMatch = left === right;
-      // Edit distance is O(n·m); skip the pathological pairs instead of paying it.
-      if (!exactMatch && longerLength > MAX_COMPARISON_CHARACTERS) continue;
-      const similarity = exactMatch ? 1 : 1 - levenshteinDistance(left, right) / longerLength;
-      if (similarity < minimumSimilarity) continue;
+
+      // One line is the weakest evidence there is, and a fuzzy threshold reads
+      // the wrong signal on receipts: two purchases of the same product differ
+      // only in quantity and amount, so a few digits out of ~25 characters
+      // score above any workable similarity floor and a real row gets deleted
+      // as a duplicate. Digits carry the meaning while contributing almost
+      // nothing to edit distance, so a lone line must match exactly. An
+      // unproven seam is reported, and reporting beats deleting.
+      if (singleLine && !exactMatch) continue;
+
+      let similarity = 1;
+      if (!exactMatch) {
+        // A length gap this wide already costs more edits than the threshold
+        // allows, so the distance pass cannot rescue it.
+        if ((longerLength - shorterLength) / longerLength > 1 - MIN_WINDOW_SIMILARITY) continue;
+        // Edit distance is O(n·m); skip the pathological pairs instead of paying it.
+        if (longerLength > MAX_COMPARISON_CHARACTERS) continue;
+        similarity = 1 - levenshteinDistance(left, right) / longerLength;
+        if (similarity < MIN_WINDOW_SIMILARITY) continue;
+      }
 
       const better =
         best === null ||

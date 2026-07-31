@@ -49,7 +49,8 @@ Modified, by layer:
 - **Docs** — `specs/api-contract.md`, `specs/scan-pipeline.md`, `README.md`, `CLAUDE.md`, `AGENTS.md`, `docs/AGENTS.md` (normative-spec list).
 
 `src/scan.tsx` (web) is unchanged: it always resolves `"cancelled"`, and a cancelled result carries no `mergedOcr`.
-No native file is touched, so `android/AGENTS.md` and `ios/AGENTS.md` are unchanged.
+
+No native **code** changes. Two native doc comments do: `ScanOptions.kt` and `RNScanOptions.h` both told contributors to keep their field set in sync with `src/types.ts` without qualification, which a JS-only option contradicts — `ocrFloor` had already been silently exempt. Both now name the carve-out. `android/AGENTS.md` and `ios/AGENTS.md` are unchanged.
 
 ## Out of scope
 

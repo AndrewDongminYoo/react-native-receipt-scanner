@@ -156,7 +156,7 @@ if (merged && !merged.isComplete) {
 }
 ```
 
-Capture each page so it overlaps the previous one by roughly a fifth of its height — the merge proves a seam from repeated text, so with no overlap there is nothing to match.
+Capture each page so it repeats **two to eight lines** from the end of the previous one. The merge proves a seam from repeated text, so with no overlap there is nothing to match — and it compares at most eight lines per side, so an overlap deeper than that cannot be proven either. Both extremes fail the same safe way: the boundary is reported, and every line is kept.
 
 The page JPEGs are never combined into one tall image. Android caps the processed long edge at 3,072 px and iOS Vision's minimum text height is a fraction of the whole image height, so a taller composite recovers _less_ text, not more. See [ADR-008](docs/notes/adr-008-long-receipt-merge-boundary.md).
 

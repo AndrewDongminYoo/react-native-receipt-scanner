@@ -9,7 +9,9 @@
 
 ## Status
 
-Proposed. This document is the normative reference for the behaviour once implemented.
+Implemented in the JS layer; device verification pending.
+This document is the normative reference for the behaviour — read it as the contract, not as a proposal.
+The plan's §Verification records exactly what has and has not been observed.
 
 ## Problem
 
@@ -169,16 +171,19 @@ Comparison is over UTF-16 code units, matching the Dart implementation — Korea
 
 A candidate pair is evaluated as follows, with `shorter` / `longer` being the two windows' comparison-text lengths:
 
-| Step               | Rule                                                                                     |
-| ------------------ | ---------------------------------------------------------------------------------------- |
-| Threshold select   | Either window is a single line → 24 chars / 0.92 similarity. Otherwise 12 chars / 0.85.  |
-| Length floor       | `shorter < minChars` → skip.                                                             |
-| Length-ratio guard | `(longer - shorter) / longer > 1 - minSimilarity` → skip; the edit distance cannot pass. |
-| Cost guard         | Not an exact string match and `longer > 512` → skip, to bound the Levenshtein cost.      |
-| Similarity         | Exact match → `1.0`. Otherwise `1 - levenshteinDistance(left, right) / longer`.          |
-| Accept             | `similarity >= minSimilarity`.                                                           |
+| Step               | Rule                                                                                                    |
+| ------------------ | ------------------------------------------------------------------------------------------------------- |
+| Threshold select   | Either window is a single line → 24 chars and **exact equality**. Otherwise 12 chars / 0.85 similarity. |
+| Length floor       | `shorter < minChars` → skip.                                                                            |
+| Length-ratio guard | `(longer - shorter) / longer > 1 - minSimilarity` → skip; the edit distance cannot pass.                |
+| Cost guard         | Not an exact string match and `longer > 512` → skip, to bound the Levenshtein cost.                     |
+| Similarity         | Exact match → `1.0`. Otherwise `1 - levenshteinDistance(left, right) / longer`.                         |
+| Accept             | `similarity >= minSimilarity`.                                                                          |
 
-The stricter single-line thresholds exist because one short line matches by coincidence far too easily.
+A single line is the weakest evidence available, and a fuzzy threshold reads the wrong signal on receipt text.
+Two purchases of the same product differ only in quantity and amount, so a handful of digits out of roughly 25 characters scores above any workable similarity floor: `서울우유 1L 흰우유 990ml 1 2,000` against the same row at quantity 2 scores exactly 0.9200 over 25 normalized characters.
+Digits carry the meaning while contributing almost nothing to edit distance, so a lone line must match exactly.
+The cost is that a genuine single-line seam carrying one OCR error is reported unproven instead of merged — the right direction, because a reported seam is visible and a deleted row is not.
 
 ### Candidate selection
 
@@ -193,7 +198,8 @@ An unmatched seam appends every line of the next page and records the boundary i
 ### Completeness
 
 `isComplete` is true only when there is at least one page, `rejectedPageIndexes` is empty, and `unmatchedBoundaryIndexes` is empty.
-A single-page merge is complete when its text is non-empty, because it has no boundary to prove — though `maxPages >= 2` is required to enable the flag, a user may still finish the capture after one page.
+A single-page merge has no boundary to prove, so it is complete when that page has non-empty text **and** is absent from `rejectedPageIndexes` — a lone page the OCR floor rejected still makes the merge incomplete.
+Although `maxPages >= 2` is required to enable the flag, a user may still finish the capture after one page.
 
 ### Known limitation: natively dropped pages
 
@@ -238,15 +244,16 @@ Pure unit tests in `src/__tests__/`:
 3. Exact two-line overlap is removed exactly once.
 4. Fuzzy Korean-plus-Latin overlap at or above threshold is removed once.
 5. A candidate below threshold is preserved and records an unmatched boundary.
-6. A single-line candidate is held to the stricter 24-character / 0.92 thresholds.
-7. Repeated totals away from the adjacent suffix and prefix are preserved.
-8. Absent or empty `ocrText` marks the page rejected and both its boundaries unmatched.
-9. Floor-rejected pages appear in `pageUris` and in `rejectedPageIndexes`, and make the merge incomplete.
-10. Native page order is restored after the floor gate partitions the images.
-11. A duplicate page URI throws rather than being silently reordered.
-12. A cancelled result carries no `mergedOcr`, while a floor-rejected one still does — the two statuses diverge here, and the pair of tests is what holds them apart.
-13. Inputs are not mutated.
-14. A ten-page, 200-lines-per-page merge completes within a recorded time bound. The bound is set from the measured value on the development machine; no performance number is documented before it is measured.
+6. A single-line candidate needs 24 characters and exact equality; a repeat purchase differing only in quantity and amount is preserved, not merged away.
+7. An overlap deeper than the eight-line window is reported unproven with every line preserved, never partially merged from a shifted window.
+8. Repeated totals away from the adjacent suffix and prefix are preserved.
+9. Absent or empty `ocrText` marks the page rejected and both its boundaries unmatched.
+10. Floor-rejected pages appear in `pageUris` and in `rejectedPageIndexes`, and make the merge incomplete.
+11. Native page order is restored after the floor gate partitions the images.
+12. A duplicate page URI throws rather than being silently reordered.
+13. A cancelled result carries no `mergedOcr`, while a floor-rejected one still does — the two statuses diverge here, and the pair of tests is what holds them apart.
+14. Inputs are not mutated.
+15. A ten-page, 200-lines-per-page merge completes within a recorded time bound. The bound is set from the measured value on the development machine; no performance number is documented before it is measured.
 
 Gate before claiming done:
 

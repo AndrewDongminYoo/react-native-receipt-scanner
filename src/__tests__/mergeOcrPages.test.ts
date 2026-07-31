@@ -95,6 +95,52 @@ describe("mergeOcrPages", () => {
     expect(merged.text.split("\n").filter((line) => line === shortLine)).toHaveLength(2);
   });
 
+  it("does not delete a repeat purchase that differs only in quantity and amount", () => {
+    // Regression: with a 0.92 fuzzy floor these two rows scored exactly 0.9200
+    // over 25 normalized characters and were merged, silently deleting the
+    // second purchase while still reporting isComplete. A lone line now has to
+    // match exactly.
+    const first = "서울우유 1L 흰우유 990ml    1     2,000";
+    const second = "서울우유 1L 흰우유 990ml    2     4,000";
+
+    const merged = mergeOcrPages([
+      page(0, `구매 내역 시작\n${first}`),
+      page(1, `${second}\n합계 6,000원`),
+    ]);
+
+    expect(merged.text).toBe(["구매 내역 시작", first, second, "합계 6,000원"].join("\n"));
+    expect(merged.unmatchedBoundaryIndexes).toEqual([0]);
+    expect(merged.isComplete).toBe(false);
+  });
+
+  it("reports an overlap deeper than the window instead of merging it wrongly", () => {
+    // Nine repeated rows exceed MAX_WINDOW_LINES, so no window pair can span
+    // the true overlap. The seam must be reported unproven with every line
+    // preserved — never a shifted partial match.
+    const overlap = [
+      "서울우유 1L         1    2,900",
+      "신라면 5개입        1    4,250",
+      "농심 새우깡         2    2,400",
+      "바나나 1송이        1    3,980",
+      "계란 한판 30구      1    7,900",
+      "삼다수 2L 6입       1    5,400",
+      "김치 500g          1    6,200",
+      "두부 부침용        2    3,000",
+      "대파 1단           1    2,480",
+    ];
+    const merged = mergeOcrPages([
+      page(0, ["가맹점명 표시줄", ...overlap].join("\n")),
+      page(1, [...overlap, "합계          38,510"].join("\n")),
+    ]);
+
+    expect(merged.unmatchedBoundaryIndexes).toEqual([0]);
+    expect(merged.isComplete).toBe(false);
+    // Nothing dropped: both copies of all nine rows survive.
+    for (const line of overlap) {
+      expect(merged.text.split("\n").filter((candidate) => candidate === line)).toHaveLength(2);
+    }
+  });
+
   it("accepts a single-line candidate once it is long enough", () => {
     const longLine = "서울특별시 강남구 테헤란로 152 강남파이낸스센터";
     expect(longLine.length).toBeGreaterThanOrEqual(24);

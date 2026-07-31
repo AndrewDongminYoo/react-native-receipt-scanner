@@ -10,6 +10,12 @@ import com.facebook.react.bridge.ReadableType
  * `DEFAULT_SCAN_OPTIONS` *before* dispatch, so missing keys here represent
  * a contract violation rather than a "use the default" signal.
  *
+ * "In sync" covers the options this layer acts on, not every field in
+ * `src/types.ts`. Options the JS layer consumes itself — `ocrFloor` and
+ * `mergeOcrPages` — are deliberately absent: adding them here would move
+ * derived-signal logic into native code, which ADR-003 and ADR-008 keep out.
+ * [from] reads a fixed key whitelist, so an unmirrored key is inert.
+ *
  * @property source Acquisition path: `"camera"` or `"gallery"`.
  * @property maxPages Page / multi-select limit (coerced to `1..10`).
  * @property quality JPEG compression target in `[0.0, 1.0]`.

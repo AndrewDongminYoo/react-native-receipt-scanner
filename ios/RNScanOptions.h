@@ -10,6 +10,12 @@ NS_ASSUME_NONNULL_BEGIN
  * defaults via `DEFAULT_SCAN_OPTIONS` *before* dispatch, so missing keys
  * here represent a contract violation rather than a "use the default" signal
  * — `+optionsFromDictionary:` still applies sensible defaults defensively.
+ *
+ * "In sync" covers the options this layer acts on, not every field in
+ * `src/types.ts`. Options the JS layer consumes itself — `ocrFloor` and
+ * `mergeOcrPages` — are deliberately absent: adding them here would move
+ * derived-signal logic into native code, which ADR-003 and ADR-008 keep out.
+ * `+optionsFromDictionary:` reads a fixed key set, so an unmirrored key is inert.
  */
 @interface RNScanOptions : NSObject
 
