@@ -110,20 +110,20 @@ describe("mergeOcrPages", () => {
     expect(merged.isComplete).toBe(false);
   });
 
-  it("holds a single-line candidate to the stricter 24-character threshold", () => {
-    // 17 characters: clears the 12-char multi-line floor, misses the 24-char
-    // single-line one, so a lone identical line must not prove a seam.
-    const shortLine = "합계 12,345,678원";
-    expect(shortLine.length).toBeGreaterThanOrEqual(12);
-    expect(shortLine.length).toBeLessThan(24);
+  it("holds a two-line overlap to the 12-character floor", () => {
+    // Two distinct lines, but only 9 characters between them — too little text
+    // to be evidence of anything.
+    const first = "합계";
+    const second = "1,200원";
+    expect(`${first} ${second}`.length).toBeLessThan(12);
 
     const merged = mergeOcrPages([
-      page(0, `상단 문구\n${shortLine}`),
-      page(1, `${shortLine}\n하단 문구`),
+      page(0, `상단 문구\n${first}\n${second}`),
+      page(1, `${first}\n${second}\n하단 문구`),
     ]);
 
     expect(merged.unmatchedBoundaryIndexes).toEqual([0]);
-    expect(merged.text.split("\n").filter((line) => line === shortLine)).toHaveLength(2);
+    expect(merged.text.split("\n").filter((line) => line === first)).toHaveLength(2);
   });
 
   it("does not delete a repeat purchase that differs only in quantity and amount", () => {
@@ -193,16 +193,47 @@ describe("mergeOcrPages", () => {
     expect(merged.isComplete).toBe(true);
   });
 
-  it("accepts a single-line candidate once it is long enough", () => {
-    const longLine = "서울특별시 강남구 테헤란로 152 강남파이낸스센터";
-    expect(longLine.length).toBeGreaterThanOrEqual(24);
+  it("does not treat a single repeated row as a seam", () => {
+    // Regression: buying two of one item prints the identical row twice, so a
+    // page ending with it and the next page starting with it match exactly
+    // without overlapping at all. Exact equality cannot tell that apart from a
+    // recaptured line, so one row is never enough evidence — however long it is.
+    const row = "서울우유 1L 흰우유 990ml    1     2,000";
+    expect(row.length).toBeGreaterThanOrEqual(24);
 
     const merged = mergeOcrPages([
-      page(0, `가맹점 주소\n${longLine}`),
-      page(1, `${longLine}\n대표 홍길동`),
+      page(0, `구매 내역 시작\n${row}`),
+      page(1, `${row}\n합계 4,000원`),
     ]);
 
-    expect(merged.text).toBe(["가맹점 주소", longLine, "대표 홍길동"].join("\n"));
+    expect(merged.text).toBe(["구매 내역 시작", row, row, "합계 4,000원"].join("\n"));
+    expect(merged.unmatchedBoundaryIndexes).toEqual([0]);
+    expect(merged.isComplete).toBe(false);
+  });
+
+  it("does not treat a run of one repeated row as a seam either", () => {
+    // The same failure at greater depth: four identical rows split 2/2 across
+    // the boundary match at depth 2 without overlapping.
+    const row = "서울우유 1L 흰우유 990ml    1     2,000";
+    const merged = mergeOcrPages([
+      page(0, ["구매 내역 시작", row, row].join("\n")),
+      page(1, [row, row, "합계 8,000원"].join("\n")),
+    ]);
+
+    expect(merged.text.split("\n").filter((line) => line === row)).toHaveLength(4);
+    expect(merged.isComplete).toBe(false);
+  });
+
+  it("accepts a two-line overlap once it carries two distinct lines", () => {
+    const address = "서울특별시 강남구 테헤란로 152 강남파이낸스센터";
+    const owner = "대표 홍길동";
+
+    const merged = mergeOcrPages([
+      page(0, `가맹점 주소\n${address}\n${owner}`),
+      page(1, `${address}\n${owner}\n사업자 123-45-67890`),
+    ]);
+
+    expect(merged.text).toBe(["가맹점 주소", address, owner, "사업자 123-45-67890"].join("\n"));
     expect(merged.isComplete).toBe(true);
   });
 
@@ -314,6 +345,25 @@ describe("scan (mergeOcrPages orchestration)", () => {
       );
     }
     expect(mockNative.scan).not.toHaveBeenCalled();
+  });
+
+  it("treats an explicitly undefined option as omitted", async () => {
+    // exactOptionalPropertyTypes is off, so `{ ocr: undefined }` type-checks —
+    // common when options are assembled from optional values. A plain spread
+    // would let it overwrite the default and reject a valid call.
+    mockNative.scan.mockResolvedValueOnce({
+      status: "success",
+      images: [
+        page(0, "가맹점 이름 표시줄\n금액 표시줄"),
+        page(1, "가맹점 이름 표시줄\n금액 표시줄\n합계 1,000원"),
+      ],
+      rejectedImages: [],
+    });
+
+    const result = await scan({ mergeOcrPages: true, maxPages: 2, ocr: undefined });
+
+    expect(mockNative.scan).toHaveBeenCalled();
+    expect(result.mergedOcr).toBeDefined();
   });
 
   it("omits mergedOcr when the option is off", async () => {

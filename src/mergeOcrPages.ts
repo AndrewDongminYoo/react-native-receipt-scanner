@@ -1,9 +1,18 @@
 import type { MergedOcrResult, ReceiptImage } from "./types";
 
-/** A multi-line overlap must reach this many characters to prove a seam. */
+/** An overlap must reach this many characters to prove a seam. */
 const MIN_WINDOW_CHARACTERS = 12;
-/** A single-line overlap must reach this many characters — one short line repeats by coincidence. */
-const MIN_SINGLE_LINE_CHARACTERS = 24;
+/**
+ * An overlap must contain this many *distinct* lines.
+ *
+ * A single repeated row is not evidence of a seam: buying two of one item
+ * prints the identical row twice, so a page ending with that row and the next
+ * page beginning with it match exactly without overlapping at all. Merging on
+ * that deletes a real purchase. Requiring two distinct lines also rejects a
+ * degenerate run of one line repeated N times, which fails the same way at
+ * greater depth.
+ */
+const MIN_DISTINCT_LINES = 2;
 
 /**
  * Assembles the OCR text of one logical receipt from its pages, removing text
@@ -121,10 +130,10 @@ function findOverlap(leftLines: readonly string[], rightLines: readonly string[]
   for (let lineCount = Math.min(left.length, right.length); lineCount >= 1; lineCount--) {
     if (!suffixEqualsPrefix(left, right, lineCount)) continue;
 
-    // Guard against a short line repeating by coincidence rather than by overlap.
-    const matched = right.slice(0, lineCount).join(" ");
-    const minimumCharacters = lineCount === 1 ? MIN_SINGLE_LINE_CHARACTERS : MIN_WINDOW_CHARACTERS;
-    if (matched.length < minimumCharacters) continue;
+    // Guard against text that repeats by coincidence rather than by overlap.
+    const matchedLines = right.slice(0, lineCount);
+    if (new Set(matchedLines).size < MIN_DISTINCT_LINES) continue;
+    if (matchedLines.join(" ").length < MIN_WINDOW_CHARACTERS) continue;
 
     return lineCount;
   }

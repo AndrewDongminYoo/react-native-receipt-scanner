@@ -26,11 +26,14 @@ import type {
  *         `ocr: false` or `maxPages < 2` — before any scanner UI opens.
  */
 export async function scan(options?: ScanReceiptOptions): Promise<ScanReceiptResult> {
-  const merged = {
-    ...DEFAULT_SCAN_OPTIONS,
-    ...options,
-    ocrLanguages: options?.ocrLanguages ?? DEFAULT_SCAN_OPTIONS.ocrLanguages,
-  };
+  // Drop explicitly-undefined keys before merging. `exactOptionalPropertyTypes`
+  // is off, so `{ ocr: undefined }` type-checks, and a plain spread would let it
+  // overwrite the default with `undefined` — making an assembled-from-optionals
+  // options object behave differently from an omitted field.
+  const provided = Object.fromEntries(
+    Object.entries(options ?? {}).filter(([, value]) => value !== undefined)
+  ) as ScanReceiptOptions;
+  const merged = { ...DEFAULT_SCAN_OPTIONS, ...provided };
   // Validate before dispatch so an impossible request never costs the user a capture.
   if (merged.mergeOcrPages) validateMergeOptions(merged);
 
