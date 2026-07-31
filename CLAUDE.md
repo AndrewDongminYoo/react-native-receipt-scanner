@@ -9,7 +9,7 @@ yarn prepare          # Build the library (react-native-builder-bob → lib/)
 yarn typecheck        # TypeScript type check
 yarn lint             # ESLint across all JS/TS/TSX files
 yarn test             # Run Jest test suite
-yarn test --testPathPattern=src/__tests__/index  # Run a single test file
+yarn test --testPathPatterns=index  # Run a single test file (Jest 30 renamed --testPathPattern)
 yarn clean            # Delete all build artifacts (lib/, example/android/build, etc.)
 yarn watchman-reset   # Reset Watchman watch (use after Metro cache issues)
 
@@ -65,9 +65,10 @@ This is a **React Native TurboModule library** (new architecture). The root is t
 ### JS Layer
 
 - `src/NativeReceiptScanner.ts` — TurboModule spec. Defines the `Spec` interface and registers the module as `"ReceiptScanner"`. Uses `Object` for options/result in Phase 1; codegen reads this to generate native base classes.
-- `src/scan.native.tsx` — Native platform entry: merges options with `DEFAULT_SCAN_OPTIONS` and delegates to the TurboModule.
+- `src/scan.native.tsx` — Native platform entry: merges options with `DEFAULT_SCAN_OPTIONS`, delegates to the TurboModule, then post-processes on the JS side (OCR quality, the `ocrFloor` gate, and the optional cross-page OCR merge).
+- `src/mergeOcrPages.ts` — Pure cross-page OCR merger behind `mergeOcrPages`. No I/O and no dependencies; the JS layer is deliberately where this lives (ADR-008).
 - `src/scan.tsx` — Web/JS fallback: pure JavaScript implementation.
-- `src/types.ts` — All public types and defaults. Source of truth for the API contract; `docs/specs/api-contract.md` is the normative reference and lists every field. Exports: `ScanReceiptOptions` (`source`, `maxPages`, `quality`, `includeExif`, `includeGpsExif`, `includeRawExif`, `ocr`, `ocrLanguages`, `ocrFloor`, `ocrGeometry`, `autoRotate`, `minimumTextHeight`, `cropAutoConfirm`), `ScanReceiptResult`, `ReceiptImage` (carries `imageOrigin`, `ocrQuality`, `ocrLines`), `ReceiptExif` (`orientation`, `dateTimeOriginal`, `make`, `model`, `software`, `gps`), `ImageOrigin` (`"camera" | "screenshot" | "download" | "unknown"`), `OcrFloor`, `OcrQuality`, `OcrLine`, `OcrModelState`, the `OcrCapabilities` union (`IosOcrCapabilities` | `AndroidOcrCapabilities` | `WebOcrCapabilities`), and the `DEFAULT_SCAN_OPTIONS` / `DEFAULT_OCR_FLOOR` / `DEFAULT_OCR_LANGUAGES` constants.
+- `src/types.ts` — All public types and defaults. Source of truth for the API contract; `docs/specs/api-contract.md` is the normative reference and lists every field. Exports: `ScanReceiptOptions` (`source`, `maxPages`, `quality`, `includeExif`, `includeGpsExif`, `includeRawExif`, `ocr`, `ocrLanguages`, `ocrFloor`, `ocrGeometry`, `autoRotate`, `minimumTextHeight`, `cropAutoConfirm`, `mergeOcrPages`), `ScanReceiptResult` (carries the optional `mergedOcr`), `MergedOcrResult`, `ReceiptImage` (carries `imageOrigin`, `ocrQuality`, `ocrLines`), `ReceiptExif` (`orientation`, `dateTimeOriginal`, `make`, `model`, `software`, `gps`), `ImageOrigin` (`"camera" | "screenshot" | "download" | "unknown"`), `OcrFloor`, `OcrQuality`, `OcrLine`, `OcrModelState`, the `OcrCapabilities` union (`IosOcrCapabilities` | `AndroidOcrCapabilities` | `WebOcrCapabilities`), and the `DEFAULT_SCAN_OPTIONS` / `DEFAULT_OCR_FLOOR` / `DEFAULT_OCR_LANGUAGES` constants.
 - `src/index.tsx` — Public re-exports.
 - `src/__tests__/index.test.tsx` — Jest spec for the JS surface. Mocks `NativeReceiptScanner` and asserts `DEFAULT_SCAN_OPTIONS` propagation through `scan.native.tsx`.
 
@@ -116,15 +117,16 @@ The module name string `"ReceiptScanner"` must remain identical in `NativeReceip
 
 Full ADRs live in `docs/notes/`. Read the relevant one before changing the corresponding subsystem.
 
-| ID      | File                                                     | Topic                                                                                                                                        |
-| ------- | -------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| ADR-001 | `docs/notes/adr-001-android-mlkit.md`                    | Why Android uses GMS ML Kit Document Scanner for the camera path.                                                                            |
-| ADR-002 | `docs/notes/adr-002-ios-gallery-crop.md`                 | iOS gallery crop strategy (Vision detect → custom 4-handle editor → CIPerspectiveCorrection).                                                |
-| ADR-003 | `docs/notes/adr-003-package-boundaries.md`               | Package responsibility boundary — image primitives only, no receipt domain logic. Summarised below.                                          |
-| ADR-004 | `docs/notes/adr-004-ios-crop-editor-realdevice-fixes.md` | iOS crop editor real-device implementation fixes. Summarised below.                                                                          |
-| ADR-005 | `docs/notes/adr-005-android-gallery-strategy.md`         | Android `source: "gallery"` uses `CropEditorActivity`, not GMS gallery import. EXIF + origin notes.                                          |
-| ADR-006 | `docs/notes/adr-006-design-audit-and-ios16-baseline.md`  | 2026-05-09 design audit outcomes — iOS 16 baseline, `exif.software`, dropped `AndroidCameraOptions`, OCR intent.                             |
-| ADR-007 | `docs/notes/adr-007-v042-v043-code-diff.md`              | v0.4.2 → v0.4.3 code diff of record. Uses the then-current `GALLERY_MAX_DIM`; the rename to `MAX_PROCESSING_DIM` landed later, in `ca58d01`. |
+| ID      | File                                                     | Topic                                                                                                                                                   |
+| ------- | -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| ADR-001 | `docs/notes/adr-001-android-mlkit.md`                    | Why Android uses GMS ML Kit Document Scanner for the camera path.                                                                                       |
+| ADR-002 | `docs/notes/adr-002-ios-gallery-crop.md`                 | iOS gallery crop strategy (Vision detect → custom 4-handle editor → CIPerspectiveCorrection).                                                           |
+| ADR-003 | `docs/notes/adr-003-package-boundaries.md`               | Package responsibility boundary — image primitives only, no receipt domain logic. Summarised below.                                                     |
+| ADR-004 | `docs/notes/adr-004-ios-crop-editor-realdevice-fixes.md` | iOS crop editor real-device implementation fixes. Summarised below.                                                                                     |
+| ADR-005 | `docs/notes/adr-005-android-gallery-strategy.md`         | Android `source: "gallery"` uses `CropEditorActivity`, not GMS gallery import. EXIF + origin notes.                                                     |
+| ADR-006 | `docs/notes/adr-006-design-audit-and-ios16-baseline.md`  | 2026-05-09 design audit outcomes — iOS 16 baseline, `exif.software`, dropped `AndroidCameraOptions`, OCR intent.                                        |
+| ADR-007 | `docs/notes/adr-007-v042-v043-code-diff.md`              | v0.4.2 → v0.4.3 code diff of record. Uses the then-current `GALLERY_MAX_DIM`; the rename to `MAX_PROCESSING_DIM` landed later, in `ca58d01`.            |
+| ADR-008 | `docs/notes/adr-008-long-receipt-merge-boundary.md`      | Long receipts merge OCR text, never pixels. Why no stitched bitmap, why the JS layer, and why gallery is supported here but not in the Flutter sibling. |
 
 **Cross-cutting reference.** `docs/notes/platform-asymmetries.md` is a living document tracking every iOS/Android difference (EXIF semantics, OCR rotation invariance, `rotationDegrees` direction, etc.). Read it before designing any feature that spans both platforms.
 

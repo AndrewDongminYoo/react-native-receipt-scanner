@@ -27,17 +27,18 @@ OCR languages are **caller-provided BCP 47 hints** (`ScanReceiptOptions.ocrLangu
 
 ## WHERE TO LOOK
 
-| Task                       | Files                                                                                                                            |
-| -------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| Public API contract        | `src/types.ts`, `docs/specs/api-contract.md`                                                                                     |
-| Cross-platform flow trace  | `docs/specs/scan-pipeline.md`                                                                                                    |
-| Add a scan option          | `src/types.ts` → `android/.../ScanOptions.kt` → `ios/RNScanOptions.{h,m}` → consumer files                                       |
-| Change result shape        | `src/types.ts` → `android/.../ResultBuilder.kt` → `ios/RN{Document,Gallery}*Delegate.m`                                          |
-| Modify OCR                 | `android/.../OcrProcessor.kt` / `ios/RNOcrProcessor.m`                                                                           |
-| Adjust iOS crop UI         | `ios/RNCropEditorViewController.m` (**read ADR-004 first**)                                                                      |
-| Change JPEG/EXIF           | `android/.../ImageProcessor.kt` / `ios/RNImageProcessor.m`                                                                       |
-| TurboModule wiring         | `src/NativeReceiptScanner.ts`, `package.json#codegenConfig`, `android/.../ReceiptScannerPackage.kt`, `ios/ReceiptScanner.{h,mm}` |
-| ADRs (decisions of record) | `docs/notes/adr-001..004-*.md`                                                                                                   |
+| Task                       | Files                                                                                                                                                                                                                                                                                      |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Public API contract        | `src/types.ts`, `docs/specs/api-contract.md`                                                                                                                                                                                                                                               |
+| Cross-platform flow trace  | `docs/specs/scan-pipeline.md`                                                                                                                                                                                                                                                              |
+| Add a scan option          | `src/types.ts` → `android/.../ScanOptions.kt` → `ios/RNScanOptions.{h,m}` → consumer files                                                                                                                                                                                                 |
+| Add a JS-only scan option  | `src/types.ts` → `src/scan.native.tsx`. Do **not** mirror it into `ScanOptions.kt` / `RNScanOptions.h` — both read a key whitelist, so an unmirrored key is inert, and mirroring it would pull derived-signal logic into native code. `ocrFloor` and `mergeOcrPages` are the two examples. |
+| Change result shape        | `src/types.ts` → `android/.../ResultBuilder.kt` → `ios/RN{Document,Gallery}*Delegate.m`                                                                                                                                                                                                    |
+| Modify OCR                 | `android/.../OcrProcessor.kt` / `ios/RNOcrProcessor.m`                                                                                                                                                                                                                                     |
+| Adjust iOS crop UI         | `ios/RNCropEditorViewController.m` (**read ADR-004 first**)                                                                                                                                                                                                                                |
+| Change JPEG/EXIF           | `android/.../ImageProcessor.kt` / `ios/RNImageProcessor.m`                                                                                                                                                                                                                                 |
+| TurboModule wiring         | `src/NativeReceiptScanner.ts`, `package.json#codegenConfig`, `android/.../ReceiptScannerPackage.kt`, `ios/ReceiptScanner.{h,mm}`                                                                                                                                                           |
+| ADRs (decisions of record) | `docs/notes/adr-*.md`                                                                                                                                                                                                                                                                      |
 
 ## CODE MAP
 
@@ -46,6 +47,7 @@ OCR languages are **caller-provided BCP 47 hints** (`ScanReceiptOptions.ocrLangu
 | `scan(options?)`             | function         | `src/scan.native.tsx`, `src/scan.tsx` | Public API; native impl + web fallback                                 |
 | `Spec.scan`                  | TurboModule spec | `src/NativeReceiptScanner.ts`         | Codegen input; module name `"ReceiptScanner"`                          |
 | `DEFAULT_SCAN_OPTIONS`       | const            | `src/types.ts`                        | Option defaults (mirrored in `ScanOptions.kt` + `RNScanOptions.m`)     |
+| `mergeOcrPages`              | function         | `src/mergeOcrPages.ts`                | Pure cross-page OCR merge; JS-only by design (ADR-008)                 |
 | `ReceiptScannerModule`       | class            | `android/.../ReceiptScannerModule.kt` | Android entry; scan lifecycle + OCR model prep                         |
 | `PendingScanLifecycle`       | class            | `android/.../ReceiptScannerModule.kt` | Single-scan token; owns the Promise hand-off (see `android/AGENTS.md`) |
 | `ImageProcessor`             | class            | `android/.../ImageProcessor.kt`       | Android JPEG + EXIF + temp cleanup                                     |
@@ -63,7 +65,7 @@ OCR languages are **caller-provided BCP 47 hints** (`ScanReceiptOptions.ocrLangu
 - **TypeScript strict + extras**: `noUncheckedIndexedAccess`, `noUnusedLocals/Parameters`, `verbatimModuleSyntax`, `customConditions: ["react-native-strict-api"]`.
 - **ESLint flat config only** (`eslint.config.mjs`); extends `@react-native` + `prettier`; Prettier violations = errors.
 - **Prettier**: 100-col, double quotes, semicolons, trailing-comma `es5`, LF.
-- **Jest** preset `@react-native/jest-preset`, no setup files. Tests in `src/__tests__/*.test.tsx` only (not colocated).
+- **Jest** preset `@react-native/jest-preset`, no setup files. Tests live in `src/__tests__/` only (not colocated); `.ts` and `.tsx` both run, and `src/__tests__/fixtures/` is ignored.
 - **Pre-commit/push** is **Trunk** (`.trunk/trunk.yaml`) — not Husky/Lefthook.
 - **Commits**: Conventional Commits + emoji (`feat: ✨`, `fix: 🐛`, `chore: 🔨`, `docs: 📝`); `release-it` consumes them. Do NOT add `Co-authored-by: Claude` trailers.
 - **Module name string `"ReceiptScanner"`** must stay identical in `NativeReceiptScanner.ts`, `ReceiptScannerPackage.kt`, and `ReceiptScanner.mm`.
@@ -99,7 +101,7 @@ yarn                           # Install (Yarn Berry; no npm/pnpm)
 yarn prepare                   # Build library to lib/{module,typescript}
 yarn typecheck                 # tsc --noEmit
 yarn lint                      # ESLint over **/*.{js,ts,tsx}
-yarn test                      # Jest (only src/__tests__/*.test.tsx)
+yarn test                      # Jest over src/__tests__ (.ts and .tsx; fixtures/ is ignored)
 
 trunk check                    # All trunk-managed linters (ktlint, osv-scanner, shellcheck, yamllint, …)
 trunk fmt                      # Auto-format every file the trunk formatters own
@@ -137,5 +139,5 @@ yarn typecheck && yarn lint && yarn test && trunk fmt && trunk check
 - **iOS deployment target is 16.0** (`ReceiptScanner.podspec`) — Korean OCR via `VNRecognizeTextRequest` requires it, and the package ships **no** Latin-only fallback for older iOS (ADR-006). There is no iOS 13–15 path.
 - **Android non-Korean OCR models ship via Play services** — Latin/Japanese/Chinese/Devanagari download on first use; Korean stays bundled. `scan()` waits for a terminal install state before opening UI, and rejects `OCR_MODEL_INSTALL_FAILED` on failure.
 - **Android requires Google Play Services** — ML Kit Document Scanner downloads its model on first use; AOSP / Play-less emulators cannot use this library.
-- **Cancelled state** is `{ status: "cancelled", images: [] }` — not a rejection. Errors reject with `SCAN_IN_PROGRESS`, `NO_ACTIVITY`, `NOT_SUPPORTED`, `SCANNER_INIT_FAILED`, `SCAN_FAILED`, `SCAN_RESULT_ERROR`, `PROCESSING_FAILED`, `CAMERA_FAILED`, `INVALID_OCR_LANGUAGE`, `OCR_LANGUAGE_NOT_SUPPORTED`, `OCR_LANGUAGE_COMBINATION_NOT_SUPPORTED`, or `OCR_MODEL_INSTALL_FAILED`. The complete table is in `README.md`; `docs/specs/api-contract.md` covers only the multilingual-OCR subset.
+- **Cancelled state** is `{ status: "cancelled", images: [] }` — not a rejection. Errors reject with `SCAN_IN_PROGRESS`, `NO_ACTIVITY`, `NOT_SUPPORTED`, `SCANNER_INIT_FAILED`, `SCAN_FAILED`, `SCAN_RESULT_ERROR`, `PROCESSING_FAILED`, `CAMERA_FAILED`, `INVALID_OCR_LANGUAGE`, `OCR_LANGUAGE_NOT_SUPPORTED`, `OCR_LANGUAGE_COMBINATION_NOT_SUPPORTED`, `OCR_MODEL_INSTALL_FAILED`, or `INVALID_MERGE_OPTION`. The complete table is in `README.md`; `docs/specs/api-contract.md` covers only the multilingual-OCR subset.
 - **`example/` IS the integration test** — there are no automated E2E tests. Build it locally to verify native changes.

@@ -1,0 +1,314 @@
+# Long Receipt OCR Page Merge (`mergeOcrPages`)
+
+**Spec version:** 1.0
+**Written:** 2026-07-31
+**Parent document:** [`api-contract.md`](./api-contract.md)
+**Related decisions:** ADR-003 (package boundaries), ADR-008 (this feature's boundary argument)
+**Platforms:** JS layer only — no native change on iOS or Android
+**Target release:** 0.9.0
+
+## Status
+
+Implemented in the JS layer; device verification pending.
+This document is the normative reference for the behaviour — read it as the contract, not as a proposal.
+The plan's §Verification records exactly what has and has not been observed.
+
+## Problem
+
+A receipt longer than a single frame cannot be captured at usable text resolution in one shot.
+The package already lets a user capture up to ten pages through `maxPages`, but it returns them as independent JPEGs with independent OCR strings.
+Nothing ties those pages into one logical receipt, and the text where two captures overlap is duplicated in the output.
+
+The same problem occurs without a camera: a long electronic receipt is commonly captured as several screenshots and picked from the gallery.
+
+### Why this does not return one stitched image
+
+Compositing the pages into a single tall JPEG makes OCR worse on both platforms:
+
+- Android caps the processed long edge at 3,072 pixels (`ImageProcessor.MAX_PROCESSING_DIM`). A taller logical receipt is downsampled to fit, so each character gets fewer pixels.
+- iOS Vision's `minimumTextHeight` is a fraction of the **whole image height** (package default 1/32). The taller the image, the larger a character must be to survive recognition at all.
+
+Both effects push in the same direction: the more pages you merge into one bitmap, the less text you recover.
+Since the value the consumer wants is the receipt's text, the package merges the text and leaves each page JPEG untouched.
+
+This mirrors the sibling `flutter_receipt_scanner` package's spec 0001, which reached the same conclusion and lists "returning one stitched receipt JPEG, PDF, or bitmap" as out of scope.
+
+## Decision
+
+Add an opt-in `mergeOcrPages` flag.
+When enabled, the JS layer keeps every native JPEG unchanged, walks the pages in native order, removes **proven** duplicated text at each adjacent seam, and returns one merged OCR string plus per-seam diagnostics.
+
+The package never decides that two images are or are not the same receipt.
+It only reports whether an overlap could be proven at each adjacent boundary.
+An unproven boundary emits both pages' text in full and records the boundary index — the merge does not discard text to make a result look clean, with one irreducible exception documented below.
+
+## Scope Boundary (ADR-003)
+
+The merge consumes `ReceiptImage.ocrText`, which ADR-003 already lists as an in-scope primitive ("On-device OCR text (raw string)").
+It produces another raw string plus integer indexes. It does not parse merchants, amounts, dates, or line items, and it does not compare non-adjacent pages or globally remove repeated lines such as headers, subtotals, or totals.
+
+The merge orchestration and the merger itself live in the JS layer for the same reason `ocrFloor` does: keeping derived-signal logic out of native code preserves the boundary rule structurally rather than by convention.
+
+## Public API
+
+### Option
+
+`ScanReceiptOptions` gains one backward-compatible field:
+
+```ts
+/**
+ * Merge OCR text across the captured pages into one ordered string on
+ * {@link ScanReceiptResult.mergedOcr}, removing proven duplicate text where
+ * two adjacent captures overlap. Page JPEGs are never combined — see
+ * `docs/specs/long-receipt-ocr-merge.md` for why a single tall image would
+ * lose text resolution.
+ *
+ * Requires `ocr: true` and an integer `maxPages >= 2`.
+ *
+ * @defaultValue `false`
+ */
+mergeOcrPages?: boolean;
+```
+
+`DEFAULT_SCAN_OPTIONS.mergeOcrPages` is `false`, so the option is forwarded to the native module like every other field.
+Both native option parsers read a fixed key whitelist (`ScanOptions.from` via `hasKey`, `RNScanOptions.optionsFromDictionary` via class checks with defaults) and ignore unknown keys, so forwarding a JS-only field is inert on both platforms.
+
+### Validation
+
+When `mergeOcrPages === true`, `scan()` throws **before** the native module is called — no scanner UI opens:
+
+| Condition                           | Reason                                                                                                                                                                                              |
+| ----------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ocr !== true`                      | There is no text to merge.                                                                                                                                                                          |
+| `maxPages` is not an integer `>= 2` | A merge needs at least one page boundary. The integer check is load-bearing: `NaN < 2` is false, so a bare comparison would let a non-finite value reach native, where it coerces to a single page. |
+
+The thrown error follows the existing single-class convention set by `InvalidOcrLanguageError` in `src/scan.native.tsx` — a typed `Error` subclass carrying a literal `code`. No new error hierarchy is introduced.
+
+```ts
+class InvalidMergeOptionError extends Error {
+  readonly code: "INVALID_MERGE_OPTION" = "INVALID_MERGE_OPTION";
+}
+```
+
+`source` is **not** validated. Both acquisition paths are supported — see [Page Ordering](#page-ordering).
+
+### Result
+
+`ScanReceiptResult` gains one optional field, populated when `mergeOcrPages === true` and the **native** scan succeeded:
+
+```ts
+mergedOcr?: MergedOcrResult;
+```
+
+```ts
+export type MergedOcrResult = {
+  /** Merged text, newline-joined, in native page order with proven overlap removed once. */
+  text: string;
+  /**
+   * True only when every adjacent boundary between the **returned** pages was
+   * proven and no returned page was rejected. It cannot detect a page the
+   * native layer dropped before returning (see "Known limitation" below), so
+   * it means "everything that came back joined up", not "the whole receipt is
+   * here".
+   */
+  isComplete: boolean;
+  /** Page URIs in native order. The index space for both index arrays below. */
+  pageUris: string[];
+  /** Boundary index `i` is the seam between `pageUris[i]` and `pageUris[i + 1]`. */
+  unmatchedBoundaryIndexes: number[];
+  /** Pages with no usable OCR text, or rejected by the OCR floor. */
+  rejectedPageIndexes: number[];
+};
+```
+
+`images`, `rejectedImages`, their JPEG files, and their per-page `ocrText` keep their current behaviour.
+Per-page `ocrLines` geometry is **not** merged and stays attached to its own page — `mergedOcr.text` has no corresponding geometry, because boxes from different pages live in different pixel spaces.
+
+The gate is the **native** status, not the returned one.
+When every page falls below the OCR floor the returned `status` becomes `"rejected"`, and `mergedOcr` is still attached — that is precisely when a consumer needs the diagnostics to decide whether to ask for a re-shoot.
+Only a `"cancelled"` scan leaves `mergedOcr` undefined, because nothing was captured.
+The web fallback (`src/scan.tsx`) always resolves `"cancelled"`, so it needs no change.
+
+## Page Ordering
+
+The merger consumes pages in the order the native layer returns them and never reorders.
+Reordering would require inferring which pages belong together, which is exactly the judgment this feature refuses to make.
+
+Both acquisition paths were verified to be strictly serial and order-preserving in this codebase:
+
+| Path            | Mechanism                                                                                         |
+| --------------- | ------------------------------------------------------------------------------------------------- |
+| iOS camera      | `RNDocumentCameraDelegate` iterates `imageOfPageAtIndex:` from `0` to `min(pageCount, maxPages)`. |
+| iOS gallery     | `RNGalleryPickerDelegate` walks `queuedItems` through `processNextQueuedItem` one at a time.      |
+| Android camera  | `ReceiptScannerModule` iterates the GMS scanner's page list in list order.                        |
+| Android gallery | `CropEditorActivity` drains `pendingUris` with `removeFirstOrNull()`.                             |
+
+For the gallery path, that order is the **picker's** order, not necessarily the user's intended sequence.
+`PHPickerConfiguration` is created without `selection = .ordered`, so iOS returns library order; Android's `PickMultipleVisualMedia` documents no ordering guarantee.
+For sequentially captured screenshots — the electronic-receipt case — library order is chronological and therefore correct.
+When it is not, the seams simply fail to match: the boundary is reported in `unmatchedBoundaryIndexes`, `isComplete` is `false`, and every line of text is still present in `text`.
+The failure mode is a reported gap, never lost or silently reordered content.
+
+The orchestration snapshots the native page order **before** the OCR-floor gate partitions `images` and `rejectedImages`, then restores that order by URI.
+A duplicate page URI is an internal state error and throws rather than being silently reordered.
+
+## Merge Algorithm
+
+Pure function, no I/O, no dependencies: `mergeOcrPages(pages, rejectedPageIndexes) -> MergedOcrResult`.
+
+### Line extraction
+
+Split each page's `ocrText` on `\n`, trim each line, drop empty lines.
+A page whose result is empty (or whose `ocrText` is absent) is added to `rejectedPageIndexes` and makes each of its adjacent boundaries unmatched.
+
+### Seam matching
+
+For each adjacent pair, compare the previous page's trailing lines against the next page's leading lines at **equal depth**, starting from the deepest depth both pages allow (`min(previousLineCount, nextLineCount)`) and descending to one.
+The first depth that satisfies both rules below wins, and the scan stops there.
+
+| Step           | Rule                                                                                                       |
+| -------------- | ---------------------------------------------------------------------------------------------------------- |
+| Match          | The two line sequences are **equal**, line for line, after normalization. Nothing else counts as evidence. |
+| Distinct lines | The matched region holds at least **two distinct** lines. One row, however long, is never enough.          |
+| Length floor   | The matched text reaches 12 characters.                                                                    |
+
+The distinct-line rule exists because equality cannot tell a recaptured line from an identical repeated one. Buying two of one item prints the same row twice, so a page ending with that row and the next page beginning with it match exactly _without overlapping at all_ — merging there deletes a real purchase. The rule counts distinct lines rather than depth, so it also rejects a degenerate run of one row repeated N times, which fails the same way at greater depth.
+
+There is **no depth ceiling**, and that is load-bearing rather than a convenience. A shallow suffix/prefix pair can coincide _inside_ a deeper true overlap — a receipt repeating a separator and a section header at both ends of a nine-line overlapped region matches at depth 2 exactly as well as at depth 9. Under a capped, shallow-first search that shallow match wins, two lines are dropped, seven stay duplicated, and the seam is still reported proven. Descending from the deepest available depth removes that class outright; equality alone does not, because both matches are exact.
+
+Each line is normalized once for comparison — lowercased, runs of whitespace collapsed to a single space, trimmed.
+This normalization is used **only** for comparison; emitted text is always the original trimmed lines.
+Comparison is over UTF-16 code units; Korean syllables are BMP, so there is no surrogate-pair edge case.
+
+### Why equality, and not a similarity threshold
+
+Approximate matching was implemented, measured, and removed.
+On receipt text an edit-distance threshold cannot separate _the same line, misread_ from _a different purchase_, because the digits that carry all the meaning contribute almost none of the edit distance.
+
+Two measured false positives, both of which deleted real rows while reporting `isComplete: true`:
+
+| Case                                                                | Depth / length | Similarity | Old floor |
+| ------------------------------------------------------------------- | -------------- | ---------- | --------- |
+| One product at quantity 1 vs quantity 2, `서울우유 1L 흰우유 990ml` | 1 line, 25 ch  | 0.9200     | 0.92      |
+| The same product at quantities 1,2 then 3,4                         | 2 lines, 39 ch | 0.8974     | 0.85      |
+
+Tightening the single-line floor did not close this: the second case cleared the _multi-line_ floor by the identical mechanism.
+No floor separates the two populations, so equality is the rule.
+
+The cost is real and deliberate: a genuine seam whose OCR differs by one character is reported unproven instead of merged.
+That is the correct direction — a reported seam is visible in `unmatchedBoundaryIndexes` and the text is all still there, while a deleted row is invisible.
+Normalization still absorbs the common variation (case, whitespace runs), so spacing differences between two captures do not break a seam.
+
+If device data shows too many unproven seams, the upgrade path is a **digit-aware** comparison — require the digit runs to match, allow fuzz elsewhere — never a looser similarity floor.
+
+### Candidate selection
+
+There is no ranking pass and no tie-break: the descending scan returns the first — therefore deepest — depth that matches and clears its length floor.
+Depth is the only ordering, it is total, and the scan is deterministic. This is part of the contract.
+
+An accepted seam keeps the previous page's suffix in full and removes only the matched prefix lines from the next page.
+An unmatched seam appends every line of the next page and records the boundary index.
+
+> **Divergence from `flutter_receipt_scanner` spec 0001.** That package matches seams approximately (0.85 multi-line, 0.92 single-line) with a Levenshtein pass, a 512-character cost guard and a length-ratio prefilter, over windows capped at eight lines and ranked by similarity then compared-character count. This package started as a port of it and now shares none of that: no approximate matching (see "Why equality"), no depth ceiling, no ranking pass. **Every defect measured here applies to `flutter_receipt_scanner` as shipped** — both approximate-match false positives, the shallow-coincidence merge, and the single repeated row accepted as a seam (its 0.92 single-line path admits identical rows outright). It has not been changed; that is filed in §Follow-Ups rather than assumed.
+
+### Known false positive: a repeated block at the page boundary
+
+A receipt that prints the same block of lines twice, split so one copy ends a page and the other begins the next, produces **exactly** the text a real overlap produces.
+
+Write the receipt content as `R` and the page split at line `j`:
+
+- True overlap: `page0 = R[0..j]`, `page1 = R[i..n]` with `i <= j`. The repeated region is `R[i..j]` — one occurrence, captured twice.
+- False positive: `page0 = R[0..j]`, `page1 = R[j+1..n]` with no overlap at all, where `R[j-k+1..j] == R[j+1..j+k]` — two occurrences, captured once each.
+
+Both yield the same two strings, so **no rule over the seam text can separate them**. The merger removes the later copy and reports the seam proven; `isComplete` is `true` and two real rows are gone.
+
+Requiring more evidence does not close this. The distinct-line rule was raised to two after a single repeated row was found to merge; a receipt repeating a two-line block then defeats two, and any depth `N` is defeated by an `N`-line repeated block. Raising `N` without data on how often receipts repeat blocks of a given size would be tuning to whichever counter-example was found last.
+
+What actually helps is capture technique, and the guidance says so: overlap generously, so the real overlap is deeper than any block the receipt repeats — the deepest-match rule then picks the real one. Closing it properly needs evidence from outside the text (page geometry, or `ocrLines` positions), which is out of scope for a JS-layer merge.
+
+### Completeness
+
+`isComplete` is true only when there is at least one page, `rejectedPageIndexes` is empty, and `unmatchedBoundaryIndexes` is empty.
+A single-page merge has no boundary to prove, so it is complete when that page has non-empty text **and** is absent from `rejectedPageIndexes` — a lone page the OCR floor rejected still makes the merge incomplete.
+Although `maxPages >= 2` is required to enable the flag, a user may still finish the capture after one page.
+
+### Known limitation: natively dropped pages
+
+**Both iOS paths** can return fewer pages than the user captured or picked, without reporting it:
+
+- iOS camera: `RNDocumentCameraDelegate` skips a page with `continue` when processing fails, and rejects only when _every_ page failed. One failed page in the middle of a batch resolves as a success with that page missing.
+- iOS gallery: `RNGalleryPickerDelegate.didFinishOneItem:` appends only non-nil results, so an item that fails to decode disappears.
+  Android does **not** share this limitation, verified against the current code: `CropEditorActivity.failAndFinish` calls `deleteProcessedOriginals()` and returns `EXTRA_ERROR`, which `handleGalleryResult` turns into a `PROCESSING_FAILED` rejection; cancellation deletes the processed copies and returns a cancelled result; `returnAllResults` runs only once the queue is drained; and a per-image failure inside the module's processing loop propagates to the outer catch, rejecting the whole scan. Android either returns every page or fails the scan — it never returns a partial batch.
+
+The JS layer cannot distinguish "the user captured three pages" from "the user captured five and two were dropped", so `isComplete` can be `true` while a page is missing from the middle of a receipt.
+The field's doc comment states this in its first sentence.
+The sibling Flutter package solved this with a native `discardedPageCount`; adding the equivalent here is a native change and is deferred (see Follow-Ups).
+
+## Errors and Diagnostics
+
+- Invalid option combinations throw before any native UI is presented.
+- Cancellation is not an error.
+- Missing OCR, floor-rejected pages, and unmatched seams never throw after a completed capture — they produce an incomplete merged result.
+- Two internal invariants are the deliberate exception and do reject the promise after capture: a duplicate page URI, and a snapshot URI missing from the post-gate result. Both mean the page identity the order restoration depends on is broken, so any merged text would be silently wrong about which page it came from. Neither is reachable from user input; both indicate a defect in this package or the native layer. Everything a user can cause is reported, not thrown.
+- The merger must not delete uncertain content to make a result appear complete.
+- Input arrays, `ocrText` values, and image URIs are not mutated.
+
+## Out of Scope
+
+1. Returning one stitched receipt JPEG, PDF, or bitmap.
+2. Any native Kotlin, Objective-C, or TurboModule spec change.
+3. Reordering pages, or comparing non-adjacent pages.
+4. Globally removing repeated lines such as headers, taxes, or totals.
+5. Structured receipt parsing of any kind — merchant, item, tax, total, date, payment.
+6. Merging `ocrLines` geometry across pages.
+7. Exposing the length floors as public configuration; they stay private in v1.
+8. A guided overlap-capture UI. `VNDocumentCameraViewController` and the GMS document scanner are closed UIs with no previous-frame overlay or per-frame callback; building one would mean a custom camera on both platforms and would reverse ADR-001 and ADR-002.
+9. Any claimed maximum receipt length or aspect ratio. The Flutter package's 11.0 ratio claim is backed by image fixtures and physical-device acceptance runs; this package has run neither, so it claims neither.
+
+## Testing Strategy
+
+The merger consumes strings only, so it is fully testable without image fixtures.
+
+Pure unit tests in `src/__tests__/`:
+
+1. Flag defaults to disabled and the result is byte-identical to today's.
+2. Invalid `ocr` and `maxPages` combinations throw before the mocked native module is called.
+3. Exact two-line overlap is removed exactly once.
+4. Normalization absorbs case and whitespace-run differences, but a single misread character leaves the seam unproven.
+5. A pair with no matching depth is preserved and records an unmatched boundary.
+6. A single repeated row never proves a seam, at depth 1 or as a run at greater depth, and a repeat purchase differing only in quantity and amount is preserved at both one and two lines wide.
+7. An overlap of any depth merges, and a shallow coincidence inside a deeper overlap (a repeated separator and section header at both ends) does not win over the deeper match.
+8. Repeated totals away from the adjacent suffix and prefix are preserved.
+9. Absent or empty `ocrText` marks the page rejected and both its boundaries unmatched.
+10. Floor-rejected pages appear in `pageUris` and in `rejectedPageIndexes`, and make the merge incomplete.
+11. Native page order is restored after the floor gate partitions the images.
+12. A duplicate page URI throws rather than being silently reordered.
+13. A cancelled result carries no `mergedOcr`, while a floor-rejected one still does — the two statuses diverge here, and the pair of tests is what holds them apart.
+14. Inputs are not mutated.
+15. A ten-page, 200-lines-per-page merge completes within a recorded time bound. The bound is set from the measured value on the development machine; no performance number is documented before it is measured.
+
+Gate before claiming done:
+
+```bash
+yarn typecheck && yarn lint && yarn test && trunk fmt && trunk check
+```
+
+No native code changes, so no Gradle or Xcode build is required for correctness.
+The example app should still exercise the flag once manually before release.
+
+## Follow-Ups
+
+1. Report natively dropped pages (the Flutter package's `discardedPageCount`) so `isComplete` can account for them. Requires a native change in both iOS delegates; Android already rejects the whole scan instead of returning a partial batch.
+2. Set `PHPickerConfiguration.selection = PHPickerConfigurationSelectionOrdered` (iOS 15+, and this package targets iOS 16) so the gallery path returns user selection order instead of library order. One native line; deferred to keep this change JS-only.
+3. **Carry every fix here to `flutter_receipt_scanner`.** Its shipped `ocr_page_merger.dart` still accepts 0.85 multi-line and 0.92 single-line approximate matches over windows capped at eight lines and ranked shallow-first, so all four defects measured here apply to it unchanged:
+   - the quantity-1-vs-2 row merged at 0.9200 (a Korean receipt case, not a synthetic one),
+   - the same mechanism one window wider at 0.8974,
+   - a shallow coincidence inside a deeper overlap, leaving the rest duplicated while reporting completeness,
+   - a single identical row accepted as a seam, deleting a real repeat purchase.
+
+   Filed as [`AndrewDongminYoo/flutter_receipt_scanner#3`](https://github.com/AndrewDongminYoo/flutter_receipt_scanner/issues/3); the iOS dropped-page gap is [#4](https://github.com/AndrewDongminYoo/flutter_receipt_scanner/issues/4). Neither is fixed there yet.
+
+4. Reconcile that package's spec 0001 tie-break prose with its shipped implementation, so the two specs do not describe different algorithms.
+5. Measure how often a real recognizer reproduces a line character-identically across two captures. That number decides whether the digit-aware comparison in "Why equality" is needed.
+6. Investigate whether page geometry or `ocrLines` positions can separate a real overlap from a repeated block at the boundary — the one defect class the text-only merge cannot close (see "Known false positive"). Needs `ocrGeometry` data and probably a native signal; do not attempt it by raising the distinct-line requirement.
+7. Consider ordered gallery selection with a review-and-reorder surface only as its own spec.

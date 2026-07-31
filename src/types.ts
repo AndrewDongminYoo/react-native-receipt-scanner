@@ -148,6 +148,21 @@ export type ScanReceiptOptions = {
    * @defaultValue `false`
    */
   ocrGeometry?: boolean;
+  /**
+   * Merge OCR text across the captured pages into one ordered string on
+   * {@link ScanReceiptResult.mergedOcr}, removing proven duplicate text where
+   * two adjacent captures overlap. Use it to read one receipt that was too
+   * long to capture in a single frame.
+   *
+   * The page JPEGs are never combined — a single tall image would lose text
+   * resolution on both platforms. Requires `ocr: true` and `maxPages` set to an
+   * integer of at least 2; anything else throws `INVALID_MERGE_OPTION` before
+   * any scanner UI opens.
+   *
+   * @see `docs/specs/long-receipt-ocr-merge.md` for the merge algorithm.
+   * @defaultValue `false`
+   */
+  mergeOcrPages?: boolean;
 };
 
 /**
@@ -342,6 +357,56 @@ export type ReceiptImage = {
 };
 
 /**
+ * OCR text assembled across the pages of one logical receipt, plus the
+ * diagnostics needed to tell a proven assembly from a partial one. Present
+ * only when {@link ScanReceiptOptions.mergeOcrPages} is `true`.
+ *
+ * Pages are consumed in native capture order and never reordered — the
+ * package does not infer which captures belong together. A seam whose
+ * overlap could not be proven keeps both pages' text in full and records its
+ * index.
+ *
+ * Content is lost in one irreducible case: a receipt that prints the same block
+ * twice, split so one copy ends a page and the next begins with the other,
+ * yields exactly the text a real overlap yields. The later copy is removed as a
+ * duplicate and `isComplete` still reports `true`.
+ *
+ * @see `docs/specs/long-receipt-ocr-merge.md` for the algorithm and thresholds.
+ */
+export type MergedOcrResult = {
+  /**
+   * Merged text, newline-joined, in native page order with each proven
+   * overlap removed exactly once.
+   */
+  text: string;
+  /**
+   * Only covers the pages that came back: it cannot detect a page the native
+   * layer dropped before returning, so it means "everything returned joined
+   * up", not "the whole receipt is here". True when every adjacent boundary
+   * between the returned pages was proven and no returned page was rejected.
+   */
+  isComplete: boolean;
+  /**
+   * Page URIs in native capture order. This is the index space for both index
+   * arrays below — the order survives the {@link OcrFloor} partition, which
+   * `images` / `rejectedImages` do not preserve.
+   */
+  pageUris: string[];
+  /**
+   * Seams where no overlap could be proven. Index `i` is the boundary between
+   * `pageUris[i]` and `pageUris[i + 1]`, so a receipt of N pages has N-1
+   * possible entries.
+   */
+  unmatchedBoundaryIndexes: number[];
+  /**
+   * Pages that carried no usable OCR text, or that the {@link OcrFloor} gate
+   * rejected. Indexes into `pageUris`. Such pages still appear in `pageUris`
+   * and still contribute whatever text they had.
+   */
+  rejectedPageIndexes: number[];
+};
+
+/**
  * Result returned by {@link scan}. Status is the primary discriminator;
  * `images` and `rejectedImages` are always arrays for interface symmetry.
  */
@@ -364,6 +429,14 @@ export type ScanReceiptResult = {
    * a null-check.
    */
   rejectedImages: ReceiptImage[];
+  /**
+   * Cross-page OCR assembly. Present whenever
+   * {@link ScanReceiptOptions.mergeOcrPages} is `true` and the scan captured
+   * something — including a `"rejected"` result, where the diagnostics are
+   * what tell the consumer whether to ask for a re-shoot. Absent for
+   * `"cancelled"`, which captured nothing.
+   */
+  mergedOcr?: MergedOcrResult;
 };
 
 /** Languages used for OCR when callers do not provide an override. */
@@ -434,4 +507,5 @@ export const DEFAULT_SCAN_OPTIONS: Required<ScanReceiptOptions> = {
   includeRawExif: false,
   minimumTextHeight: 0,
   ocrGeometry: false,
+  mergeOcrPages: false,
 };

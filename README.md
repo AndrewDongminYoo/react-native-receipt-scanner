@@ -141,6 +141,31 @@ if (result.status === "success") {
 }
 ```
 
+### Long receipts — merging OCR across pages
+
+A receipt too long for one frame is captured across several overlapping pages, or saved as a run of screenshots and picked from the gallery.
+`mergeOcrPages` assembles their OCR text into one ordered string and removes the text duplicated where two captures overlap.
+
+```ts
+const result = await scan({ maxPages: 6, mergeOcrPages: true });
+
+const merged = result.mergedOcr;
+if (merged && !merged.isComplete) {
+  // A seam that could not be proven; both pages' text is still in merged.text.
+  console.log(`unproven seams: ${merged.unmatchedBoundaryIndexes.join(", ")}`);
+}
+```
+
+Capture each page so it repeats **at least a couple of lines** from the end of the previous one — the merge proves a seam from repeated text, so with no overlap there is nothing to match. There is no upper limit: the deepest repeated run wins, so a generous overlap is strictly safer than a thin one. With no provable overlap the boundary is reported and every line is kept.
+
+The page JPEGs are never combined into one tall image. Android caps the processed long edge at 3,072 px and iOS Vision's minimum text height is a fraction of the whole image height, so a taller composite recovers _less_ text, not more. See [ADR-008](docs/notes/adr-008-long-receipt-merge-boundary.md).
+
+Two behaviours worth knowing:
+
+- An unproven seam emits both pages' lines in full and reports its boundary index — the merge does not drop text to make a result look clean.
+- **One case does lose content, and cannot be detected.** If a receipt prints the same block of lines twice and the page split falls between the two copies, the text is identical to what a real overlap produces, so the later copy is removed as a duplicate and `isComplete` still reports `true`. Overlapping your captures generously makes the real overlap deeper than any repeated block, which is the practical defence.
+- `isComplete` only covers the pages that came back. Both iOS paths can silently drop a page that fails to process, and the JS layer cannot see that — so it means "everything returned joined up", not "the whole receipt is here". Android fails the whole scan instead, so it does not have this gap.
+
 ### OCR — extract text from the document
 
 OCR runs on-device and is enabled by default. Set `ocr: false` to skip it (faster, smaller result):
@@ -255,21 +280,22 @@ if (result.status === "success") {
 
 ### `scan(options?): Promise<ScanReceiptResult>`
 
-| Option              | Type                    | Default                                   | Description                                                                                                                                                                                                                                 |
-| ------------------- | ----------------------- | ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `source`            | `'camera' \| 'gallery'` | `'camera'`                                | Open document camera or system image picker                                                                                                                                                                                                 |
-| `maxPages`          | `number`                | `1`                                       | Maximum pages per scan session                                                                                                                                                                                                              |
-| `quality`           | `number` (0.0–1.0)      | `0.82`                                    | JPEG compression quality after crop                                                                                                                                                                                                         |
-| `includeExif`       | `boolean`               | `true`                                    | Attach EXIF metadata to each result image                                                                                                                                                                                                   |
-| `includeGpsExif`    | `boolean`               | `false`                                   | Include GPS coordinates in EXIF (off by default — privacy risk)                                                                                                                                                                             |
-| `ocr`               | `boolean`               | `true`                                    | Run on-device text recognition and return `ocrText`                                                                                                                                                                                         |
-| `ocrLanguages`      | `readonly string[]`     | `["ko-KR", "en-US"]`                      | Ordered BCP 47 hints that select native OCR. Empty arrays or entries reject while OCR is enabled. These hints do not infer a receipt country or parse receipt / invoice fields.                                                             |
-| `cropAutoConfirm`   | `boolean`               | `false`                                   | iOS gallery only: skip the crop editor when document detection confidence is ≥ 0.85 and apply the detected corners automatically                                                                                                            |
-| `ocrFloor`          | `OcrFloor \| false`     | conservative default (12 chars / 2 lines) | Reject blank / non-text captures (e.g. landscape photo of a wall). Pass `false` to disable. Only applies when `ocr: true`.                                                                                                                  |
-| `autoRotate`        | `boolean`               | `true`                                    | Detect 90° / 180° / 270° content rotation via OCR confidence and rotate the output JPEG to upright. Only applies when `ocr: true`.                                                                                                          |
-| `includeRawExif`    | `boolean`               | `false`                                   | Include the full raw EXIF / TIFF / GPS dictionary on `exif.raw`. Off by default to keep IPC payloads small. GPS keys excluded when `includeGpsExif: false`.                                                                                 |
-| `minimumTextHeight` | `number` (0.0–1.0)      | `0`                                       | iOS only: minimum text height as a fraction of image height for Vision OCR (`0` = platform default ≈ 1/32). Lower it to recover small receipt line items; Android (ML Kit) has no equivalent and ignores it. Only applies when `ocr: true`. |
-| `ocrGeometry`       | `boolean`               | `false`                                   | Attach per-line text boxes to `ocrLines`, in output-image pixels. Enable it to draw text-region overlays. Off by default because a long receipt can carry hundreds of lines. Only applies when `ocr: true`.                                 |
+| Option              | Type                    | Default                                   | Description                                                                                                                                                                                                                                     |
+| ------------------- | ----------------------- | ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `source`            | `'camera' \| 'gallery'` | `'camera'`                                | Open document camera or system image picker                                                                                                                                                                                                     |
+| `maxPages`          | `number`                | `1`                                       | Maximum pages per scan session                                                                                                                                                                                                                  |
+| `quality`           | `number` (0.0–1.0)      | `0.82`                                    | JPEG compression quality after crop                                                                                                                                                                                                             |
+| `includeExif`       | `boolean`               | `true`                                    | Attach EXIF metadata to each result image                                                                                                                                                                                                       |
+| `includeGpsExif`    | `boolean`               | `false`                                   | Include GPS coordinates in EXIF (off by default — privacy risk)                                                                                                                                                                                 |
+| `ocr`               | `boolean`               | `true`                                    | Run on-device text recognition and return `ocrText`                                                                                                                                                                                             |
+| `ocrLanguages`      | `readonly string[]`     | `["ko-KR", "en-US"]`                      | Ordered BCP 47 hints that select native OCR. Empty arrays or entries reject while OCR is enabled. These hints do not infer a receipt country or parse receipt / invoice fields.                                                                 |
+| `cropAutoConfirm`   | `boolean`               | `false`                                   | iOS gallery only: skip the crop editor when document detection confidence is ≥ 0.85 and apply the detected corners automatically                                                                                                                |
+| `ocrFloor`          | `OcrFloor \| false`     | conservative default (12 chars / 2 lines) | Reject blank / non-text captures (e.g. landscape photo of a wall). Pass `false` to disable. Only applies when `ocr: true`.                                                                                                                      |
+| `autoRotate`        | `boolean`               | `true`                                    | Detect 90° / 180° / 270° content rotation via OCR confidence and rotate the output JPEG to upright. Only applies when `ocr: true`.                                                                                                              |
+| `includeRawExif`    | `boolean`               | `false`                                   | Include the full raw EXIF / TIFF / GPS dictionary on `exif.raw`. Off by default to keep IPC payloads small. GPS keys excluded when `includeGpsExif: false`.                                                                                     |
+| `minimumTextHeight` | `number` (0.0–1.0)      | `0`                                       | iOS only: minimum text height as a fraction of image height for Vision OCR (`0` = platform default ≈ 1/32). Lower it to recover small receipt line items; Android (ML Kit) has no equivalent and ignores it. Only applies when `ocr: true`.     |
+| `ocrGeometry`       | `boolean`               | `false`                                   | Attach per-line text boxes to `ocrLines`, in output-image pixels. Enable it to draw text-region overlays. Off by default because a long receipt can carry hundreds of lines. Only applies when `ocr: true`.                                     |
+| `mergeOcrPages`     | `boolean`               | `false`                                   | Assemble the pages' OCR text into one ordered string on `mergedOcr`, removing text duplicated where captures overlap. For a receipt too long for one frame. Requires `ocr: true` and an integer `maxPages >= 2`; page JPEGs are never combined. |
 
 ### Result types
 
@@ -278,6 +304,15 @@ type ScanReceiptResult = {
   status: "success" | "cancelled" | "rejected";
   images: ReceiptImage[]; // always an array — empty when none
   rejectedImages: ReceiptImage[]; // always an array — empty when none
+  mergedOcr?: MergedOcrResult; // with mergeOcrPages: true, unless the scan was cancelled
+};
+
+type MergedOcrResult = {
+  text: string; // pages joined in capture order, proven overlap removed once
+  isComplete: boolean; // covers only the pages that came back — see "Long receipts" above
+  pageUris: string[]; // native capture order; the index space for both arrays below
+  unmatchedBoundaryIndexes: number[]; // i = the seam between pageUris[i] and pageUris[i + 1]
+  rejectedPageIndexes: number[]; // no usable text, or rejected by the OCR floor
 };
 
 type ReceiptImage = {
@@ -367,20 +402,21 @@ console.log(result.images[0].exif?.raw);
 
 ### Error codes
 
-| Code                                     | Trigger                                                             |
-| ---------------------------------------- | ------------------------------------------------------------------- |
-| `SCAN_IN_PROGRESS`                       | `scan()` called while a previous call has not yet resolved          |
-| `NO_ACTIVITY`                            | No foreground activity (Android) / presented view controller (iOS)  |
-| `NOT_SUPPORTED`                          | `VNDocumentCameraViewController` not supported on this device (iOS) |
-| `SCANNER_INIT_FAILED`                    | ML Kit scanner failed to initialize (Android)                       |
-| `SCAN_FAILED`                            | Unexpected activity result code (Android)                           |
-| `SCAN_RESULT_ERROR`                      | ML Kit scan result could not be parsed (Android)                    |
-| `PROCESSING_FAILED`                      | Image processing or OCR failed                                      |
-| `CAMERA_FAILED`                          | `VNDocumentCameraViewController` reported an error (iOS)            |
-| `INVALID_OCR_LANGUAGE`                   | OCR is enabled and a hint is empty or not a valid BCP 47 tag        |
-| `OCR_LANGUAGE_NOT_SUPPORTED`             | A requested language or script is not supported by the provider     |
-| `OCR_LANGUAGE_COMBINATION_NOT_SUPPORTED` | Android receives more than one non-Latin script                     |
-| `OCR_MODEL_INSTALL_FAILED`               | Android cannot prepare the selected OCR model before scanner UI     |
+| Code                                     | Trigger                                                                        |
+| ---------------------------------------- | ------------------------------------------------------------------------------ |
+| `SCAN_IN_PROGRESS`                       | `scan()` called while a previous call has not yet resolved                     |
+| `NO_ACTIVITY`                            | No foreground activity (Android) / presented view controller (iOS)             |
+| `NOT_SUPPORTED`                          | `VNDocumentCameraViewController` not supported on this device (iOS)            |
+| `SCANNER_INIT_FAILED`                    | ML Kit scanner failed to initialize (Android)                                  |
+| `SCAN_FAILED`                            | Unexpected activity result code (Android)                                      |
+| `SCAN_RESULT_ERROR`                      | ML Kit scan result could not be parsed (Android)                               |
+| `PROCESSING_FAILED`                      | Image processing or OCR failed                                                 |
+| `CAMERA_FAILED`                          | `VNDocumentCameraViewController` reported an error (iOS)                       |
+| `INVALID_OCR_LANGUAGE`                   | OCR is enabled and a hint is empty or not a valid BCP 47 tag                   |
+| `OCR_LANGUAGE_NOT_SUPPORTED`             | A requested language or script is not supported by the provider                |
+| `OCR_LANGUAGE_COMBINATION_NOT_SUPPORTED` | Android receives more than one non-Latin script                                |
+| `OCR_MODEL_INSTALL_FAILED`               | Android cannot prepare the selected OCR model before scanner UI                |
+| `INVALID_MERGE_OPTION`                   | `mergeOcrPages` is set with `ocr: false`, or `maxPages` is not an integer >= 2 |
 
 ---
 
@@ -390,10 +426,11 @@ console.log(result.images[0].exif?.raw);
 - [Scan pipeline](docs/specs/scan-pipeline.md) — internal processing flow (contributors)
 - [Multilingual OCR](docs/specs/multilingual-ocr.md) — `ocrLanguages`, `getOcrCapabilities()`, per-platform language resolution
 - [OCR line geometry](docs/specs/ocr-line-geometry.md) — `ocrLines` coordinate contract
+- [Long receipt OCR merge](docs/specs/long-receipt-ocr-merge.md) — `mergeOcrPages`, seam-matching thresholds, completeness diagnostics
 - [OCR 180° orientation correction](docs/specs/ocr-orientation-correction.md) — confidence-based 2-pass detection (iOS)
 - [Platform asymmetries](docs/notes/platform-asymmetries.md) — living record of every iOS/Android behavioural difference
-- Phase plans: [1 JS wrapper](docs/plans/phase-1-js-wrapper.md) · [2 Android](docs/plans/phase-2-android.md) · [3 iOS](docs/plans/phase-3-ios.md) · [4 OCR orientation](docs/plans/phase-4-ocr-orientation-correction.md) · [5 autoflip/mirror](docs/plans/phase-5-autoflip-mirror-detection.md) · [6 data quality](docs/plans/phase-6-receipt-data-quality-hardening.md) · [7 line geometry](docs/plans/phase-7-ocr-line-geometry.md) · [8 multilingual OCR](docs/plans/phase-8-multilingual-ocr.md)
-- ADRs: [001 Android ML Kit](docs/notes/adr-001-android-mlkit.md) · [002 iOS gallery crop](docs/notes/adr-002-ios-gallery-crop.md) · [003 package boundaries](docs/notes/adr-003-package-boundaries.md) · [004 iOS crop editor real-device fixes](docs/notes/adr-004-ios-crop-editor-realdevice-fixes.md) · [005 Android gallery strategy](docs/notes/adr-005-android-gallery-strategy.md) · [006 design audit + iOS 16 baseline](docs/notes/adr-006-design-audit-and-ios16-baseline.md) · [007 v0.4.2→v0.4.3 diff](docs/notes/adr-007-v042-v043-code-diff.md)
+- Phase plans: [1 JS wrapper](docs/plans/phase-1-js-wrapper.md) · [2 Android](docs/plans/phase-2-android.md) · [3 iOS](docs/plans/phase-3-ios.md) · [4 OCR orientation](docs/plans/phase-4-ocr-orientation-correction.md) · [5 autoflip/mirror](docs/plans/phase-5-autoflip-mirror-detection.md) · [6 data quality](docs/plans/phase-6-receipt-data-quality-hardening.md) · [7 line geometry](docs/plans/phase-7-ocr-line-geometry.md) · [8 multilingual OCR](docs/plans/phase-8-multilingual-ocr.md) · [9 long receipt OCR merge](docs/plans/phase-9-long-receipt-ocr-merge.md)
+- ADRs: [001 Android ML Kit](docs/notes/adr-001-android-mlkit.md) · [002 iOS gallery crop](docs/notes/adr-002-ios-gallery-crop.md) · [003 package boundaries](docs/notes/adr-003-package-boundaries.md) · [004 iOS crop editor real-device fixes](docs/notes/adr-004-ios-crop-editor-realdevice-fixes.md) · [005 Android gallery strategy](docs/notes/adr-005-android-gallery-strategy.md) · [006 design audit + iOS 16 baseline](docs/notes/adr-006-design-audit-and-ios16-baseline.md) · [007 v0.4.2→v0.4.3 diff](docs/notes/adr-007-v042-v043-code-diff.md) · [008 long receipt merge boundary](docs/notes/adr-008-long-receipt-merge-boundary.md)
 
 ---
 

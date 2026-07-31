@@ -50,6 +50,7 @@ type ScanOptionsState = {
   cropAutoConfirm: boolean;
   minimumTextHeight: number;
   ocrGeometry: boolean;
+  mergeOcrPages: boolean;
   // ocrFloor is `OcrFloor | false`; modelled here as an on/off flag plus the
   // three sub-thresholds, recombined in `buildOptions`.
   ocrFloorEnabled: boolean;
@@ -70,6 +71,7 @@ const INITIAL_OPTIONS: ScanOptionsState = {
   cropAutoConfirm: false,
   minimumTextHeight: 0,
   ocrGeometry: true,
+  mergeOcrPages: false,
   ocrFloorEnabled: true,
   floorMinTextLength: 12,
   floorMinLines: 2,
@@ -90,6 +92,9 @@ function buildOptions(o: ScanOptionsState): ScanReceiptOptions {
     cropAutoConfirm: o.cropAutoConfirm,
     minimumTextHeight: o.minimumTextHeight,
     ocrGeometry: o.ocrGeometry,
+    // Forwarded as-is even when the combination is invalid, so the demo shows
+    // the real INVALID_MERGE_OPTION rejection instead of hiding it.
+    mergeOcrPages: o.mergeOcrPages,
     ocrFloor: o.ocrFloorEnabled
       ? {
           minTextLength: o.floorMinTextLength,
@@ -798,6 +803,20 @@ function ScanPage({
               }
             />
             <View style={styles.divider} />
+            <ToggleRow
+              label="긴 영수증 OCR 병합 (mergeOcrPages)"
+              value={opts.mergeOcrPages}
+              onToggle={() => set("mergeOcrPages", !opts.mergeOcrPages)}
+              disabled={!opts.ocr || opts.maxPages < 2}
+              hint={
+                !opts.ocr
+                  ? "OCR이 켜져 있어야 적용됩니다"
+                  : opts.maxPages < 2
+                    ? "페이지 수를 2장 이상으로 올려야 이어붙일 경계가 생깁니다"
+                    : "겹치게 나눠 찍은 페이지들의 OCR 텍스트를 한 줄기로 이어붙입니다"
+              }
+            />
+            <View style={styles.divider} />
             <ChipRow
               label="최소 텍스트 높이 (minimumTextHeight)"
               values={[0, 0.02, 0.05, 0.1]}
@@ -994,6 +1013,8 @@ function ResultPage({
   const hasImages = result.images.length > 0;
   const hasOcr = hasImages && result.images.some((img) => img.ocrText);
   const isWarn = result.status !== "success";
+  // Hoisted so the merged block renders even when every page was floor-rejected.
+  const merged = result.mergedOcr;
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -1068,6 +1089,37 @@ function ResultPage({
               </View>
             )}
           </>
+        )}
+
+        {/* 섹션 B-2 — 페이지 간 OCR 병합 결과 */}
+        {merged && (
+          <View style={styles.section}>
+            <SectionHeader
+              title="병합된 OCR (mergedOcr)"
+              description={
+                merged.isComplete
+                  ? "인접한 모든 경계에서 겹침이 확인되었습니다"
+                  : "확인하지 못한 경계가 있습니다 — 텍스트는 하나도 버리지 않습니다"
+              }
+            />
+            <Card style={{ marginVertical: S.md }}>
+              <Text style={styles.imageCardTitle}>
+                {merged.isComplete ? "✅ 완결" : "⚠️ 미완결"} · {merged.pageUris.length}페이지
+              </Text>
+              {merged.unmatchedBoundaryIndexes.length > 0 && (
+                <Text style={styles.ocrText}>
+                  겹침 미확인 경계:{" "}
+                  {merged.unmatchedBoundaryIndexes.map((i) => `${i}↔${i + 1}`).join(", ")}
+                </Text>
+              )}
+              {merged.rejectedPageIndexes.length > 0 && (
+                <Text style={styles.ocrText}>
+                  기준 미달 페이지: {merged.rejectedPageIndexes.join(", ")}
+                </Text>
+              )}
+              <Text style={styles.ocrText}>{merged.text.trim() || "(인식된 텍스트 없음)"}</Text>
+            </Card>
+          </View>
         )}
 
         {/* 섹션 C — OCR 기준 미달로 거부된 이미지 */}
