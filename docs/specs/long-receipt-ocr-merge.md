@@ -63,7 +63,7 @@ The merge orchestration and the merger itself live in the JS layer for the same 
  * `docs/specs/long-receipt-ocr-merge.md` for why a single tall image would
  * lose text resolution.
  *
- * Requires `ocr: true` and `maxPages >= 2`.
+ * Requires `ocr: true` and an integer `maxPages >= 2`.
  *
  * @defaultValue `false`
  */
@@ -215,10 +215,10 @@ Although `maxPages >= 2` is required to enable the flag, a user may still finish
 
 ### Known limitation: natively dropped pages
 
-Both platforms can return fewer pages than the user captured or picked, without reporting it:
+The **iOS gallery** path can return fewer pages than the user picked, without reporting it:
 
 - iOS gallery: `RNGalleryPickerDelegate.didFinishOneItem:` appends only non-nil results, so an item that fails to decode disappears.
-- Android gallery: `CropEditorActivity` returns only the URIs it finished processing.
+  Android does **not** share this limitation, verified against the current code: `CropEditorActivity.failAndFinish` calls `deleteProcessedOriginals()` and returns `EXTRA_ERROR`, which `handleGalleryResult` turns into a `PROCESSING_FAILED` rejection; cancellation deletes the processed copies and returns a cancelled result; `returnAllResults` runs only once the queue is drained; and a per-image failure inside the module's processing loop propagates to the outer catch, rejecting the whole scan. Android either returns every page or fails the scan — it never returns a partial batch.
 
 The JS layer cannot distinguish "the user captured three pages" from "the user captured five and two were dropped", so `isComplete` can be `true` while a page is missing from the middle of a receipt.
 The field's doc comment states this in its first sentence.
@@ -257,7 +257,7 @@ Pure unit tests in `src/__tests__/`:
 4. Normalization absorbs case and whitespace-run differences, but a single misread character leaves the seam unproven.
 5. A pair with no matching window is preserved and records an unmatched boundary.
 6. A single-line candidate needs 24 characters; a repeat purchase differing only in quantity and amount is preserved, at both one and two lines wide.
-7. An overlap deeper than the eight-line window is reported unproven with every line preserved, never partially merged from a shifted window.
+7. An overlap of any depth merges, and a shallow coincidence inside a deeper overlap (a repeated separator and section header at both ends) does not win over the deeper match.
 8. Repeated totals away from the adjacent suffix and prefix are preserved.
 9. Absent or empty `ocrText` marks the page rejected and both its boundaries unmatched.
 10. Floor-rejected pages appear in `pageUris` and in `rejectedPageIndexes`, and make the merge incomplete.

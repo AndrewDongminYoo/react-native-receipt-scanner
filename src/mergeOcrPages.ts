@@ -1,28 +1,9 @@
 import type { MergedOcrResult, ReceiptImage } from "./types";
 
-/**
- * Longest suffix / prefix window compared at a seam, in lines.
- *
- * ponytail: hard ceiling on provable overlap — an overlap deeper than this
- * cannot be matched, so the seam is reported unproven rather than merged. That
- * is the safe direction (nothing is deleted), and it is why the capture
- * guidance asks for a few overlapping lines rather than a fraction of the page.
- * Raise it if real receipts turn out to overlap more deeply; cost is quadratic
- * in this value.
- */
-const MAX_WINDOW_LINES = 8;
-/** A multi-line window pair must reach this many characters to prove a seam. */
+/** A multi-line overlap must reach this many characters to prove a seam. */
 const MIN_WINDOW_CHARACTERS = 12;
-/** A single-line pair must reach this many characters — one short line repeats by coincidence. */
+/** A single-line overlap must reach this many characters — one short line repeats by coincidence. */
 const MIN_SINGLE_LINE_CHARACTERS = 24;
-
-/** An accepted seam candidate. Only `rightLineCount` affects the output; `matchedCharacters` ranks. */
-type Overlap = {
-  /** Lines to drop from the start of the later page. */
-  rightLineCount: number;
-  /** Length of the matched window — longer is stronger evidence. */
-  matchedCharacters: number;
-};
 
 /**
  * Assembles the OCR text of one logical receipt from its pages, removing text
@@ -65,17 +46,17 @@ export function mergeOcrPages(
     const previousLines = linesByPage[pageIndex - 1] ?? [];
     const currentLines = linesByPage[pageIndex] ?? [];
     // A page with no text cannot prove a seam, so its boundary is unmatched.
-    const overlap =
+    const overlapLines =
       previousLines.length > 0 && currentLines.length > 0
         ? findOverlap(previousLines, currentLines)
         : null;
 
-    if (overlap === null) {
+    if (overlapLines === null) {
       unmatchedBoundaries.push(pageIndex - 1);
       mergedLines.push(...currentLines);
       continue;
     }
-    mergedLines.push(...currentLines.slice(overlap.rightLineCount));
+    mergedLines.push(...currentLines.slice(overlapLines));
   }
 
   const sortedRejected = [...rejected].sort((a, b) => a - b);
@@ -109,65 +90,64 @@ function nonEmptyLines(text: string | undefined): string[] {
 }
 
 /**
- * Finds the strongest provable overlap between the earlier page's trailing
- * lines and the later page's leading lines, or `null` when none clears its
- * threshold.
+ * Returns how many leading lines of the later page repeat the earlier page's
+ * trailing lines, or `null` when no overlap is provable.
+ *
+ * Equality is the only evidence accepted. Approximate matching was implemented,
+ * measured, and removed: on receipt text an edit-distance threshold cannot tell
+ * "the same line, misread" from "a different purchase". Two rows for one product
+ * at quantities 1 and 2 differ only in digits, which carry all the meaning and
+ * almost none of the edit distance — measured at 0.9200 similarity for a lone
+ * 25-character row and 0.8974 for a 39-character two-line window, both above any
+ * floor that still merges anything, and both deleting real rows while reporting
+ * the seam proven.
+ *
+ * ponytail: exact-only trades merges for safety — a genuine seam whose OCR
+ * differs by one character is reported unproven instead of merged, which is
+ * visible to the consumer where a deleted row is not. If device data shows too
+ * many unproven seams, the upgrade path is a digit-aware comparison (equal digit
+ * runs, fuzzy elsewhere), never a looser similarity floor.
  */
-function findOverlap(leftLines: readonly string[], rightLines: readonly string[]): Overlap | null {
-  const leftLimit = Math.min(MAX_WINDOW_LINES, leftLines.length);
-  const rightLimit = Math.min(MAX_WINDOW_LINES, rightLines.length);
-  // Window at index k spans k+1 lines: the earlier page's last k+1, the later
-  // page's first k+1. Built once because each is compared up to eight times.
-  const leftWindows = Array.from({ length: leftLimit }, (_unused, index) =>
-    comparisonText(leftLines.slice(leftLines.length - index - 1))
-  );
-  const rightWindows = Array.from({ length: rightLimit }, (_unused, index) =>
-    comparisonText(rightLines.slice(0, index + 1))
-  );
+function findOverlap(leftLines: readonly string[], rightLines: readonly string[]): number | null {
+  const left = leftLines.map(normalizeLine);
+  const right = rightLines.map(normalizeLine);
 
-  let best: Overlap | null = null;
-  // Both loops ascend and a tie keeps the incumbent, so an otherwise equal
-  // match drops the fewest lines from the later page.
-  for (const [rightIndex, right] of rightWindows.entries()) {
-    const rightCount = rightIndex + 1;
-    for (const [leftIndex, left] of leftWindows.entries()) {
-      const leftCount = leftIndex + 1;
-      // Equality is the only evidence accepted. Approximate matching was tried
-      // and removed: on receipt text an edit-distance threshold cannot tell
-      // "the same line, misread" from "a different purchase". Two rows for one
-      // product at quantities 1 and 2 differ only in digits, which carry all
-      // the meaning and almost none of the edit distance — measured at 0.9200
-      // for a lone 25-character row and 0.8974 for a 39-character two-line
-      // window, both above any floor that still merges anything. Both deleted
-      // real rows while reporting isComplete.
-      //
-      // ponytail: exact-only trades merges for safety — a genuine seam whose
-      // OCR differs by one character is reported unproven instead of merged,
-      // which is visible to the consumer, where a deleted row is not. If device
-      // data shows too many unproven seams, the upgrade path is a digit-aware
-      // comparison (equal digit runs, fuzzy elsewhere), never a looser floor.
-      if (left !== right) continue;
+  // Deepest first. A shorter suffix/prefix pair can coincide *inside* a deeper
+  // true overlap — a receipt that repeats a separator and a section header at
+  // both ends of the overlapped region matches at two lines as readily as at
+  // nine — and merging on that shallow match leaves the rest duplicated while
+  // reporting the seam proven. Taking the deepest match removes that class
+  // outright, so there is no window ceiling to exceed.
+  for (let lineCount = Math.min(left.length, right.length); lineCount >= 1; lineCount--) {
+    if (!suffixEqualsPrefix(left, right, lineCount)) continue;
 
-      const matchedCharacters = left.length;
-      const minimumCharacters =
-        leftCount === 1 || rightCount === 1 ? MIN_SINGLE_LINE_CHARACTERS : MIN_WINDOW_CHARACTERS;
-      if (matchedCharacters < minimumCharacters) continue;
+    // Guard against a short line repeating by coincidence rather than by overlap.
+    const matched = right.slice(0, lineCount).join(" ");
+    const minimumCharacters = lineCount === 1 ? MIN_SINGLE_LINE_CHARACTERS : MIN_WINDOW_CHARACTERS;
+    if (matched.length < minimumCharacters) continue;
 
-      // A longer match is stronger evidence; a tie keeps the incumbent, which
-      // by the loop order drops the fewest lines from the later page.
-      if (best === null || matchedCharacters > best.matchedCharacters) {
-        best = { rightLineCount: rightCount, matchedCharacters };
-      }
-    }
+    return lineCount;
   }
-  return best;
+  return null;
+}
+
+/** Whether `left`'s last `lineCount` lines equal `right`'s first `lineCount`. */
+function suffixEqualsPrefix(
+  left: readonly string[],
+  right: readonly string[],
+  lineCount: number
+): boolean {
+  const offset = left.length - lineCount;
+  for (let index = 0; index < lineCount; index++) {
+    if (left[offset + index] !== right[index]) return false;
+  }
+  return true;
 }
 
 /**
- * Normalizes a window for comparison only — lowercased, whitespace runs
- * collapsed, lines joined by a single space. Emitted text always uses the
- * original trimmed lines.
+ * Normalizes one line for comparison only — lowercased, whitespace runs
+ * collapsed. Emitted text always uses the original trimmed lines.
  */
-function comparisonText(lines: readonly string[]): string {
-  return lines.map((line) => line.toLowerCase().replace(/\s+/g, " ").trim()).join(" ");
+function normalizeLine(line: string): string {
+  return line.toLowerCase().replace(/\s+/g, " ").trim();
 }

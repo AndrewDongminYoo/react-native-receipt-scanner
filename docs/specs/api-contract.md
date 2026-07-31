@@ -36,7 +36,7 @@ and the system cannot show the rationale dialog).
 | `includeRawExif`    | `boolean`               | `false`              | Include the full raw EXIF / TIFF / GPS dictionary on `exif.raw`. Off by default to keep IPC payloads small (raw maps are typically 30–60 fields). Effective only when `includeExif === true`. GPS keys are excluded from `raw` whenever `includeGpsExif === false`.                                                       |
 | `minimumTextHeight` | `number` (0.0–1.0)      | `0`                  | **iOS only.** Vision `minimumTextHeight` as a fraction of image height; text shorter than this is skipped during recognition. Lowering it (e.g. `0.02`) can recover small receipt line items at the cost of more noise. `0` uses the package default (≈ 1/32). Android (ML Kit) has no equivalent and ignores this field. |
 | `ocrGeometry`       | `boolean`               | `false`              | Attach per-line OCR boxes to `ReceiptImage.ocrLines` (see "OCR line geometry" below). Effective only when `ocr === true`.                                                                                                                                                                                                 |
-| `mergeOcrPages`     | `boolean`               | `false`              | Assemble the pages' OCR text into one ordered string on `ScanReceiptResult.mergedOcr` (see "Long receipt OCR merge" below). Requires `ocr: true` and `maxPages >= 2`; page JPEGs are never combined.                                                                                                                      |
+| `mergeOcrPages`     | `boolean`               | `false`              | Assemble the pages' OCR text into one ordered string on `ScanReceiptResult.mergedOcr` (see "Long receipt OCR merge" below). Requires `ocr: true` and an integer `maxPages >= 2`; page JPEGs are never combined.                                                                                                           |
 
 ### Multilingual OCR and capabilities
 
@@ -144,7 +144,7 @@ type MergedOcrResult = {
 
 Rules:
 
-- Requires `ocr: true` and `maxPages >= 2`. An invalid combination throws before any scanner UI opens.
+- Requires `ocr: true` and `maxPages` set to an integer of at least 2. Anything else throws `INVALID_MERGE_OPTION` before any scanner UI opens — `NaN`, `Infinity`, and `2.5` are all rejected.
 - `mergedOcr` is attached whenever the native scan captured something — including a `"rejected"` result, where the diagnostics are what tell a consumer to prompt for a re-shoot. A `"cancelled"` scan has no `mergedOcr`.
 - Pages are merged in native capture order and never reordered. Only adjacent pages are compared, and repeated lines away from a seam (totals, headers) are always preserved.
 - A seam whose overlap cannot be proven contributes both pages' lines in full and records its boundary index. Enabling the merge never loses text.

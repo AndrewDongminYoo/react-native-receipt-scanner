@@ -155,8 +155,9 @@ export type ScanReceiptOptions = {
    * long to capture in a single frame.
    *
    * The page JPEGs are never combined — a single tall image would lose text
-   * resolution on both platforms. Requires `ocr: true` and `maxPages >= 2`;
-   * an invalid combination throws before any scanner UI opens.
+   * resolution on both platforms. Requires `ocr: true` and `maxPages` set to an
+   * integer of at least 2; anything else throws `INVALID_MERGE_OPTION` before
+   * any scanner UI opens.
    *
    * @see `docs/specs/long-receipt-ocr-merge.md` for the merge algorithm.
    * @defaultValue `false`

@@ -32,11 +32,16 @@ A duplicate URI throws rather than being silently reordered.
 
 **Gallery is supported, unlike the sibling Flutter package.** Its spec restricts merging to the camera because gallery selection order is unreliable. Both gallery paths in this repo were verified strictly serial and order-preserving — `RNGalleryPickerDelegate.processNextQueuedItem` and `CropEditorActivity.loadNextImage` — and the gallery path is what covers a long electronic receipt captured as several screenshots. Where the picker's order is not the user's intended order, the seam simply fails to match and is reported; no text is lost.
 
-**Unproven seams are reported, never guessed.** An overlap is removed only when a window comparison clears its threshold. Otherwise both pages' lines are emitted in full and the boundary index is recorded. The merger never compares non-adjacent pages and never removes globally repeated lines such as totals — that would be receipt-domain inference.
+**Unproven seams are reported, never guessed.** An overlap is removed only when the earlier page's trailing lines are exactly equal to the later page's leading lines after normalization. Otherwise both pages' lines are emitted in full and the boundary index is recorded. The merger never compares non-adjacent pages and never removes globally repeated lines such as totals — that would be receipt-domain inference.
 
-**`isComplete` is narrower than its name, and says so.** Both platforms silently drop a page that fails to decode (`didFinishOneItem:` appends only non-nil results; `CropEditorActivity` returns only finished URIs), and JS cannot see that. The field means "everything that came back joined up". Its JSDoc states the limitation in the first sentence rather than in a footnote. The native page-count signal that would close it is deferred — see the spec's §Follow-Ups.
+**`isComplete` is narrower than its name, and says so.** The iOS gallery path silently drops a page that fails to decode (`didFinishOneItem:` appends only non-nil results) and JS cannot see it, so the field means "everything that came back joined up". Its JSDoc states the limitation in its first sentence rather than in a footnote. This was first written as a both-platform limitation and corrected during review: Android rejects the whole scan on a per-image failure instead of returning a partial batch. The native page-count signal that would close the iOS gap is deferred — see the spec's §Follow-Ups.
 
-**The algorithm ports the Flutter package's shipped implementation, not its spec prose.** The two disagree on the candidate tie-break, and the implementation is what its tests fix. The divergence and the two guards missing from that spec text are recorded in this package's spec.
+**The algorithm started as a port of the Flutter package and ended up diverging from it.** That package matches seams approximately (Levenshtein, 0.85 multi-line / 0.92 single-line) over windows capped at eight lines. Two review rounds produced measured counter-examples to both halves, so neither survived here:
+
+- Approximate matching deletes real rows. Two purchases of one product at different quantities differ only in digits, which carry all the meaning and almost none of the edit distance — 0.9200 for a lone 25-character row, 0.8974 for a 39-character two-line window. Seam matching now requires normalized equality.
+- The window cap let a shallow coincidence beat a deeper true overlap: a receipt repeating a separator and a section header at both ends of a nine-line overlap matched at two lines, dropped two, left seven duplicated, and reported the seam proven. There is no cap now — the deepest repeated run wins.
+
+The result is smaller and faster than the port: no edit distance, no cost guards, no similarity floors, and the ten-page benchmark went from 59 ms to 3 ms. `flutter_receipt_scanner` still ships the original matcher and is affected by both counter-examples; that is filed in the spec's §Follow-Ups, not assumed fixed.
 
 ## Scope
 
@@ -60,7 +65,7 @@ Full list with reasons in the spec's §Out of Scope.
 ## Verification
 
 Gate: `yarn typecheck && yarn lint && yarn test && trunk fmt && trunk check`.
-No native build is required for correctness, since no native file changes.
+No native build is required for correctness: the only native edits are doc comments.
 `/codex-review` runs on the branch diff before the PR is opened.
 
 Required test cases are enumerated in the spec's §Testing Strategy.

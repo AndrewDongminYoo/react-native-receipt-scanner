@@ -144,10 +144,7 @@ describe("mergeOcrPages", () => {
     expect(merged.isComplete).toBe(false);
   });
 
-  it("reports an overlap deeper than the window instead of merging it wrongly", () => {
-    // Nine repeated rows exceed MAX_WINDOW_LINES, so no window pair can span
-    // the true overlap. The seam must be reported unproven with every line
-    // preserved — never a shifted partial match.
+  it("merges an overlap of any depth, with no window ceiling", () => {
     const overlap = [
       "서울우유 1L         1    2,900",
       "신라면 5개입        1    4,250",
@@ -164,12 +161,36 @@ describe("mergeOcrPages", () => {
       page(1, [...overlap, "합계          38,510"].join("\n")),
     ]);
 
-    expect(merged.unmatchedBoundaryIndexes).toEqual([0]);
-    expect(merged.isComplete).toBe(false);
-    // Nothing dropped: both copies of all nine rows survive.
-    for (const line of overlap) {
-      expect(merged.text.split("\n").filter((candidate) => candidate === line)).toHaveLength(2);
-    }
+    expect(merged.text).toBe(["가맹점명 표시줄", ...overlap, "합계          38,510"].join("\n"));
+    expect(merged.isComplete).toBe(true);
+  });
+
+  it("takes the deepest overlap, not a shallower one that coincides inside it", () => {
+    // Regression: a receipt that repeats a separator and a section header at
+    // both ends of the overlapped region matched at two lines as readily as at
+    // nine. Merging on the shallow match dropped two lines, left seven
+    // duplicated, and still reported isComplete — 18 lines where 11 were right.
+    const separator = "구분선 ──────────────";
+    const header = "상품 내역 계속 이어짐";
+    const overlap = [
+      separator,
+      header,
+      "우유 1 2,900",
+      "라면 1 4,250",
+      "새우깡 2 2,400",
+      "바나나 1 3,980",
+      "계란 1 7,900",
+      separator,
+      header,
+    ];
+    const merged = mergeOcrPages([
+      page(0, ["가맹점명 표시줄 여기", ...overlap].join("\n")),
+      page(1, [...overlap, "합계   21,430"].join("\n")),
+    ]);
+
+    expect(merged.text.split("\n")).toHaveLength(11);
+    expect(merged.text).toBe(["가맹점명 표시줄 여기", ...overlap, "합계   21,430"].join("\n"));
+    expect(merged.isComplete).toBe(true);
   });
 
   it("accepts a single-line candidate once it is long enough", () => {
@@ -243,9 +264,13 @@ describe("mergeOcrPages", () => {
   });
 
   it("merges ten pages of 200 lines within the recorded bound", () => {
-    // Measured at 59 ms on the development Mac mini (2026-07-31). The bound is
-    // deliberately ~17x that so CI machine variance cannot make this flaky; it
-    // is a guard against an accidental blow-up, not a performance target.
+    // Measured at 3 ms on the development Mac mini (2026-07-31), down from 59 ms
+    // under the previous Levenshtein matcher — comparing pre-normalized line
+    // arrays with an early exit is far cheaper than building joined windows and
+    // running an edit distance over them, even though the deepest-first scan is
+    // O(n²) in the worst case. The bound is deliberately far above that so CI
+    // machine variance cannot make this flaky; it guards against an accidental
+    // blow-up, not a performance target.
     const overlap = Array.from({ length: 4 }, (_unused, line) => `겹치는 줄 번호 ${line} 표시`);
     const pages = Array.from({ length: 10 }, (_unused, index) => {
       const body = Array.from(
