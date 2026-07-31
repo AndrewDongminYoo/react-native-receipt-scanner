@@ -224,6 +224,26 @@ describe("mergeOcrPages", () => {
     expect(merged.isComplete).toBe(false);
   });
 
+  it("KNOWN LIMITATION: merges a repeated block at the boundary as if it overlapped", () => {
+    // Not a bug to fix by raising the distinct-line requirement — it is the
+    // irreducible case. A receipt printing the same block twice, split between
+    // the copies, produces exactly the text a real overlap produces, so no rule
+    // over the seam text can separate them. Any depth N is defeated by an
+    // N-line repeated block. See the spec's "Known false positive".
+    //
+    // This test pins the behaviour so it changes deliberately, not silently.
+    const first = "서울우유 1L 흰우유 1 2,000";
+    const second = "신라면 5개입 1 4,250";
+
+    const merged = mergeOcrPages([
+      page(0, ["구매 내역 시작", first, second].join("\n")),
+      page(1, [first, second, "합계 12,500원"].join("\n")),
+    ]);
+
+    expect(merged.text.split("\n")).toHaveLength(4); // 6 would be the truth
+    expect(merged.isComplete).toBe(true);
+  });
+
   it("accepts a two-line overlap once it carries two distinct lines", () => {
     const address = "서울특별시 강남구 테헤란로 152 강남파이낸스센터";
     const owner = "대표 홍길동";

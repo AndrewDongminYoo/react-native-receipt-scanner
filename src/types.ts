@@ -364,7 +364,12 @@ export type ReceiptImage = {
  * Pages are consumed in native capture order and never reordered — the
  * package does not infer which captures belong together. A seam whose
  * overlap could not be proven keeps both pages' text in full and records its
- * index, so enabling the merge never loses text.
+ * index.
+ *
+ * Content is lost in one irreducible case: a receipt that prints the same block
+ * twice, split so one copy ends a page and the next begins with the other,
+ * yields exactly the text a real overlap yields. The later copy is removed as a
+ * duplicate and `isComplete` still reports `true`.
  *
  * @see `docs/specs/long-receipt-ocr-merge.md` for the algorithm and thresholds.
  */

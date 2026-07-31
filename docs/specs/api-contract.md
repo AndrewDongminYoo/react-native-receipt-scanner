@@ -147,7 +147,7 @@ Rules:
 - Requires `ocr: true` and `maxPages` set to an integer of at least 2. Anything else throws `INVALID_MERGE_OPTION` before any scanner UI opens — `NaN`, `Infinity`, and `2.5` are all rejected.
 - `mergedOcr` is attached whenever the native scan captured something — including a `"rejected"` result, where the diagnostics are what tell a consumer to prompt for a re-shoot. A `"cancelled"` scan has no `mergedOcr`.
 - Pages are merged in native capture order and never reordered. Only adjacent pages are compared, and repeated lines away from a seam (totals, headers) are always preserved.
-- A seam whose overlap cannot be proven contributes both pages' lines in full and records its boundary index. Enabling the merge never loses text.
+- A seam whose overlap cannot be proven contributes both pages' lines in full and records its boundary index. The merge does not drop text to make a result look clean — with one irreducible exception, a receipt that prints the same block twice across a page boundary; see the spec's "Known false positive".
 - Per-page `ocrLines` geometry is **not** merged. Boxes from different pages live in different pixel spaces, so `mergedOcr.text` has no corresponding geometry.
 - `isComplete` cannot see a page the native layer dropped before returning, so it means "everything returned joined up", not "the whole receipt is here".
 

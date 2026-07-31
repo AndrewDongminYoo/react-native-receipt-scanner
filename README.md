@@ -162,7 +162,8 @@ The page JPEGs are never combined into one tall image. Android caps the processe
 
 Two behaviours worth knowing:
 
-- Nothing is ever dropped to make the result look clean. An unproven seam emits both pages' lines in full and reports its boundary index.
+- An unproven seam emits both pages' lines in full and reports its boundary index — the merge does not drop text to make a result look clean.
+- **One case does lose content, and cannot be detected.** If a receipt prints the same block of lines twice and the page split falls between the two copies, the text is identical to what a real overlap produces, so the later copy is removed as a duplicate and `isComplete` still reports `true`. Overlapping your captures generously makes the real overlap deeper than any repeated block, which is the practical defence.
 - `isComplete` only covers the pages that came back. Both iOS paths can silently drop a page that fails to process, and the JS layer cannot see that — so it means "everything returned joined up", not "the whole receipt is here". Android fails the whole scan instead, so it does not have this gap.
 
 ### OCR — extract text from the document

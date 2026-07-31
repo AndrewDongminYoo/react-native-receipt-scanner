@@ -40,7 +40,7 @@ When enabled, the JS layer keeps every native JPEG unchanged, walks the pages in
 
 The package never decides that two images are or are not the same receipt.
 It only reports whether an overlap could be proven at each adjacent boundary.
-An unproven boundary emits both pages' text in full and records the boundary index — no text is ever discarded to make a result look clean.
+An unproven boundary emits both pages' text in full and records the boundary index — the merge does not discard text to make a result look clean, with one irreducible exception documented below.
 
 ## Scope Boundary (ADR-003)
 
@@ -211,6 +211,21 @@ An unmatched seam appends every line of the next page and records the boundary i
 
 > **Divergence from `flutter_receipt_scanner` spec 0001.** That package matches seams approximately (0.85 multi-line, 0.92 single-line) with a Levenshtein pass, a 512-character cost guard and a length-ratio prefilter, over windows capped at eight lines and ranked by similarity then compared-character count. This package started as a port of it and now shares none of that: no approximate matching (see "Why equality"), no depth ceiling, no ranking pass. **Every defect measured here applies to `flutter_receipt_scanner` as shipped** — both approximate-match false positives, the shallow-coincidence merge, and the single repeated row accepted as a seam (its 0.92 single-line path admits identical rows outright). It has not been changed; that is filed in §Follow-Ups rather than assumed.
 
+### Known false positive: a repeated block at the page boundary
+
+A receipt that prints the same block of lines twice, split so one copy ends a page and the other begins the next, produces **exactly** the text a real overlap produces.
+
+Write the receipt content as `R` and the page split at line `j`:
+
+- True overlap: `page0 = R[0..j]`, `page1 = R[i..n]` with `i <= j`. The repeated region is `R[i..j]` — one occurrence, captured twice.
+- False positive: `page0 = R[0..j]`, `page1 = R[j+1..n]` with no overlap at all, where `R[j-k+1..j] == R[j+1..j+k]` — two occurrences, captured once each.
+
+Both yield the same two strings, so **no rule over the seam text can separate them**. The merger removes the later copy and reports the seam proven; `isComplete` is `true` and two real rows are gone.
+
+Requiring more evidence does not close this. The distinct-line rule was raised to two after a single repeated row was found to merge; a receipt repeating a two-line block then defeats two, and any depth `N` is defeated by an `N`-line repeated block. Raising `N` without data on how often receipts repeat blocks of a given size would be tuning to whichever counter-example was found last.
+
+What actually helps is capture technique, and the guidance says so: overlap generously, so the real overlap is deeper than any block the receipt repeats — the deepest-match rule then picks the real one. Closing it properly needs evidence from outside the text (page geometry, or `ocrLines` positions), which is out of scope for a JS-layer merge.
+
 ### Completeness
 
 `isComplete` is true only when there is at least one page, `rejectedPageIndexes` is empty, and `unmatchedBoundaryIndexes` is empty.
@@ -291,8 +306,9 @@ The example app should still exercise the flag once manually before release.
    - a shallow coincidence inside a deeper overlap, leaving the rest duplicated while reporting completeness,
    - a single identical row accepted as a seam, deleting a real repeat purchase.
 
-   Not assumed fixed; not yet filed there.
+   Filed as [`AndrewDongminYoo/flutter_receipt_scanner#3`](https://github.com/AndrewDongminYoo/flutter_receipt_scanner/issues/3); the iOS dropped-page gap is [#4](https://github.com/AndrewDongminYoo/flutter_receipt_scanner/issues/4). Neither is fixed there yet.
 
 4. Reconcile that package's spec 0001 tie-break prose with its shipped implementation, so the two specs do not describe different algorithms.
 5. Measure how often a real recognizer reproduces a line character-identically across two captures. That number decides whether the digit-aware comparison in "Why equality" is needed.
-6. Consider ordered gallery selection with a review-and-reorder surface only as its own spec.
+6. Investigate whether page geometry or `ocrLines` positions can separate a real overlap from a repeated block at the boundary — the one defect class the text-only merge cannot close (see "Known false positive"). Needs `ocrGeometry` data and probably a native signal; do not attempt it by raising the distinct-line requirement.
+7. Consider ordered gallery selection with a review-and-reorder surface only as its own spec.

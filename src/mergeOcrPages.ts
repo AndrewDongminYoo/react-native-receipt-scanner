@@ -24,7 +24,13 @@ const MIN_DISTINCT_LINES = 2;
  * headers) are always preserved.
  *
  * A seam whose overlap cannot be proven contributes both pages' lines in full
- * and records its boundary index, so enabling the merge never loses text.
+ * and records its boundary index.
+ *
+ * The one case where content *is* lost is irreducible: a receipt that prints
+ * the same block twice, split so one copy ends a page and the other begins the
+ * next, produces exactly the text a real overlap produces. The two are
+ * indistinguishable from the strings alone, so the later copy is removed as a
+ * duplicate. Requiring more lines only moves the counter-example.
  *
  * @param pages - Pages in native capture order.
  * @param rejectedPageIndexes - Pages the `ocrFloor` gate rejected. Pages with
