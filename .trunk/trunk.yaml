@@ -36,7 +36,9 @@ lint:
     - checkov@3.3.8
     # Pinned to 9.x: `@react-native` eslint config pulls @babel/eslint-parser,
     # whose eslint-scope@5 ScopeManager has no addGlobals() — eslint 10 crashes
-    # on every plain .js file. Bump only together with package.json's eslint.
+    # on every plain .js file. Bumping package.json's eslint is NOT the unblock:
+    # that chain already wants eslint ^8.57.0 (see the YN0060 peer warning on
+    # install), so the gate is upstream @react-native/eslint-config, not us.
     - eslint@9.39.4
     - git-diff-check
     - ktlint@1.8.0
