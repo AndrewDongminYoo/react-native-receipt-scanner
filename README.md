@@ -1,5 +1,14 @@
 # react-native-receipt-scanner
 
+![Abstract receipt scanning and on-device OCR pipeline](.github/assets/readme-hero.png)
+
+[![CI](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/actions/workflows/ci.yml)
+[![npm version](https://img.shields.io/npm/v/react-native-receipt-scanner)](https://www.npmjs.com/package/react-native-receipt-scanner)
+[![npm downloads](https://img.shields.io/npm/dm/react-native-receipt-scanner)](https://www.npmjs.com/package/react-native-receipt-scanner)
+[![MIT license](https://img.shields.io/npm/l/react-native-receipt-scanner)](LICENSE)
+[![React Native New Architecture](https://img.shields.io/badge/React%20Native-New%20Architecture-61DAFB?logo=react&logoColor=white)](https://reactnative.dev/docs/the-new-architecture/landing-page)
+[![On-device OCR](https://img.shields.io/badge/OCR-on--device-0EA5E9)](#ocr--extract-text-from-the-document)
+
 Receipt document scanner for React Native. Wraps **ML Kit** (Android) and **VisionKit + Vision** (iOS) with a unified API for scanning, interactive perspective-crop, JPEG compression, EXIF extraction, and on-device OCR.
 
 Built exclusively for the [React Native New Architecture](https://reactnative.dev/docs/the-new-architecture/landing-page) — no legacy bridge, no base64 blobs.
