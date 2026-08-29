@@ -6,6 +6,9 @@ cli:
 # Trunk provides extensibility via plugins. (https://docs.trunk.io/plugins)
 plugins:
   sources:
+    - id: quality-configs
+      ref: v0.5.0
+      uri: https://github.com/AndrewDongminYoo/quality-configs
     - id: trunk
       ref: v1.11.0
       uri: https://github.com/trunk-io/plugins
@@ -14,13 +17,26 @@ runtimes:
   enabled:
     - go@1.21.0
     - java@13.0.11
-    - node@22.16.0
-    - python@3.14.4
+    - node@22.22.3
+    - python@3.10.8
 # This is the section where you manage your linters. (https://docs.trunk.io/check/configuration)
 lint:
   disabled:
     - dotenv-linter
+    - oxipng
+    - svgo
   ignore:
+    - linters: [cspell, shellcheck, shfmt]
+      paths:
+        - android/gradlew
+        - example/android/gradlew
+    - linters: [dotenv-linter]
+      paths:
+        - ios/.xcode.env
+        - ios/.xcode.env.local
+    - linters: [osv-scanner]
+      paths:
+        - "**/Podfile.lock"
     - linters: [shellcheck, shfmt]
       paths: [example/android/gradlew]
     - linters: [osv-scanner, trufflehog]
@@ -38,15 +54,15 @@ lint:
     - git-diff-check
     - ktlint@1.8.0
     - markdownlint@0.49.1
-    - oxipng@10.1.1
     - prettier@3.9.6
     - shellcheck@0.11.0
     - shfmt@3.13.1
     - trufflehog@3.95.8
     - yamllint@1.38.0
 actions:
+  disabled:
+    - trunk-fmt-pre-commit
   enabled:
     - trunk-announce
     - trunk-check-pre-push
-    - trunk-fmt-pre-commit
     - trunk-upgrade-available
