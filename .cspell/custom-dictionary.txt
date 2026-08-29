@@ -17,6 +17,7 @@ documentscanner
 Docutain
 Dongmin
 Dorg
+dotenv
 EXIF
 exifinterface
 gradlew
@@ -55,6 +56,7 @@ Scanbot
 sdkmanager
 shellcheck
 shellness
+shfmt
 Srcs
 Sublabel
 Sublayer
