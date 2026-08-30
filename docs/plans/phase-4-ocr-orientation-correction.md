@@ -1,5 +1,7 @@
 # Phase 4 — OCR Orientation Correction (0° / 90° / 180° / 270°)
 
+> **Status (2026-08-31): implemented and shipped.** `autoRotate` is present across `src/types.ts`, `ScanOptions`/`ImageProcessor` (Android) and `RNScanOptions` (iOS), and the v2.0 quarter-turn logic lives in `OcrGeometry.quantizeQuarterTurn` / `RNOcrGeometry`. The checkboxes below were never ticked as the work landed; read the source tree, not this list, for what exists.
+
 > **Update 2026-05-09 (spec v2.0):** 90° / 270° 확장은 ADR-006 D7로 결정 → 양 플랫폼에 적용. 본 plan의 알고리즘 섹션과 DoD는 v1.0(180°만) 기준으로 작성된 것이며, v2.0 알고리즘과 픽셀 회전 적용은 `docs/specs/ocr-orientation-correction.md` v2.0과 ADR-006 D7을 참조.
 
 ## Goal (v2.0)

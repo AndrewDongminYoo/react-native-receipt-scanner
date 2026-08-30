@@ -1,6 +1,6 @@
 # Phase 9 — Long Receipt OCR Page Merge
 
-## Status: In progress. Targeting 0.9.0.
+## Status: Implemented and released in 0.9.0.
 
 The normative behaviour — public API, validation contract, merge algorithm, and acceptance criteria — lives in [`../specs/long-receipt-ocr-merge.md`](../specs/long-receipt-ocr-merge.md).
 The boundary argument that admitted the feature lives in [`../notes/adr-008-long-receipt-merge-boundary.md`](../notes/adr-008-long-receipt-merge-boundary.md).
@@ -73,8 +73,8 @@ No native build is required for correctness: the only native edits are doc comme
 Required test cases are enumerated in the spec's §Testing Strategy.
 The ten-page merge timing bound is set from a measured value, not an assumed one.
 
-Not observed, and not claimed: **the feature has never run against real OCR output.** The example-app control exists but was not launched — `example/ios` has a pre-existing `Podfile.lock` versus `Pods/Manifest.lock` mismatch that blocks the iOS run, and a device pass is a heavy job the machine takes one at a time. Every claim here rests on unit tests over synthetic OCR strings.
+A device pass was run before the 0.9.0 release and the maintainer confirmed the flow against real OCR output, so the earlier "never run on device" caveat no longer holds. The per-seam match rate was not recorded here, so the design question in the next paragraph is still open.
 
-That gap matters most in one specific way: seam matching requires the two captures' OCR to be **character-identical** after normalization, and no synthetic fixture can tell you how often a real recognizer reproduces a line exactly across two photographs of it. Run the example app on one device per platform with a genuinely long receipt before release and count how many seams prove.
+The open question is one specific number: seam matching requires the two captures' OCR to be **character-identical** after normalization, and how often a real recognizer reproduces a line exactly across two photographs of it has not been counted. Count proven versus unproven seams on a genuinely long receipt, one device per platform, before deciding anything about the algorithm.
 
 Read the outcome as a design input, not a test failure. Frequent unproven seams do not mean the thresholds need loosening — that path was measured and removed (see the spec's "Why equality"). They would mean the next step is a digit-aware comparison: require the digit runs to match, allow fuzz elsewhere.

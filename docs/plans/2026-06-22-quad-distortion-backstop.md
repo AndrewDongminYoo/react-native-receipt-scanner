@@ -1,5 +1,7 @@
 # Quad Distortion Backstop Implementation Plan
 
+> **Status (2026-08-31): implemented and shipped.** `QuadGeometry.isDistorted` (Android) and `RNQuadGeometry.isDistorted` (iOS) are wired at both the warp chokepoint and the detection-seeding return, with `QuadGeometryTest.kt` covering the predicate. The checkboxes below were never ticked as the work landed; read the source tree, not this list, for what exists.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Skip perspective warp (→ axis-aligned bounding-box crop) when the crop quad is an egregious trapezoid or degenerate, and discard such quads at detection seeding (→ inset default), on both iOS and Android.

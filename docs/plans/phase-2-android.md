@@ -74,5 +74,5 @@ implementation("androidx.exifinterface:exifinterface:1.3.7")
 - [x] `exif.orientation`, `exif.dateTimeOriginal`, `exif.software` populated when available (from source EXIF)
 - [x] `exif.gps` absent by default; present in JS response when `includeGpsExif=true` (output file never carries GPS — see note above)
 - [x] `uri` is a `file://` path — no base64
-- [ ] Tested on a low-end device (≤3 GB RAM): no OOM crash — requires physical device
+- [ ] Tested on a low-end device (≤3 GB RAM): no OOM crash — requires physical device. **Not planned**: no such device is available, so this item stays open rather than being verified.
 - [x] `yarn example android` runs the full flow end-to-end

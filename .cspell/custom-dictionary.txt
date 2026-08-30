@@ -29,6 +29,7 @@ agentic
 androidx
 anonymization
 appname
+chokepoint
 cmdline
 cocoapods
 codegen
