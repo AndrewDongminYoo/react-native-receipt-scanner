@@ -1,5 +1,29 @@
 # Changelog
 
+## [0.9.0](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/compare/v0.8.0...v0.9.0) (2026-08-30)
+
+### Features
+
+* merge OCR text across long-receipt pages (mergeOcrPages) ([#19](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/issues/19)) ([5d3847d](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/commit/5d3847d9c4c543a475b259f434fe232b26957343))
+
+### Bug Fixes
+
+* declare espree as a direct devDependency ([7ee246b](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/commit/7ee246bba61d8b67260295cdb36447105f902efd))
+
+### Documentation
+
+* 📝 add README hero and project badges ([59d0429](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/commit/59d0429752ddca01db1a554e1b571129fac0cee5))
+* 📝 correct claims this PR introduced ([717d487](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/commit/717d487041a4d4b358e29f773b20b0184ed2b3ad))
+* 📝 correct the release doc's provenance claim ([e3857c7](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/commit/e3857c727ddcfa7307885928eea9d2511663bc55))
+* 📝 drop the hand-maintained freshness stamp ([384c72f](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/commit/384c72f479ab9038fd0bf9d735cf8070edb876c7))
+* 📝 reconcile claims exposed by promoting these docs ([9e60833](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/commit/9e6083339e831a5f346d1492a11e8a2db68622ed))
+* 📝 reconcile knowledge layer with current code ([ff1d5d7](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/commit/ff1d5d78835266cf3ed2b08ab87485df7249ecb1))
+* 📝 reconcile plan statuses with the shipped code ([4dadbd2](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/commit/4dadbd2779ec07ff6797e2bbdd565c3900ea0512))
+* 📝 record the doc-drift pattern and refresh stale OCR claims ([e44b093](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/commit/e44b093403288b7305222b8aa9a0b3d875cab87f)), closes [#16](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/issues/16) [#17](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/issues/17)
+* 📝 replace AGENTS.md line anchors with symbol names ([9323608](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/commit/9323608d7c41ec8fb14971420941e9e072cdc385))
+* 📝 update CLAUDE's description of the iOS map ([79736e3](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/commit/79736e3d4af50a2f454102b0001b92b24fe978a8))
+* **android:** 📝 fix KDoc reference to a renamed constant ([0905220](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/commit/0905220703288778607a6e8a65d9f6b583d05838))
+
 ## [0.8.0](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/compare/v0.7.0...v0.8.0) (2026-07-30)
 
 ### Features
