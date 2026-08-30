@@ -9,7 +9,7 @@
     "clean": "react-native clean --include android,metro,watchman,yarn",
     "postclean": "(cd ios && pod install)",
     "build:android": "BUILD_NUMBER=${BUILD_NUMBER:-$(TZ='Asia/Seoul' date +'%y%m%d%H')} react-native build-android --extra-params \"--no-daemon --console=plain -PreactNativeArchitectures=arm64-v8a\"",
-    "build:ios": "BUILD_NUMBER=${BUILD_NUMBER:-$(TZ='Asia/Seoul' date +'%y%m%d%H')} react-native build-ios --mode Release",
+    "build:ios": "BUILD_NUMBER=${BUILD_NUMBER:-$(TZ='Asia/Seoul' date +'%y%m%d%H')} xcodebuild -workspace ios/ReceiptScannerExample.xcworkspace -scheme ReceiptScannerExample -configuration Release -destination 'generic/platform=iOS Simulator' -quiet build",
     "web": "vite",
     "build:web": "vite build"
   },

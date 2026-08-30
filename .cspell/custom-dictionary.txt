@@ -67,3 +67,4 @@ shfmt
 trimmable
 turborepo
 xcassets
+xcworkspace
