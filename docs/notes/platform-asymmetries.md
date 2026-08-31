@@ -79,6 +79,8 @@
 
 **해소 (2026-07-18): 두 플랫폼이 처음으로 동일한 신호를 공유한다.** "공유할 수 없다"는 원래 판단은 _인식 품질_ 을 신호로 쓴다는 전제에서만 참이었다 — 품질은 엔진마다 회전 반응이 다르므로 공유 불가가 맞다. 그러나 **텍스트 각도**는 엔진과 무관한 기하량이라 양쪽에서 같은 의미를 갖는다. [`../specs/ocr-angle-rotation-detection.md`](../specs/ocr-angle-rotation-detection.md) v1.0이 그 신호로 재설계했고, quantize·최빈값·보정 수학은 양 플랫폼이 같은 공식을 쓴다 (취득 경로 차이는 §2.5). 위 표의 rotation-invariance 차이는 이제 _폴백_ 경로에만 영향을 준다 — 특히 iOS 16/17에서는 Vision이 아직 rotation-variant라 probe 루프가 실제로 동작하므로, 그 폴백은 살려 둔다.
 
+✅ **2026-08-31 — iOS 각도 신호가 측정으로 확인되었다.** `example/data/RECEIPT-{0,90,180,270}.jpg` 네 장 모두에서 각도 최빈값이 실제 회전과 일치했고, 보정을 적용한 뒤 재측정한 각도가 모두 `0`이 되었다. 수치와 측정 한계는 [`../specs/ocr-angle-rotation-detection.md`](../specs/ocr-angle-rotation-detection.md) §각도 규약 검증이 소유한다. Android `getAngle()`은 아직 같은 방식으로 측정되지 않았다.
+
 ### 2.2 per-line confidence 노출
 
 | 플랫폼                           | per-line confidence                                                                              |

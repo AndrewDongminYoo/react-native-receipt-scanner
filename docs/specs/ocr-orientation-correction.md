@@ -21,6 +21,7 @@ Vision이 회전된 한글·영문을 그대로 읽어내므로 줄 수 격차�
 Android는 별개의 알고리즘([`portrait-rotation-detection.md`](./portrait-rotation-detection.md) v1.3)을 쓰며 부분적으로만 동작한다 — 그 문서의 §회전 방향 결정의 한계 참조.
 
 **재설계 완료 (2026-07-18): [`ocr-angle-rotation-detection.md`](./ocr-angle-rotation-detection.md) v1.0이 이 문서를 대체한다.**
+대체 알고리즘의 각도 규약은 2026-08-31 측정으로 확인되었다 (그 문서의 §각도 규약 검증).
 신호는 줄 수도 박스 *모양*도 아닌 **텍스트 각도**다 — Vision observation의 quad에서 시계방향 각도를 유도해 1/4 회전으로 양자화한다.
 여기 v2.0의 probe 루프는 삭제되지 않고 **폴백으로 남는다**: 이 패키지가 지원하는 iOS 16/17에서는 Vision이 아직 rotation-variant라 probe가 실제로 동작하는 경로이기 때문이다.
 아래 v2.0 본문은 그 폴백 경로의 명세이자 **역사적 기록**으로 남긴다.

@@ -286,10 +286,12 @@ static const double kRotateCommitRatio = 1.3;            // probe must find >= r
         // Only a quarter turn is acted on, never a confirmed 0. The probe loop
         // below is still the live path on iOS 16/17, where Vision is *not*
         // rotation-robust, so letting a 0 short-circuit it would regress those
-        // versions if the angle turns out to be reported in Vision's own reading
-        // frame rather than in image space — the one assumption this design
-        // rests on that cannot be checked from source. Android can afford the
-        // stricter reading because its fallback false-positives; this one does not.
+        // versions. The image-space reading this design rests on was measured on
+        // 2026-08-31 against the four example/data/RECEIPT-*.jpg fixtures and
+        // held (macOS Vision, revision 3) — see the angle spec's verification
+        // section — but that says nothing about the older OS versions this
+        // fallback exists for. Android can afford the stricter reading because
+        // its fallback false-positives; this one does not.
         if (correction != 0) {
             // `correction` is clockwise (the canonical direction, §3.1); this
             // rotate: is counter-clockwise, so hand it the complement.
