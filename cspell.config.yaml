@@ -1,12 +1,39 @@
 version: "0.2"
-ignorePaths: []
+$schema: https://raw.githubusercontent.com/streetsidesoftware/cspell/main/cspell.schema.json
+useGitignore: true
+enableGlobDot: true
+allowCompoundWords: false
+ignorePaths:
+  - .git
+  - .codegraph/** # cspell:ignore codegraph
+  - .yarn/releases/**
+  - "**/*.lock"
+  - "**/package-lock.json"
+  - "**/pnpm-lock.yaml"
+  - "**/project.pbxproj"
+  - "**/android/gradlew"
+  - "**/android/gradlew.bat"
+ignoreRegExpList:
+  - /GHSA-[0-9a-z-]+/gi
 dictionaryDefinitions:
   - name: custom-dictionary
     path: ./.cspell/custom-dictionary.txt
-    addWords: true
+    addWords: false
 dictionaries:
+  - bash
+  - cpp
+  - cpp-compound-words
   - custom-dictionary
+  - en-gb
+  - filetypes
+  - fonts
+  - java
+  - kotlin
+  - node
+  - npm
+  - softwareTerms
+  - swift
+  - typescript
 words: []
 ignoreWords: []
-allowsCompoundWords: true
 import: []
