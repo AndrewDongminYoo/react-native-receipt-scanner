@@ -345,6 +345,7 @@ static const double kRotateCommitRatio = 1.3;            // probe must find >= r
                    outResults:rN
                         error:&probeErr];
         NSInteger cN = [self nonEmptyCountFromResults:rN];
+        // cspell:ignore lddeg
         [self logDiagnostics:[NSString stringWithFormat:@"probe %lddeg fast",
                                                         (long)deg.integerValue]
                      results:rN

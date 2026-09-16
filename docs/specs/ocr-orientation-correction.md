@@ -1,5 +1,7 @@
 # OCR Orientation Correction (0° / 90° / 180° / 270°)
 
+<!-- cspell:ignore neslgt -->
+
 **Spec version:** 2.0
 **최초 작성일:** 2026-05-09 (v1.0 — 180°만)
 **개정일:** 2026-05-09 (v2.0 — 90° / 270° 확장)
