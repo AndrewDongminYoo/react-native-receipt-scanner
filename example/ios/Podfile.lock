@@ -1747,7 +1747,7 @@ PODS:
     - React-utils (= 0.85.2)
     - ReactNativeDependencies
   - ReactNativeDependencies (0.85.2)
-  - ReceiptScanner (0.9.0):
+  - ReceiptScanner (1.0.0):
     - hermes-engine
     - RCTRequired
     - RCTTypeSafety
@@ -2072,9 +2072,9 @@ SPEC CHECKSUMS:
   ReactCodegen: 5bd23df5c8ad6c87df0bc8ccd391bd37bf6c92d5
   ReactCommon: a804bb8d1dcf3ecdec3a77eb8bba19b7863bbbdb
   ReactNativeDependencies: fa01d4463fe07ced8aa62ae7b042a1e6188e4fdb
-  ReceiptScanner: 5c218a0033d0f7dc7bcb5d177e99d1b91c6c6ec8
+  ReceiptScanner: eb5ff46ee255f8ee9fbfb8e4cf4476c1f6a746f7
   Yoga: 04bb4bfeb02c0000b940c1e6e89e856cd8de5a71
 
 PODFILE CHECKSUM: b9af92c58ef214a5698dba2e1d213cba02cc6d14
 
-COCOAPODS: 1.15.2
+COCOAPODS: 1.17.0

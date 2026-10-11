@@ -1,5 +1,21 @@
 # Changelog
 
+## [1.0.0](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/compare/v0.9.0...v1.0.0) (2026-10-11)
+
+### Bug Fixes
+
+- **android:** 🐛 skip gallery corner OCR when disabled ([96f232e](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/commit/96f232e8dfcf4da397d6c4e2ab78db8643843095))
+- **deps:** raise the qs resolution to ^6.16.0 ([#22](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/issues/22)) ([e2b7fd5](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/commit/e2b7fd5031e84e4c556afbc18d88942b44e387e7))
+- **example:** 🐛 adopt UIScene lifecycle for iOS startup ([497b158](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/commit/497b158079bd6e2bb3633545e9cfec0591349f96))
+- **release:** 🐛 invalidate Pods cache when lockfile changes ([c942c40](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/commit/c942c403918e6f615544aa04b9d1b9d006614ca0))
+- **release:** 🐛 reject stale pod versions before publishing ([8861fca](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/commit/8861fcaf508d3f17a890922b46c83f36d23193e5))
+
+### Documentation
+
+- 📝 clarify iOS JPEG metadata preservation ([d92a401](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/commit/d92a4013ccfb388a831853136efb62b0c7ac0541))
+- 📝 document iOS troubleshooting and standardize Yarn commands ([06cda5a](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/commit/06cda5a7d7993fca49ac901f239dd731fbbac327))
+- 📝 record the measurement that confirms the angle convention ([caa7abf](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/commit/caa7abf40f72b0273a2632c636c0f15b9e60aa0d))
+
 ## [0.9.0](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/compare/v0.8.0...v0.9.0) (2026-08-30)
 
 ### Features
