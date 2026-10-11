@@ -1,6 +1,6 @@
 # ReceiptScanner Example
 
-This is the example app for [`react-native-receipt-scanner`](https://github.com/react-native-receipt-scanner), bootstrapped using [`@react-native-community/cli`](https://github.com/react-native-community/cli).
+This is the example app for [`react-native-receipt-scanner`](https://github.com/AndrewDongminYoo/react-native-receipt-scanner), bootstrapped using [`@react-native-community/cli`](https://github.com/react-native-community/cli).
 
 ## Getting Started
 
@@ -10,27 +10,20 @@ This is the example app for [`react-native-receipt-scanner`](https://github.com/
 
 First, you will need to run **Metro**, the JavaScript build tool for React Native.
 
-To start the Metro dev server, run the following command from the root of your React Native project:
+Install dependencies with `yarn` from the repository root, then run the commands below from `example/`.
+To start the Metro dev server:
 
 ```sh
-# Using npm
-npm start
-
-# OR using Yarn
 yarn start
 ```
 
 ### Step 2: Build and run your app
 
-With Metro running, open a new terminal window/pane from the root of your React Native project, and use one of the following commands to build and run your Android or iOS app:
+With Metro running, open a new terminal window/pane in `example/`, and use one of the following commands to build and run your Android or iOS app:
 
 #### Android
 
 ```sh
-# Using npm
-npm run android
-
-# OR using Yarn
 yarn android
 ```
 
@@ -47,16 +40,12 @@ bundle install
 Then, and every time you update your native dependencies, run:
 
 ```sh
-bundle exec pod install
+bundle exec pod install --project-directory=ios
 ```
 
 For more information, please visit [CocoaPods Getting Started guide](https://guides.cocoapods.org/using/getting-started.html).
 
 ```sh
-# Using npm
-npm run ios
-
-# OR using Yarn
 yarn ios
 ```
 
@@ -68,7 +57,8 @@ This is one way to run your app — you can also build it directly from Android 
 
 Now that you have successfully run the app, let's make changes!
 
-Open `App.tsx` in your text editor of choice and make some changes. When you save, your app will automatically update and reflect these changes — this is powered by [Fast Refresh](https://reactnative.dev/docs/fast-refresh).
+Open `src/App.tsx` in your text editor of choice and make some changes.
+When you save, your app will automatically update and reflect these changes — this is powered by [Fast Refresh](https://reactnative.dev/docs/fast-refresh).
 
 When you want to forcefully reload, for example to reset the state of your app, you can perform a full reload:
 
@@ -86,7 +76,8 @@ You've successfully run and modified your React Native App. :partying_face:
 
 ## Troubleshooting
 
-If you're having issues getting the above steps to work, see the [Troubleshooting](https://reactnative.dev/docs/troubleshooting) page.
+For Node paths, incomplete Pods installation, Hermes paths, or UIScene startup failures, see the [iOS troubleshooting guide](../CONTRIBUTING.md#ios-build-and-launch-troubleshooting).
+For other issues, see the [React Native Troubleshooting](https://reactnative.dev/docs/troubleshooting) page.
 
 ## Learn More
 

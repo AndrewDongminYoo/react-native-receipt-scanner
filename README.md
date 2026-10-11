@@ -55,8 +55,6 @@ Built exclusively for the [React Native New Architecture](https://reactnative.de
 ## Installation
 
 ```sh
-npm install react-native-receipt-scanner
-# or
 yarn add react-native-receipt-scanner
 ```
 

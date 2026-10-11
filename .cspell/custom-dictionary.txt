@@ -114,7 +114,9 @@ unrotated
 Wconversion
 xcassets
 xccheckout
+xcconfig
 xcodeproj
+xcrun
 xctest
 xcuserdata
 xcuserstate

@@ -46,7 +46,7 @@ jobs:
           # publish fails with ENEEDAUTH (no NODE_AUTH_TOKEN, no OIDC exchange).
           registry-url: https://registry.npmjs.org
 
-      # Trusted publishing requires npm >= 11.5.1; .nvmrc (v24.15.0) bundles 11.12.1.
+      # Trusted publishing requires npm >= 11.5.1; use the Node version in .nvmrc.
       # It also turns provenance on by default, which is what we want now that
       # the source repo is public — sigstore attestations need a public repo, and
       # that was the only reason NPM_CONFIG_PROVENANCE was previously forced off.

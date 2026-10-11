@@ -39,6 +39,7 @@
     "example": "yarn workspace react-native-receipt-scanner-example",
     "clean": "del-cli android/build example/android/build example/android/app/build example/ios/build lib",
     "prepare": "bob build",
+    "prepublishOnly": "node scripts/check-pod-version.js",
     "typecheck": "tsc --noEmit",
     "test": "jest",
     "release": "release-it --only-version",
