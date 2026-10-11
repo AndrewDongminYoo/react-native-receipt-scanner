@@ -211,6 +211,7 @@ class ReceiptScannerModule(
         activity.startActivityForResult(
           Intent(activity, CropEditorActivity::class.java).apply {
             putExtra(CropEditorActivity.EXTRA_MAX_IMAGES, scanOptions.maxPages)
+            putExtra(CropEditorActivity.EXTRA_OCR_ENABLED, scanOptions.ocr)
           },
           GALLERY_REQUEST_CODE,
         )

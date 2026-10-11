@@ -61,6 +61,9 @@ internal class CropEditorActivity : ComponentActivity() {
     /** Input extra: `Int` upper bound on multi-select count. Coerced to `>= 1`. */
     const val EXTRA_MAX_IMAGES = "max_images"
 
+    /** Input extra: whether OCR may run to estimate document corners. Defaults to `true`. */
+    const val EXTRA_OCR_ENABLED = "ocr_enabled"
+
     /**
      * Result extra (with `RESULT_OK`): a processing-error message. Present only
      * when the flow failed an enforced limit (e.g. an oversized selection),
@@ -404,6 +407,8 @@ internal class CropEditorActivity : ComponentActivity() {
   // Reuses the Korean recognizer (same artifact OcrProcessor uses) — it covers Latin too,
   // and adding text-recognition (Latin) as a separate dep would inflate APK size.
   private fun detectCornersFromText(bitmap: Bitmap) {
+    if (!intent.getBooleanExtra(EXTRA_OCR_ENABLED, true)) return
+
     val recognizer = TextRecognition.getClient(KoreanTextRecognizerOptions.Builder().build())
     recognizer
       .process(InputImage.fromBitmap(bitmap, 0))
