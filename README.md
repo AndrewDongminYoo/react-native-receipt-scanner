@@ -222,6 +222,10 @@ if (result.status === "success") {
 
 > **Note:** Output JPEG pixels are always written orientation-normalized, so `exif.orientation` is always `1`. Callers must not re-rotate.
 
+> **iOS metadata limitation:** `includeRawExif` controls the returned `exif.raw` field; it does not sanitize the output JPEG.
+> With `includeExif: true`, gallery JPEGs preserve the source EXIF and TIFF dictionaries, while GPS copying remains controlled by `includeGpsExif`.
+> Review or remove file metadata before sharing images when your application requires a strict metadata allowlist.
+
 > **Note:** On the gallery path EXIF is read from the original source image. On the camera path (VNDocumentCameraViewController on iOS, GmsDocumentScanner on Android) the source EXIF is stripped during the scan, so the library synthesizes `make` / `model` / `dateTimeOriginal` from the device — `software` and `gps` are absent unless the source carried them.
 
 ### Cancelled state
