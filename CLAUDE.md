@@ -19,7 +19,10 @@ trunk fmt             # Auto-format every file the trunk formatters own
 
 ### Verification before declaring a job complete
 
-Run these in order before claiming any task is done. The Yarn commands cover the JS/TS surface; `trunk` covers the rest of the repo (Kotlin via ktlint, shell, YAML, Markdown, security advisories, secret scan, etc.) and the pre-commit / pre-push hooks (`.trunk/trunk.yaml`) run the same checks, so passing them locally is a prerequisite for committing.
+Run these in order before claiming any task is done.
+The Yarn commands cover the JS/TS surface; `trunk` covers Kotlin via ktlint, shell, YAML, Markdown, security advisories, and secret scans.
+The enabled pre-push hook in `.trunk/trunk.yaml` invokes Trunk checks.
+The full pipeline below remains a prerequisite for committing.
 
 ```bash
 yarn typecheck && yarn lint && yarn test && trunk fmt && trunk check
@@ -47,6 +50,7 @@ yarn example ios            # Run on iOS simulator
 
 - **Yarn 4.11.0** — pinned via the `packageManager` field in `package.json` (corepack-managed). Do not run `npm install`; it will desync the lockfile.
 - **Node ≥ 22.11.0** — enforced by `example/package.json#engines`.
+  Use `.nvmrc` for the development and CI version.
 - **ESLint flat config** — `eslint.config.mjs` (ESM).
 - **Android** — Kotlin 2.0.21, `minSdk 24`, `targetSdk 36`, `compileSdk 36`. Key deps: `play-services-mlkit-document-scanner` (16.0.0), `text-recognition-korean` (16.0.1), `androidx.exifinterface` (1.4.2).
 - **iOS** — deployment target pinned at **16.0** in `ReceiptScanner.podspec` (Korean OCR via `VNRecognizeTextRequest` requires iOS 16; the package ships no Latin-only fallback — see ADR-006). Linked frameworks: `VisionKit`, `Vision`, `PhotosUI`, `ImageIO`, `CoreImage`, `CoreGraphics`, `UniformTypeIdentifiers`.

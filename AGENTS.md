@@ -61,12 +61,12 @@ OCR languages are **caller-provided BCP 47 hints** (`ScanReceiptOptions.ocrLangu
 ## CONVENTIONS
 
 - **Yarn 4 (Berry)** with `nodeLinker: node-modules`. `yarnPath: .yarn/releases/yarn-4.11.0.cjs`. No npm/pnpm.
-- **Node**: `.nvmrc` = `v24.15.0` (CI reads this); example app engines: `>= 22.11.0`.
+- **Node**: `.nvmrc` is the version source of truth (CI reads this); example app engines: `>= 22.11.0`.
 - **TypeScript strict + extras**: `noUncheckedIndexedAccess`, `noUnusedLocals/Parameters`, `verbatimModuleSyntax`, `customConditions: ["react-native-strict-api"]`.
 - **ESLint flat config only** (`eslint.config.mjs`); extends `@react-native` + `prettier`; Prettier violations = errors.
 - **Prettier**: 100-col, double quotes, semicolons, trailing-comma `es5`, LF.
 - **Jest** preset `@react-native/jest-preset`, no setup files. Tests live in `src/__tests__/` only (not colocated); `.ts` and `.tsx` both run, and `src/__tests__/fixtures/` is ignored.
-- **Pre-commit/push** is **Trunk** (`.trunk/trunk.yaml`) — not Husky/Lefthook.
+- **Pre-push** uses **Trunk** (`.trunk/trunk.yaml`) — not Husky/Lefthook.
 - **Commits**: Conventional Commits + emoji (`feat: ✨`, `fix: 🐛`, `chore: 🔨`, `docs: 📝`); `release-it` consumes them. Do NOT add `Co-authored-by: Claude` trailers.
 - **Module name string `"ReceiptScanner"`** must stay identical in `NativeReceiptScanner.ts`, `ReceiptScannerPackage.kt`, and `ReceiptScanner.mm`.
 - **Codegen** (`package.json#codegenConfig`): `name: ReceiptScannerSpec`, `jsSrcsDir: src`, Android package `com.receiptscanner`. Android emits `NativeReceiptScannerSpec` under `android/build/generated/...`.
@@ -118,7 +118,10 @@ yarn clean                     # Delete lib/ + example native build dirs
 
 ## VERIFICATION (before declaring a job complete)
 
-Run this exact pipeline before claiming any task is done. Yarn covers the JS/TS surface; `trunk` covers Kotlin (ktlint), shell, YAML, Markdown, secret scan, and OSV-Scanner advisories. The pre-commit / pre-push hooks (`.trunk/trunk.yaml`) run the same checks — passing them locally is a prerequisite for committing.
+Run this exact pipeline before claiming any task is done.
+Yarn covers the JS/TS surface; `trunk` covers Kotlin (ktlint), shell, YAML, Markdown, secret scan, and OSV-Scanner advisories.
+The enabled pre-push hook in `.trunk/trunk.yaml` invokes Trunk checks.
+The full pipeline below remains a prerequisite for committing.
 
 ```bash
 yarn typecheck && yarn lint && yarn test && trunk fmt && trunk check

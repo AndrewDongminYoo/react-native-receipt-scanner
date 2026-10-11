@@ -209,8 +209,8 @@ fun recognize(imageUri: Uri): String {
 
 ```bash
 # iOS 빌드 검증
-cd ios && bundle exec pod install && cd ..
-npm run typecheck && npm run lint
+(cd example && bundle exec pod install --project-directory=ios)
+yarn typecheck && yarn lint
 
 # 예제 앱 실행
 yarn example ios
