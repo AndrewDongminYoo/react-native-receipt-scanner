@@ -1193,7 +1193,12 @@ export default function App() {
     try {
       const ocrLanguages = ocrLanguageInput.split(",").map((tag) => tag.trim());
       const scanResult = await scan({ ...buildOptions(opts), ocrLanguages });
-      console.debug("[🧾] Scanned Result:", scanResult);
+      // Keep receipt contents, file URIs and metadata out of diagnostic logs.
+      console.debug("[🧾] Scan summary:", {
+        status: scanResult.status,
+        imageCount: scanResult.images.length,
+        rejectedImageCount: scanResult.rejectedImages.length,
+      });
       setResult(scanResult);
       // Navigate to the result screen for both success and rejected so the
       // rejectedImages (ocrFloor effect) are visible; stay on scan for cancel.
