@@ -175,7 +175,7 @@ Run this exact pipeline and confirm it is clean before requesting review. `trunk
 yarn typecheck && yarn lint && yarn test && trunk fmt && trunk check
 ```
 
-If `trunk check` reports a finding you believe is a false positive, suppress it in the appropriate `.trunk/configs/<linter>.toml` with a written justification (see `.trunk/configs/osv-scanner.toml` for the canonical pattern) — do not silence findings inline.
+If `trunk check` reports a finding you believe is a false positive, suppress it in the appropriate `.trunk/configs/<linter>.toml` with a written justification (OSV advisories go in the root `osv-scanner.toml`, which is also the canonical pattern) — do not silence findings inline.
 
 ### Publishing to npm
 

@@ -1,0 +1,22 @@
+# OSV-Scanner config — https://google.github.io/osv-scanner/configuration/
+#
+# Each [[IgnoredVulns]] block suppresses a single advisory. Re-evaluate every
+# entry on or before its `ignoreUntil` date — remove the block once the
+# affected dependency has been bumped or pinned past the vulnerable range.
+
+# braces 3.0.3 — stack exhaustion through deeply nested patterns. Pulled in
+# only by dev tooling (micromatch via jest, metro-file-map, fast-glob, globby);
+# the library ships no runtime dependencies, and every pattern braces sees is a
+# glob written in this repo's own tool config, never untrusted input.
+[[IgnoredVulns]]
+id = "GHSA-vfj7-8cjw-p6xm"
+ignoreUntil = 2027-04-18
+reason = "braces@3.0.3 has no patched release as of 2026-10-18. Dev-only path (micromatch via jest/metro/fast-glob/globby); patterns are repo-authored globs. Approved by Dongmin Yu on 2026-10-18. Re-evaluate when a patch is released."
+
+# sprintf-js 1.0.3 — unbounded precision specifiers. Pulled in only by
+# argparse 1.x via js-yaml 3 via @istanbuljs/load-nyc-config (Jest coverage);
+# format strings are argparse's own, never untrusted input.
+[[IgnoredVulns]]
+id = "GHSA-hp3w-g68c-fv3c"
+ignoreUntil = 2027-04-18
+reason = "sprintf-js@1.0.3 has no patched release as of 2026-10-18. Dev-only path (argparse 1 via js-yaml 3 via @istanbuljs/load-nyc-config); format strings are not user-controlled. Approved by Dongmin Yu on 2026-10-18. Re-evaluate when a patch is released."

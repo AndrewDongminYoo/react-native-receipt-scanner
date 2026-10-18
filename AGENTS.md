@@ -128,7 +128,7 @@ yarn typecheck && yarn lint && yarn test && trunk fmt && trunk check
 ```
 
 - `trunk fmt` rewrites files in place — run it **before** `trunk check`; otherwise the formatters are reported as failures.
-- A `trunk check` failure that is genuinely a false positive belongs in `.trunk/configs/<linter>.toml` with a written justification (see `.trunk/configs/osv-scanner.toml` for the canonical pattern). Never silence findings inline.
+- A `trunk check` failure that is genuinely a false positive belongs in `.trunk/configs/<linter>.toml` with a written justification. OSV advisories are the exception: they go in the root `osv-scanner.toml`, next to `yarn.lock`, so a direct `osv-scanner` run auto-discovers the same ignores trunk applies — see it for the canonical pattern. Never silence findings inline.
 - For native (`example/android` / `example/ios`) changes, also run `yarn example android` / `yarn example ios` — the example app is the integration test (no automated E2E).
 - **No gate checks prose.** Before declaring done, re-read the docs your change touched the premises of and fix them in the same commit — see the "Fix the prose your change falsifies" convention. `trunk check` will pass either way, which is exactly why this step is listed here.
 
