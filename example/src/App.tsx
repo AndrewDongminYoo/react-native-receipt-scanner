@@ -667,7 +667,7 @@ function ScanPage({
   const isIOS = Platform.OS === "ios";
   return (
     <SafeAreaView style={styles.safeArea}>
-      <StatusBar barStyle="dark-content" backgroundColor={C.bg} />
+      <StatusBar barStyle="dark-content" />
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         {/* 헤더 */}
         <View style={{ marginBottom: S["3xl"] }}>
@@ -1018,7 +1018,7 @@ function ResultPage({
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <StatusBar barStyle="dark-content" backgroundColor={C.surface} />
+      <StatusBar barStyle="dark-content" />
 
       {/* 내비게이션 바 */}
       <View style={styles.navBar}>
