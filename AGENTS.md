@@ -18,7 +18,7 @@ OCR languages are **caller-provided BCP 47 hints** (`ScanReceiptOptions.ocrLangu
 ├── ios/                    Obj-C++ delegates, custom crop editor, Vision
 ├── docs/                   ADRs, phase plans, public/internal specs (see docs/AGENTS.md)
 ├── example/                Yarn-workspace consumer app (the integration test)
-├── .github/workflows/      ci.yml (lint+typecheck+test) + release.yml (multi-platform build)
+├── .github/workflows/      ci.yml (lint+typecheck+test), native-{android,ios}.yml (example builds on PRs and manual runs), release.yml (publish; calls the native builds)
 ├── bob.config.js           react-native-builder-bob → lib/{module,typescript}
 ├── ReceiptScanner.podspec  iOS pod; uses install_modules_dependencies(s)
 ├── turbo.json              Turborepo for caching example builds

@@ -1,0 +1,98 @@
+name: Native Android Example Build
+
+on:
+  workflow_dispatch:
+  # release.yml calls this, so a release still builds the example app.
+  workflow_call:
+  pull_request:
+    branches:
+      - main
+    # Deliberately an ignore list, not an allow list. Too many things reach a
+    # native build indirectly — codegen reads src, autolinking reads
+    # react-native.config.js, the setup action installs from yarn.lock — and a
+    # path missing from an allow list skips the job silently, which looks
+    # identical to a pass. A path missing from an ignore list only costs one
+    # redundant build.
+    paths-ignore:
+      - "**/*.md"
+      - LICENSE
+      - src/__tests__/**
+      - .github/workflows/ci.yml
+  # Matches ci.yml. Merge groups do not honour paths-ignore, so this runs
+  # unconditionally once a merge queue is enabled.
+  merge_group:
+    types:
+      - checks_requested
+
+# A literal group name, not github.workflow: under workflow_call that
+# resolves to the caller ("Release"), so the Android and iOS builds of one
+# release would share a group and cancel each other.
+concurrency:
+  group: native-android-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions: read-all
+
+jobs:
+  build-android:
+    name: Build Android
+    runs-on: ubuntu-latest
+
+    env:
+      TURBO_CACHE_DIR: .turbo/android
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup
+        uses: ./.github/actions/setup
+
+      - name: Set build number
+        run: |
+          echo "BUILD_NUMBER=$(TZ='Asia/Seoul' date +'%y%m%d%H')" >> "$GITHUB_ENV"
+
+      - name: Cache turborepo for Android
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ env.TURBO_CACHE_DIR }}
+          key: ${{ runner.os }}-turborepo-android-${{ hashFiles('yarn.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-turborepo-android-
+
+      - name: Check turborepo cache for Android
+        run: |
+          TURBO_CACHE_STATUS=$(node -p "($(yarn turbo run build:android --cache-dir="$TURBO_CACHE_DIR" --dry=json)).tasks.find(t => t.task === 'build:android').cache.status")
+
+          if [[ $TURBO_CACHE_STATUS == "HIT" ]]; then
+            echo "turbo_cache_hit=1" >> $GITHUB_ENV
+          fi
+
+      - name: Install JDK
+        if: env.turbo_cache_hit != 1
+        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: zulu
+          java-version: "17"
+
+      - name: Finalize Android SDK
+        if: env.turbo_cache_hit != 1
+        run: |
+          /bin/bash -c "yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses > /dev/null"
+
+      - name: Cache Gradle
+        if: env.turbo_cache_hit != 1
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.gradle/wrapper
+            ~/.gradle/caches
+          key: ${{ runner.os }}-gradle-${{ hashFiles('example/android/gradle/wrapper/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+
+      - name: Build example for Android
+        env:
+          JAVA_OPTS: -XX:MaxHeapSize=6g
+        run: |
+          yarn turbo run build:android --cache-dir="$TURBO_CACHE_DIR"
