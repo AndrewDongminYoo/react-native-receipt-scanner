@@ -11578,7 +11578,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "react-native-receipt-scanner-example@workspace:example"
   dependencies:
-    "@babel/core": "npm:^7.29.7"
+    "@babel/core": "npm:^8.0.7"
     "@babel/preset-env": "npm:^7.29.7"
     "@babel/runtime": "npm:^7.29.10"
     "@react-native-community/cli": "npm:~20.2.0"
