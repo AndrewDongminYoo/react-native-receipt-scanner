@@ -11596,7 +11596,7 @@ __metadata:
     react-native-builder-bob: "npm:^0.43.2"
     react-native-monorepo-config: "npm:^0.4.0"
     react-native-web: "npm:~0.21.4"
-    vite: "npm:^7.3.7"
+    vite: "npm:^8.3.4"
     vite-plugin-commonjs: "npm:^0.10.4"
   languageName: unknown
   linkType: soft
