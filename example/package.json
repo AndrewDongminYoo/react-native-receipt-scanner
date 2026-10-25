@@ -32,7 +32,7 @@
     "@react-native/typescript-config": "0.88.0",
     "@types/react": "^19.3.0",
     "@vitejs/plugin-react": "^5.2.0",
-    "react-native-builder-bob": "^0.43.2",
+    "react-native-builder-bob": "^0.44.1",
     "react-native-monorepo-config": "^0.4.0",
     "vite": "^7.3.7",
     "vite-plugin-commonjs": "^0.10.4"
