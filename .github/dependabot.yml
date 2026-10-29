@@ -39,10 +39,8 @@ updates:
           - version-update:semver-minor
           - version-update:semver-major
       # Babel 8 waits for @react-native/babel-preset support and moves as one change (#48).
-      - dependency-name: "@babel/core"
-        update-types:
-          - version-update:semver-major
-      - dependency-name: "@babel/runtime"
+      # The wildcard holds every @babel package, so @babel/preset-env 8 waits too (#55).
+      - dependency-name: "@babel/*"
         update-types:
           - version-update:semver-major
       # The example stays on Vite 7 until issue #49 lands. Builder Bob 0.44 imports
