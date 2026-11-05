@@ -1,4 +1,4 @@
-# Approved by the operator on 2026-09-17. Review by 2027-02-20.
+# Approved on 2026-09-17. Review by 2027-02-20.
 # Metro uses image-size@1.2.1 for local build assets, not scanned receipts.
 # Neither advisory has a patched version as of 2026-09-17.
 # Grype has no expiry field. Remove these rules when a fix is available.
