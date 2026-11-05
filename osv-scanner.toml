@@ -11,7 +11,7 @@
 [[IgnoredVulns]]
 id = "GHSA-vfj7-8cjw-p6xm"
 ignoreUntil = 2027-04-18
-reason = "braces@3.0.3 has no patched release as of 2026-10-18. Dev-only path (micromatch via jest/metro/fast-glob/globby); patterns are repo-authored globs. Approved by Dongmin Yu on 2026-10-18. Re-evaluate when a patch is released."
+reason = "braces@3.0.3 has no patched release as of 2026-10-18. Dev-only path (micromatch via jest/metro/fast-glob/globby); patterns are repo-authored globs. Approved on 2026-10-18. Re-evaluate when a patch is released."
 
 # sprintf-js 1.0.3 — unbounded precision specifiers. Pulled in only by
 # argparse 1.x via js-yaml 3 via @istanbuljs/load-nyc-config (Jest coverage);
@@ -19,7 +19,7 @@ reason = "braces@3.0.3 has no patched release as of 2026-10-18. Dev-only path (m
 [[IgnoredVulns]]
 id = "GHSA-hp3w-g68c-fv3c"
 ignoreUntil = 2027-04-18
-reason = "sprintf-js@1.0.3 has no patched release as of 2026-10-18. Dev-only path (argparse 1 via js-yaml 3 via @istanbuljs/load-nyc-config); format strings are not user-controlled. Approved by Dongmin Yu on 2026-10-18. Re-evaluate when a patch is released."
+reason = "sprintf-js@1.0.3 has no patched release as of 2026-10-18. Dev-only path (argparse 1 via js-yaml 3 via @istanbuljs/load-nyc-config); format strings are not user-controlled. Approved on 2026-10-18. Re-evaluate when a patch is released."
 
 [[IgnoredVulns]]
 id = "GHSA-3g3m-2fjr-6pw4"
