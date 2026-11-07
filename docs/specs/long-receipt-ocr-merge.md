@@ -170,7 +170,8 @@ The first depth that satisfies both rules below wins, and the scan stops there.
 | -------------- | ---------------------------------------------------------------------------------------------------------- |
 | Match          | The two line sequences are **equal**, line for line, after normalization. Nothing else counts as evidence. |
 | Distinct lines | The matched region holds at least **two distinct** lines. One row, however long, is never enough.          |
-| Length floor   | The matched text reaches 12 characters.                                                                    |
+
+There is no character-count floor. Until 2026-11-07 a third rule required the matched text to reach 12 characters; it was removed to match `flutter_receipt_scanner` spec 0001, which rejects character-count thresholds. This spec, the tests and the code comments record no measured case behind the floor. It had two effects: it reported short true seams, such as `합계` / `1,200원`, as unproven, and it kept short repeated blocks from the false positive described under "Known false positive". Removing it merges the first and gives up the second.
 
 The distinct-line rule exists because equality cannot tell a recaptured line from an identical repeated one. Buying two of one item prints the same row twice, so a page ending with that row and the next page beginning with it match exactly _without overlapping at all_ — merging there deletes a real purchase. The rule counts distinct lines rather than depth, so it also rejects a degenerate run of one row repeated N times, which fails the same way at greater depth.
 
@@ -203,7 +204,7 @@ If device data shows too many unproven seams, the upgrade path is a **digit-awar
 
 ### Candidate selection
 
-There is no ranking pass and no tie-break: the descending scan returns the first — therefore deepest — depth that matches and clears its length floor.
+There is no ranking pass and no tie-break: the descending scan returns the first — therefore deepest — depth that matches.
 Depth is the only ordering, it is total, and the scan is deterministic. This is part of the contract.
 
 An accepted seam keeps the previous page's suffix in full and removes only the matched prefix lines from the next page.
@@ -211,7 +212,7 @@ An unmatched seam appends every line of the next page and records the boundary i
 
 > **Divergence from `flutter_receipt_scanner` spec 0001.** That package matches seams approximately (0.85 multi-line, 0.92 single-line) with a Levenshtein pass, a 512-character cost guard and a length-ratio prefilter, over windows capped at eight lines and ranked by similarity then compared-character count. This package started as a port of it and now shares none of that: no approximate matching (see "Why equality"), no depth ceiling, no ranking pass. **Every defect measured here applies to `flutter_receipt_scanner` as shipped** — both approximate-match false positives, the shallow-coincidence merge, and the single repeated row accepted as a seam (its 0.92 single-line path admits identical rows outright). ~~It has not been changed; that is filed in §Follow-Ups rather than assumed.~~
 >
-> **Reconciled 2026-11-07.** The paragraph above describes `flutter_receipt_scanner` as of 2026-07-31. That package replaced the approximate matcher on 2026-10-04 ([PR #16](https://github.com/AndrewDongminYoo/flutter_receipt_scanner/pull/16), closing [#3](https://github.com/AndrewDongminYoo/flutter_receipt_scanner/issues/3), commit `2ccaa3e`): exact equality after normalization, at least two distinct lines, deepest-first with no depth ceiling and no ranking pass. The two merges now share this algorithm except for the length floor in the table above, which its spec 0001 rejects ("no … character-count thresholds").
+> **Reconciled 2026-11-07.** The paragraph above describes `flutter_receipt_scanner` as of 2026-07-31. That package replaced the approximate matcher on 2026-10-04 ([PR #16](https://github.com/AndrewDongminYoo/flutter_receipt_scanner/pull/16), closing [#3](https://github.com/AndrewDongminYoo/flutter_receipt_scanner/issues/3), commit `2ccaa3e`): exact equality after normalization, at least two distinct lines, deepest-first with no depth ceiling and no ranking pass. This package removed its 12-character length floor on 2026-11-07, so the two merges now share one rule set.
 
 ### Known false positive: a repeated block at the page boundary
 
@@ -225,6 +226,8 @@ Write the receipt content as `R` and the page split at line `j`:
 Both yield the same two strings, so **no rule over the seam text can separate them**. The merger removes the later copy and reports the seam proven; `isComplete` is `true` and two real rows are gone.
 
 Requiring more evidence does not close this. The distinct-line rule was raised to two after a single repeated row was found to merge; a receipt repeating a two-line block then defeats two, and any depth `N` is defeated by an `N`-line repeated block. Raising `N` without data on how often receipts repeat blocks of a given size would be tuning to whichever counter-example was found last.
+
+Since the 12-character length floor was removed on 2026-11-07, this case also covers short blocks: a two-line block such as `합계` / `1,200원` printed twice across the boundary is merged like any longer one.
 
 What actually helps is capture technique, and the guidance says so: overlap generously, so the real overlap is deeper than any block the receipt repeats — the deepest-match rule then picks the real one. Closing it properly needs evidence from outside the text (page geometry, or `ocrLines` positions), which is out of scope for a JS-layer merge.
 
@@ -263,7 +266,7 @@ The sibling Flutter package solved this with a native `discardedPageCount`; addi
 4. Globally removing repeated lines such as headers, taxes, or totals.
 5. Structured receipt parsing of any kind — merchant, item, tax, total, date, payment.
 6. Merging `ocrLines` geometry across pages.
-7. Exposing the length floors as public configuration; they stay private in v1.
+7. Exposing the matching rules as public configuration; they stay private in v1.
 8. A guided overlap-capture UI. `VNDocumentCameraViewController` and the GMS document scanner are closed UIs with no previous-frame overlay or per-frame callback; building one would mean a custom camera on both platforms and would reverse ADR-001 and ADR-002.
 9. Any claimed maximum receipt length or aspect ratio. The Flutter package's 11.0 ratio claim is backed by image fixtures and physical-device acceptance runs; this package has run neither, so it claims neither.
 
@@ -275,7 +278,7 @@ Pure unit tests in `src/__tests__/`:
 
 1. Flag defaults to disabled and the result is byte-identical to today's.
 2. Invalid `ocr` and `maxPages` combinations throw before the mocked native module is called.
-3. Exact two-line overlap is removed exactly once.
+3. Exact two-line overlap is removed exactly once, including a short one under 12 characters.
 4. Normalization absorbs case and whitespace-run differences, but a single misread character leaves the seam unproven.
 5. A pair with no matching depth is preserved and records an unmatched boundary.
 6. A single repeated row never proves a seam, at depth 1 or as a run at greater depth, and a repeat purchase differing only in quantity and amount is preserved at both one and two lines wide.

@@ -110,9 +110,10 @@ describe("mergeOcrPages", () => {
     expect(merged.isComplete).toBe(false);
   });
 
-  it("holds a two-line overlap to the 12-character floor", () => {
-    // Two distinct lines, but only 9 characters between them — too little text
-    // to be evidence of anything.
+  it("proves a short two-line overlap regardless of character count", () => {
+    // Two distinct lines with only 9 characters between them. Exact equality on
+    // two distinct lines is the evidence; length adds none (same rule as the
+    // flutter_receipt_scanner "short distinct lines" case).
     const first = "합계";
     const second = "1,200원";
     expect(`${first} ${second}`.length).toBeLessThan(12);
@@ -122,8 +123,9 @@ describe("mergeOcrPages", () => {
       page(1, `${first}\n${second}\n하단 문구`),
     ]);
 
-    expect(merged.unmatchedBoundaryIndexes).toEqual([0]);
-    expect(merged.text.split("\n").filter((line) => line === first)).toHaveLength(2);
+    expect(merged.text).toBe(["상단 문구", first, second, "하단 문구"].join("\n"));
+    expect(merged.unmatchedBoundaryIndexes).toEqual([]);
+    expect(merged.isComplete).toBe(true);
   });
 
   it("does not delete a repeat purchase that differs only in quantity and amount", () => {

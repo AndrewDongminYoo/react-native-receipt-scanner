@@ -1,7 +1,5 @@
 import type { MergedOcrResult, ReceiptImage } from "./types";
 
-/** An overlap must reach this many characters to prove a seam. */
-const MIN_WINDOW_CHARACTERS = 12;
 /**
  * An overlap must contain this many *distinct* lines.
  *
@@ -136,10 +134,11 @@ function findOverlap(leftLines: readonly string[], rightLines: readonly string[]
   for (let lineCount = Math.min(left.length, right.length); lineCount >= 1; lineCount--) {
     if (!suffixEqualsPrefix(left, right, lineCount)) continue;
 
-    // Guard against text that repeats by coincidence rather than by overlap.
+    // Guard against a repeated row that matches without any overlap. There is
+    // no character-count floor: two distinct lines matched exactly are evidence
+    // at any length, matching the sibling flutter_receipt_scanner rule.
     const matchedLines = right.slice(0, lineCount);
     if (new Set(matchedLines).size < MIN_DISTINCT_LINES) continue;
-    if (matchedLines.join(" ").length < MIN_WINDOW_CHARACTERS) continue;
 
     return lineCount;
   }
