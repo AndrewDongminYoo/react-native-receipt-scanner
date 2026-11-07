@@ -209,7 +209,9 @@ Depth is the only ordering, it is total, and the scan is deterministic. This is 
 An accepted seam keeps the previous page's suffix in full and removes only the matched prefix lines from the next page.
 An unmatched seam appends every line of the next page and records the boundary index.
 
-> **Divergence from `flutter_receipt_scanner` spec 0001.** That package matches seams approximately (0.85 multi-line, 0.92 single-line) with a Levenshtein pass, a 512-character cost guard and a length-ratio prefilter, over windows capped at eight lines and ranked by similarity then compared-character count. This package started as a port of it and now shares none of that: no approximate matching (see "Why equality"), no depth ceiling, no ranking pass. **Every defect measured here applies to `flutter_receipt_scanner` as shipped** — both approximate-match false positives, the shallow-coincidence merge, and the single repeated row accepted as a seam (its 0.92 single-line path admits identical rows outright). It has not been changed; that is filed in §Follow-Ups rather than assumed.
+> **Divergence from `flutter_receipt_scanner` spec 0001.** That package matches seams approximately (0.85 multi-line, 0.92 single-line) with a Levenshtein pass, a 512-character cost guard and a length-ratio prefilter, over windows capped at eight lines and ranked by similarity then compared-character count. This package started as a port of it and now shares none of that: no approximate matching (see "Why equality"), no depth ceiling, no ranking pass. **Every defect measured here applies to `flutter_receipt_scanner` as shipped** — both approximate-match false positives, the shallow-coincidence merge, and the single repeated row accepted as a seam (its 0.92 single-line path admits identical rows outright). ~~It has not been changed; that is filed in §Follow-Ups rather than assumed.~~
+>
+> **Reconciled 2026-11-07.** The paragraph above describes `flutter_receipt_scanner` as of 2026-07-31. That package replaced the approximate matcher on 2026-10-04 ([PR #16](https://github.com/AndrewDongminYoo/flutter_receipt_scanner/pull/16), closing [#3](https://github.com/AndrewDongminYoo/flutter_receipt_scanner/issues/3), commit `2ccaa3e`): exact equality after normalization, at least two distinct lines, deepest-first with no depth ceiling and no ranking pass. The two merges now share this algorithm except for the length floor in the table above, which its spec 0001 rejects ("no … character-count thresholds").
 
 ### Known false positive: a repeated block at the page boundary
 
@@ -306,9 +308,11 @@ The example app should still exercise the flag once manually before release.
    - a shallow coincidence inside a deeper overlap, leaving the rest duplicated while reporting completeness,
    - a single identical row accepted as a seam, deleting a real repeat purchase.
 
-   Filed as [`AndrewDongminYoo/flutter_receipt_scanner#3`](https://github.com/AndrewDongminYoo/flutter_receipt_scanner/issues/3); the iOS dropped-page gap is [#4](https://github.com/AndrewDongminYoo/flutter_receipt_scanner/issues/4). Neither is fixed there yet.
+   Filed as [`AndrewDongminYoo/flutter_receipt_scanner#3`](https://github.com/AndrewDongminYoo/flutter_receipt_scanner/issues/3); the iOS dropped-page gap is [#4](https://github.com/AndrewDongminYoo/flutter_receipt_scanner/issues/4). ~~Neither is fixed there yet.~~
+   Done (reconciled 2026-11-07): #3 closed on 2026-10-04 with PR #16, and #4 closed on 2026-10-10 after commit `446d67b` (`fix: report pages omitted from native scan batches`). Follow-Up 1 remains open in this package.
 
-4. Reconcile that package's spec 0001 tie-break prose with its shipped implementation, so the two specs do not describe different algorithms.
+4. ~~Reconcile that package's spec 0001 tie-break prose with its shipped implementation, so the two specs do not describe different algorithms.~~
+   Done (reconciled 2026-11-07): commit `2ccaa3e` rewrote spec 0001 to the deepest-first exact rule, which has no tie-break.
 5. Measure how often a real recognizer reproduces a line character-identically across two captures. That number decides whether the digit-aware comparison in "Why equality" is needed.
 6. Investigate whether page geometry or `ocrLines` positions can separate a real overlap from a repeated block at the boundary — the one defect class the text-only merge cannot close (see "Known false positive"). Needs `ocrGeometry` data and probably a native signal; do not attempt it by raising the distinct-line requirement.
 7. Consider ordered gallery selection with a review-and-reorder surface only as its own spec.
