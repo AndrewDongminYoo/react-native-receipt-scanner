@@ -49,3 +49,5 @@ The PRs deliver the shared contract and Flutter alignment; publication and nativ
 The approved follow-up boundary is a C ABI function that returns overlap length from borrowed normalized UTF-16 buffers; TS/Dart still assemble output and apply quality policy.
 Geometry migration, OCR replacement, receipt-domain parsing and native omitted-page diagnostics are outside this batch.
 Production adoption requires both mobile adapter reports and the separate decision in issue #70; ADR-008's JS-only production decision remains in force meanwhile.
+The [pilot decision](../specs/ocr-overlap-pilot.md) supplies the measurement protocol, acceptance budgets, source-distribution policy and rollback for issue #62.
+The operator approved those criteria separately on 2026-11-09; native implementation and production adoption remain subsequent work.
