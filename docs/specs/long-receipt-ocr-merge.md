@@ -164,13 +164,13 @@ A page whose result is empty (or whose `ocrText` is absent) is added to `rejecte
 ### Seam matching
 
 For each adjacent pair, compare the previous page's trailing lines against the next page's leading lines at **equal depth**, starting from the deepest depth both pages allow (`min(previousLineCount, nextLineCount)`) and descending to one.
-The first depth that satisfies both rules below wins, and the scan stops there.
+The first depth that satisfies all rules below wins, and the scan stops there.
 
 | Step           | Rule                                                                                                       |
 | -------------- | ---------------------------------------------------------------------------------------------------------- |
 | Match          | The two line sequences are **equal**, line for line, after normalization. Nothing else counts as evidence. |
 | Distinct lines | The matched region holds at least **two distinct** lines. One row, however long, is never enough.          |
-| Length floor   | The matched text reaches 12 characters.                                                                    |
+| Length floor   | The normalized lines, joined with one space, reach 12 UTF-16 code units.                                   |
 
 The distinct-line rule exists because equality cannot tell a recaptured line from an identical repeated one. Buying two of one item prints the same row twice, so a page ending with that row and the next page beginning with it match exactly _without overlapping at all_ — merging there deletes a real purchase. The rule counts distinct lines rather than depth, so it also rejects a degenerate run of one row repeated N times, which fails the same way at greater depth.
 
@@ -178,7 +178,8 @@ There is **no depth ceiling**, and that is load-bearing rather than a convenienc
 
 Each line is normalized once for comparison — lowercased, runs of whitespace collapsed to a single space, trimmed.
 This normalization is used **only** for comparison; emitted text is always the original trimmed lines.
-Comparison is over UTF-16 code units; Korean syllables are BMP, so there is no surrogate-pair edge case.
+Comparison and length are measured in UTF-16 code units, matching JavaScript and Dart string lengths.
+Supplementary characters such as emoji count as two units; UTF-8 bytes, Unicode scalar values, and grapheme clusters are not the length metric.
 
 ### Why equality, and not a similarity threshold
 
@@ -209,7 +210,16 @@ Depth is the only ordering, it is total, and the scan is deterministic. This is 
 An accepted seam keeps the previous page's suffix in full and removes only the matched prefix lines from the next page.
 An unmatched seam appends every line of the next page and records the boundary index.
 
-> **Divergence from `flutter_receipt_scanner` spec 0001.** That package matches seams approximately (0.85 multi-line, 0.92 single-line) with a Levenshtein pass, a 512-character cost guard and a length-ratio prefilter, over windows capped at eight lines and ranked by similarity then compared-character count. This package started as a port of it and now shares none of that: no approximate matching (see "Why equality"), no depth ceiling, no ranking pass. **Every defect measured here applies to `flutter_receipt_scanner` as shipped** — both approximate-match false positives, the shallow-coincidence merge, and the single repeated row accepted as a seam (its 0.92 single-line path admits identical rows outright). It has not been changed; that is filed in §Follow-Ups rather than assumed.
+The shared conformance target for `flutter_receipt_scanner` uses these same matching rules.
+Flutter already replaced its original approximate matching in [issue #3](https://github.com/AndrewDongminYoo/flutter_receipt_scanner/issues/3); [the contract alignment](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/issues/64) adds this package's 12-unit floor to Flutter's existing exact matcher.
+Released package versions can differ until that change is published.
+
+### Shared conformance fixtures
+
+The canonical corpus lives in [`src/__tests__/fixtures/ocr-contracts/v1/contract.json`](../../src/__tests__/fixtures/ocr-contracts/v1/contract.json), with a versioned schema and SHA-256 manifest beside it.
+Jest and Flutter readers consume identical snapshots of the merge and quality cases; see the [snapshot maintenance guide](../../src/__tests__/fixtures/ocr-contracts/README.md).
+The shared contract covers postprocessing of identical OCR input, not equal recognition output from Vision and ML Kit.
+It does not change Flutter's camera-only restriction or its additional `discardedPageCount` completeness check.
 
 ### Known false positive: a repeated block at the page boundary
 
@@ -300,15 +310,9 @@ The example app should still exercise the flag once manually before release.
 
 1. Report natively dropped pages (the Flutter package's `discardedPageCount`) so `isComplete` can account for them. Requires a native change in both iOS delegates; Android already rejects the whole scan instead of returning a partial batch.
 2. Set `PHPickerConfiguration.selection = PHPickerConfigurationSelectionOrdered` (iOS 15+, and this package targets iOS 16) so the gallery path returns user selection order instead of library order. One native line; deferred to keep this change JS-only.
-3. **Carry every fix here to `flutter_receipt_scanner`.** Its shipped `ocr_page_merger.dart` still accepts 0.85 multi-line and 0.92 single-line approximate matches over windows capped at eight lines and ranked shallow-first, so all four defects measured here apply to it unchanged:
-   - the quantity-1-vs-2 row merged at 0.9200 (a Korean receipt case, not a synthetic one),
-   - the same mechanism one window wider at 0.8974,
-   - a shallow coincidence inside a deeper overlap, leaving the rest duplicated while reporting completeness,
-   - a single identical row accepted as a seam, deleting a real repeat purchase.
-
-   Filed as [`AndrewDongminYoo/flutter_receipt_scanner#3`](https://github.com/AndrewDongminYoo/flutter_receipt_scanner/issues/3); the iOS dropped-page gap is [#4](https://github.com/AndrewDongminYoo/flutter_receipt_scanner/issues/4). Neither is fixed there yet.
-
-4. Reconcile that package's spec 0001 tie-break prose with its shipped implementation, so the two specs do not describe different algorithms.
+3. Keep the Flutter snapshot and matching specification aligned through the [shared contract backlog](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/issues/60).
+   The former approximate-match and dropped-page work is tracked by the closed Flutter issues [#3](https://github.com/AndrewDongminYoo/flutter_receipt_scanner/issues/3) and [#4](https://github.com/AndrewDongminYoo/flutter_receipt_scanner/issues/4); those historical findings are not new work here.
+4. Evaluate the bounded C ABI overlap-matcher pilot separately; ADR-008's JS-only production implementation remains in force until an adoption decision.
 5. Measure how often a real recognizer reproduces a line character-identically across two captures. That number decides whether the digit-aware comparison in "Why equality" is needed.
 6. Investigate whether page geometry or `ocrLines` positions can separate a real overlap from a repeated block at the boundary — the one defect class the text-only merge cannot close (see "Known false positive"). Needs `ocrGeometry` data and probably a native signal; do not attempt it by raising the distinct-line requirement.
 7. Consider ordered gallery selection with a review-and-reorder surface only as its own spec.

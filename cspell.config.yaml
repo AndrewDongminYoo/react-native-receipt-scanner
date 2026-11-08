@@ -15,6 +15,13 @@ ignorePaths:
   - "**/android/gradlew.bat"
 ignoreRegExpList:
   - /GHSA-[0-9a-z-]+/gi
+overrides:
+  - filename: src/__tests__/fixtures/ocr-contracts/v1/contract.json
+    # Escaped newline + repeated letters are intentional length-boundary data.
+    # The German word exercises Unicode case folding, not English spelling.
+    ignoreRegExpList:
+      - /\\n[ab]{5,6}/g
+      - /[Üü][Bb][Ee][Rr]/g
 dictionaryDefinitions:
   - name: custom-dictionary
     path: ./.cspell/custom-dictionary.txt

@@ -1,0 +1,877 @@
+{
+  "schemaVersion": 1,
+  "mergeCases": [
+    {
+      "id": "empty-pages",
+      "pages": [],
+      "rejectedPageIndexes": [],
+      "expectedError": null,
+      "expected": {
+        "text": "",
+        "isComplete": false,
+        "unmatchedBoundaryIndexes": [],
+        "rejectedPageIndexes": []
+      }
+    },
+    {
+      "id": "trim-and-drop-empty-lines",
+      "pages": ["  START  \n\n END \t"],
+      "rejectedPageIndexes": [],
+      "expectedError": null,
+      "expected": {
+        "text": "START\nEND",
+        "isComplete": true,
+        "unmatchedBoundaryIndexes": [],
+        "rejectedPageIndexes": []
+      }
+    },
+    {
+      "id": "exact-distinct-overlap",
+      "pages": ["START\nITEM A 1 1000\nTOTAL 1000", "ITEM A 1 1000\nTOTAL 1000\nEND"],
+      "rejectedPageIndexes": [],
+      "expectedError": null,
+      "expected": {
+        "text": "START\nITEM A 1 1000\nTOTAL 1000\nEND",
+        "isComplete": true,
+        "unmatchedBoundaryIndexes": [],
+        "rejectedPageIndexes": []
+      }
+    },
+    {
+      "id": "short-distinct-overlap",
+      "pages": ["START\nA\nB", "A\nB\nEND"],
+      "rejectedPageIndexes": [],
+      "expectedError": null,
+      "expected": {
+        "text": "START\nA\nB\nA\nB\nEND",
+        "isComplete": false,
+        "unmatchedBoundaryIndexes": [0],
+        "rejectedPageIndexes": []
+      }
+    },
+    {
+      "id": "overlap-11-units",
+      "pages": ["START\naaaaa\nbbbbb", "aaaaa\nbbbbb\nEND"],
+      "rejectedPageIndexes": [],
+      "expectedError": null,
+      "expected": {
+        "text": "START\naaaaa\nbbbbb\naaaaa\nbbbbb\nEND",
+        "isComplete": false,
+        "unmatchedBoundaryIndexes": [0],
+        "rejectedPageIndexes": []
+      }
+    },
+    {
+      "id": "overlap-12-units",
+      "pages": ["START\naaaaa\nbbbbbb", "aaaaa\nbbbbbb\nEND"],
+      "rejectedPageIndexes": [],
+      "expectedError": null,
+      "expected": {
+        "text": "START\naaaaa\nbbbbbb\nEND",
+        "isComplete": true,
+        "unmatchedBoundaryIndexes": [],
+        "rejectedPageIndexes": []
+      }
+    },
+    {
+      "id": "overlap-13-units",
+      "pages": ["START\naaaaaa\nbbbbbb", "aaaaaa\nbbbbbb\nEND"],
+      "rejectedPageIndexes": [],
+      "expectedError": null,
+      "expected": {
+        "text": "START\naaaaaa\nbbbbbb\nEND",
+        "isComplete": true,
+        "unmatchedBoundaryIndexes": [],
+        "rejectedPageIndexes": []
+      }
+    },
+    {
+      "id": "length-after-whitespace-normalization",
+      "pages": ["START\nA          B\nC          D", "A B\nC D\nEND"],
+      "rejectedPageIndexes": [],
+      "expectedError": null,
+      "expected": {
+        "text": "START\nA          B\nC          D\nA B\nC D\nEND",
+        "isComplete": false,
+        "unmatchedBoundaryIndexes": [0],
+        "rejectedPageIndexes": []
+      }
+    },
+    {
+      "id": "single-long-row",
+      "pages": ["START\nITEM ABCDEFG 1000", "ITEM ABCDEFG 1000\nEND"],
+      "rejectedPageIndexes": [],
+      "expectedError": null,
+      "expected": {
+        "text": "START\nITEM ABCDEFG 1000\nITEM ABCDEFG 1000\nEND",
+        "isComplete": false,
+        "unmatchedBoundaryIndexes": [0],
+        "rejectedPageIndexes": []
+      }
+    },
+    {
+      "id": "repeated-identical-purchases",
+      "pages": ["START\nMILK 1000\nMILK 1000", "MILK 1000\nMILK 1000\nEND"],
+      "rejectedPageIndexes": [],
+      "expectedError": null,
+      "expected": {
+        "text": "START\nMILK 1000\nMILK 1000\nMILK 1000\nMILK 1000\nEND",
+        "isComplete": false,
+        "unmatchedBoundaryIndexes": [0],
+        "rejectedPageIndexes": []
+      }
+    },
+    {
+      "id": "changed-quantity",
+      "pages": ["START\nMILK 1 1000\nBREAD 1 2000", "MILK 2 2000\nBREAD 1 2000\nEND"],
+      "rejectedPageIndexes": [],
+      "expectedError": null,
+      "expected": {
+        "text": "START\nMILK 1 1000\nBREAD 1 2000\nMILK 2 2000\nBREAD 1 2000\nEND",
+        "isComplete": false,
+        "unmatchedBoundaryIndexes": [0],
+        "rejectedPageIndexes": []
+      }
+    },
+    {
+      "id": "deepest-nine-line-overlap",
+      "pages": [
+        "START\n----------\nITEM QTY AMOUNT\nAPPLE 1 1000\nMILK 2 2000\nBREAD 3 3000\nCARROT 4 4000\nTEA 5 5000\n----------\nITEM QTY AMOUNT",
+        "----------\nITEM QTY AMOUNT\nAPPLE 1 1000\nMILK 2 2000\nBREAD 3 3000\nCARROT 4 4000\nTEA 5 5000\n----------\nITEM QTY AMOUNT\nEND"
+      ],
+      "rejectedPageIndexes": [],
+      "expectedError": null,
+      "expected": {
+        "text": "START\n----------\nITEM QTY AMOUNT\nAPPLE 1 1000\nMILK 2 2000\nBREAD 3 3000\nCARROT 4 4000\nTEA 5 5000\n----------\nITEM QTY AMOUNT\nEND",
+        "isComplete": true,
+        "unmatchedBoundaryIndexes": [],
+        "rejectedPageIndexes": []
+      }
+    },
+    {
+      "id": "missing-middle-page",
+      "pages": ["ALPHA ITEM\nBETA TOTAL", null, "ALPHA ITEM\nBETA TOTAL"],
+      "rejectedPageIndexes": [],
+      "expectedError": null,
+      "expected": {
+        "text": "ALPHA ITEM\nBETA TOTAL\nALPHA ITEM\nBETA TOTAL",
+        "isComplete": false,
+        "unmatchedBoundaryIndexes": [0, 1],
+        "rejectedPageIndexes": [1]
+      }
+    },
+    {
+      "id": "blank-final-page",
+      "pages": ["ALPHA ITEM\nBETA TOTAL", " \n\t"],
+      "rejectedPageIndexes": [],
+      "expectedError": null,
+      "expected": {
+        "text": "ALPHA ITEM\nBETA TOTAL",
+        "isComplete": false,
+        "unmatchedBoundaryIndexes": [0],
+        "rejectedPageIndexes": [1]
+      }
+    },
+    {
+      "id": "all-empty-pages",
+      "pages": [null, " \n\t"],
+      "rejectedPageIndexes": [],
+      "expectedError": null,
+      "expected": {
+        "text": "",
+        "isComplete": false,
+        "unmatchedBoundaryIndexes": [0],
+        "rejectedPageIndexes": [0, 1]
+      }
+    },
+    {
+      "id": "floor-rejected-page-still-contributes",
+      "pages": ["START\nALPHA ITEM\nBETA TOTAL", "ALPHA ITEM\nBETA TOTAL\nEND"],
+      "rejectedPageIndexes": [1],
+      "expectedError": null,
+      "expected": {
+        "text": "START\nALPHA ITEM\nBETA TOTAL\nEND",
+        "isComplete": false,
+        "unmatchedBoundaryIndexes": [],
+        "rejectedPageIndexes": [1]
+      }
+    },
+    {
+      "id": "rejected-indexes-sorted-and-deduplicated",
+      "pages": ["ALPHA ITEM\nBETA TOTAL", "ALPHA ITEM\nBETA TOTAL"],
+      "rejectedPageIndexes": [1, 0, 1],
+      "expectedError": null,
+      "expected": {
+        "text": "ALPHA ITEM\nBETA TOTAL",
+        "isComplete": false,
+        "unmatchedBoundaryIndexes": [],
+        "rejectedPageIndexes": [0, 1]
+      }
+    },
+    {
+      "id": "negative-rejected-index",
+      "pages": ["ITEM"],
+      "rejectedPageIndexes": [-1],
+      "expectedError": "RangeError",
+      "expected": null
+    },
+    {
+      "id": "out-of-range-rejected-index",
+      "pages": ["ITEM"],
+      "rejectedPageIndexes": [1],
+      "expectedError": "RangeError",
+      "expected": null
+    },
+    {
+      "id": "rejected-index-without-pages",
+      "pages": [],
+      "rejectedPageIndexes": [0],
+      "expectedError": "RangeError",
+      "expected": null
+    },
+    {
+      "id": "do-not-compare-nonadjacent-pages",
+      "pages": ["ALPHA ITEM\nBETA TOTAL", "MIDDLE ONLY", "ALPHA ITEM\nBETA TOTAL"],
+      "rejectedPageIndexes": [],
+      "expectedError": null,
+      "expected": {
+        "text": "ALPHA ITEM\nBETA TOTAL\nMIDDLE ONLY\nALPHA ITEM\nBETA TOTAL",
+        "isComplete": false,
+        "unmatchedBoundaryIndexes": [0, 1],
+        "rejectedPageIndexes": []
+      }
+    },
+    {
+      "id": "unicode-lowercase-keeps-earlier-text",
+      "pages": ["START\nCAFÉ ÜBER 100\n합계 100", "café über 100\n합계 100\nEND"],
+      "rejectedPageIndexes": [],
+      "expectedError": null,
+      "expected": {
+        "text": "START\nCAFÉ ÜBER 100\n합계 100\nEND",
+        "isComplete": true,
+        "unmatchedBoundaryIndexes": [],
+        "rejectedPageIndexes": []
+      }
+    },
+    {
+      "id": "crlf-nbsp-and-tab",
+      "pages": ["START\r\n  MILK 1 100 \r\n TOTAL\t100 \r\n", "milk 1 100\ntotal 100\nEND"],
+      "rejectedPageIndexes": [],
+      "expectedError": null,
+      "expected": {
+        "text": "START\nMILK 1 100\nTOTAL\t100\nEND",
+        "isComplete": true,
+        "unmatchedBoundaryIndexes": [],
+        "rejectedPageIndexes": []
+      }
+    },
+    {
+      "id": "utf16-length-not-codepoints-or-bytes",
+      "pages": ["START\n😀😀😀\n🧾🧾A", "😀😀😀\n🧾🧾A\nEND"],
+      "rejectedPageIndexes": [],
+      "expectedError": null,
+      "expected": {
+        "text": "START\n😀😀😀\n🧾🧾A\nEND",
+        "isComplete": true,
+        "unmatchedBoundaryIndexes": [],
+        "rejectedPageIndexes": []
+      }
+    },
+    {
+      "id": "distinctness-after-normalization",
+      "pages": ["START\nMILK 1 1000\nmilk   1 1000", "milk 1 1000\nMILK 1 1000\nEND"],
+      "rejectedPageIndexes": [],
+      "expectedError": null,
+      "expected": {
+        "text": "START\nMILK 1 1000\nmilk   1 1000\nmilk 1 1000\nMILK 1 1000\nEND",
+        "isComplete": false,
+        "unmatchedBoundaryIndexes": [0],
+        "rejectedPageIndexes": []
+      }
+    },
+    {
+      "id": "changed-line-segmentation",
+      "pages": ["START\nALPHA ITEM\nBETA TOTAL", "ALPHA ITEM BETA TOTAL\nEND"],
+      "rejectedPageIndexes": [],
+      "expectedError": null,
+      "expected": {
+        "text": "START\nALPHA ITEM\nBETA TOTAL\nALPHA ITEM BETA TOTAL\nEND",
+        "isComplete": false,
+        "unmatchedBoundaryIndexes": [0],
+        "rejectedPageIndexes": []
+      }
+    },
+    {
+      "id": "fully-overlapped-middle-page",
+      "pages": [
+        "START\nALPHA ITEM\nBETA TOTAL",
+        "ALPHA ITEM\nBETA TOTAL",
+        "ALPHA ITEM\nBETA TOTAL\nEND"
+      ],
+      "rejectedPageIndexes": [],
+      "expectedError": null,
+      "expected": {
+        "text": "START\nALPHA ITEM\nBETA TOTAL\nEND",
+        "isComplete": true,
+        "unmatchedBoundaryIndexes": [],
+        "rejectedPageIndexes": []
+      }
+    },
+    {
+      "id": "known-repeated-block-ambiguity",
+      "pages": ["START\nALPHA ITEM\nBETA TOTAL", "ALPHA ITEM\nBETA TOTAL\nEND"],
+      "rejectedPageIndexes": [],
+      "expectedError": null,
+      "expected": {
+        "text": "START\nALPHA ITEM\nBETA TOTAL\nEND",
+        "isComplete": true,
+        "unmatchedBoundaryIndexes": [],
+        "rejectedPageIndexes": []
+      }
+    }
+  ],
+  "qualityCases": [
+    {
+      "id": "default-floor-at-12",
+      "input": {
+        "status": "success",
+        "ocr": true,
+        "floor": null,
+        "pages": [
+          {
+            "text": "AAAAAA\nBBBBB",
+            "confidence": null
+          }
+        ]
+      },
+      "expected": {
+        "status": "success",
+        "acceptedPageIndexes": [0],
+        "rejectedPageIndexes": [],
+        "qualities": [
+          {
+            "textLength": 12,
+            "lineCount": 2,
+            "confidence": null
+          }
+        ]
+      }
+    },
+    {
+      "id": "default-floor-below-12",
+      "input": {
+        "status": "success",
+        "ocr": true,
+        "floor": null,
+        "pages": [
+          {
+            "text": "AAAAA\nBBBBB",
+            "confidence": null
+          }
+        ]
+      },
+      "expected": {
+        "status": "rejected",
+        "acceptedPageIndexes": [],
+        "rejectedPageIndexes": [0],
+        "qualities": [
+          {
+            "textLength": 11,
+            "lineCount": 2,
+            "confidence": null
+          }
+        ]
+      }
+    },
+    {
+      "id": "default-floor-above-12",
+      "input": {
+        "status": "success",
+        "ocr": true,
+        "floor": null,
+        "pages": [
+          {
+            "text": "AAAAAA\nBBBBBB",
+            "confidence": null
+          }
+        ]
+      },
+      "expected": {
+        "status": "success",
+        "acceptedPageIndexes": [0],
+        "rejectedPageIndexes": [],
+        "qualities": [
+          {
+            "textLength": 13,
+            "lineCount": 2,
+            "confidence": null
+          }
+        ]
+      }
+    },
+    {
+      "id": "default-floor-one-line",
+      "input": {
+        "status": "success",
+        "ocr": true,
+        "floor": null,
+        "pages": [
+          {
+            "text": "ABCDEFGHIJKLM",
+            "confidence": null
+          }
+        ]
+      },
+      "expected": {
+        "status": "rejected",
+        "acceptedPageIndexes": [],
+        "rejectedPageIndexes": [0],
+        "qualities": [
+          {
+            "textLength": 13,
+            "lineCount": 1,
+            "confidence": null
+          }
+        ]
+      }
+    },
+    {
+      "id": "blank-ocr",
+      "input": {
+        "status": "success",
+        "ocr": true,
+        "floor": null,
+        "pages": [
+          {
+            "text": " \t\n ",
+            "confidence": null
+          }
+        ]
+      },
+      "expected": {
+        "status": "rejected",
+        "acceptedPageIndexes": [],
+        "rejectedPageIndexes": [0],
+        "qualities": [
+          {
+            "textLength": 0,
+            "lineCount": 0,
+            "confidence": null
+          }
+        ]
+      }
+    },
+    {
+      "id": "missing-ocr",
+      "input": {
+        "status": "success",
+        "ocr": true,
+        "floor": null,
+        "pages": [
+          {
+            "text": null,
+            "confidence": null
+          }
+        ]
+      },
+      "expected": {
+        "status": "rejected",
+        "acceptedPageIndexes": [],
+        "rejectedPageIndexes": [0],
+        "qualities": [null]
+      }
+    },
+    {
+      "id": "trimmed-quality",
+      "input": {
+        "status": "success",
+        "ocr": true,
+        "floor": null,
+        "pages": [
+          {
+            "text": " \tAAAAAA\n\nBBBBB \n",
+            "confidence": null
+          }
+        ]
+      },
+      "expected": {
+        "status": "success",
+        "acceptedPageIndexes": [0],
+        "rejectedPageIndexes": [],
+        "qualities": [
+          {
+            "textLength": 13,
+            "lineCount": 2,
+            "confidence": null
+          }
+        ]
+      }
+    },
+    {
+      "id": "utf16-quality",
+      "input": {
+        "status": "success",
+        "ocr": true,
+        "floor": null,
+        "pages": [
+          {
+            "text": "😀😀😀\n🧾🧾A",
+            "confidence": null
+          }
+        ]
+      },
+      "expected": {
+        "status": "success",
+        "acceptedPageIndexes": [0],
+        "rejectedPageIndexes": [],
+        "qualities": [
+          {
+            "textLength": 12,
+            "lineCount": 2,
+            "confidence": null
+          }
+        ]
+      }
+    },
+    {
+      "id": "missing-confidence-satisfies-floor",
+      "input": {
+        "status": "success",
+        "ocr": true,
+        "floor": {
+          "minTextLength": 12,
+          "minLines": 2,
+          "minConfidence": 0.9
+        },
+        "pages": [
+          {
+            "text": "AAAAAA\nBBBBB",
+            "confidence": null
+          }
+        ]
+      },
+      "expected": {
+        "status": "success",
+        "acceptedPageIndexes": [0],
+        "rejectedPageIndexes": [],
+        "qualities": [
+          {
+            "textLength": 12,
+            "lineCount": 2,
+            "confidence": null
+          }
+        ]
+      }
+    },
+    {
+      "id": "zero-confidence-rejected",
+      "input": {
+        "status": "success",
+        "ocr": true,
+        "floor": {
+          "minTextLength": 12,
+          "minLines": 2,
+          "minConfidence": 0.9
+        },
+        "pages": [
+          {
+            "text": "AAAAAA\nBBBBB",
+            "confidence": 0
+          }
+        ]
+      },
+      "expected": {
+        "status": "rejected",
+        "acceptedPageIndexes": [],
+        "rejectedPageIndexes": [0],
+        "qualities": [
+          {
+            "textLength": 12,
+            "lineCount": 2,
+            "confidence": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "confidence-below-floor",
+      "input": {
+        "status": "success",
+        "ocr": true,
+        "floor": {
+          "minTextLength": 12,
+          "minLines": 2,
+          "minConfidence": 0.9
+        },
+        "pages": [
+          {
+            "text": "AAAAAA\nBBBBB",
+            "confidence": 0.8
+          }
+        ]
+      },
+      "expected": {
+        "status": "rejected",
+        "acceptedPageIndexes": [],
+        "rejectedPageIndexes": [0],
+        "qualities": [
+          {
+            "textLength": 12,
+            "lineCount": 2,
+            "confidence": 0.8
+          }
+        ]
+      }
+    },
+    {
+      "id": "confidence-at-floor",
+      "input": {
+        "status": "success",
+        "ocr": true,
+        "floor": {
+          "minTextLength": 12,
+          "minLines": 2,
+          "minConfidence": 0.9
+        },
+        "pages": [
+          {
+            "text": "AAAAAA\nBBBBB",
+            "confidence": 0.9
+          }
+        ]
+      },
+      "expected": {
+        "status": "success",
+        "acceptedPageIndexes": [0],
+        "rejectedPageIndexes": [],
+        "qualities": [
+          {
+            "textLength": 12,
+            "lineCount": 2,
+            "confidence": 0.9
+          }
+        ]
+      }
+    },
+    {
+      "id": "confidence-above-floor",
+      "input": {
+        "status": "success",
+        "ocr": true,
+        "floor": {
+          "minTextLength": 12,
+          "minLines": 2,
+          "minConfidence": 0.9
+        },
+        "pages": [
+          {
+            "text": "AAAAAA\nBBBBB",
+            "confidence": 1
+          }
+        ]
+      },
+      "expected": {
+        "status": "success",
+        "acceptedPageIndexes": [0],
+        "rejectedPageIndexes": [],
+        "qualities": [
+          {
+            "textLength": 12,
+            "lineCount": 2,
+            "confidence": 1
+          }
+        ]
+      }
+    },
+    {
+      "id": "disabled-floor",
+      "input": {
+        "status": "success",
+        "ocr": true,
+        "floor": false,
+        "pages": [
+          {
+            "text": "x",
+            "confidence": null
+          }
+        ]
+      },
+      "expected": {
+        "status": "success",
+        "acceptedPageIndexes": [0],
+        "rejectedPageIndexes": [],
+        "qualities": [
+          {
+            "textLength": 1,
+            "lineCount": 1,
+            "confidence": null
+          }
+        ]
+      }
+    },
+    {
+      "id": "ocr-disabled",
+      "input": {
+        "status": "success",
+        "ocr": false,
+        "floor": null,
+        "pages": [
+          {
+            "text": null,
+            "confidence": null
+          }
+        ]
+      },
+      "expected": {
+        "status": "success",
+        "acceptedPageIndexes": [0],
+        "rejectedPageIndexes": [],
+        "qualities": [null]
+      }
+    },
+    {
+      "id": "custom-text-floor",
+      "input": {
+        "status": "success",
+        "ocr": true,
+        "floor": {
+          "minTextLength": 1,
+          "minLines": 1,
+          "minConfidence": 0
+        },
+        "pages": [
+          {
+            "text": "x",
+            "confidence": null
+          }
+        ]
+      },
+      "expected": {
+        "status": "success",
+        "acceptedPageIndexes": [0],
+        "rejectedPageIndexes": [],
+        "qualities": [
+          {
+            "textLength": 1,
+            "lineCount": 1,
+            "confidence": null
+          }
+        ]
+      }
+    },
+    {
+      "id": "partial-rejection-keeps-input-order",
+      "input": {
+        "status": "success",
+        "ocr": true,
+        "floor": null,
+        "pages": [
+          {
+            "text": "x",
+            "confidence": null
+          },
+          {
+            "text": "AAAAAA\nBBBBB",
+            "confidence": null
+          },
+          {
+            "text": null,
+            "confidence": null
+          },
+          {
+            "text": "AAAAAA\nBBBBBB",
+            "confidence": null
+          }
+        ]
+      },
+      "expected": {
+        "status": "success",
+        "acceptedPageIndexes": [1, 3],
+        "rejectedPageIndexes": [0, 2],
+        "qualities": [
+          {
+            "textLength": 1,
+            "lineCount": 1,
+            "confidence": null
+          },
+          {
+            "textLength": 12,
+            "lineCount": 2,
+            "confidence": null
+          },
+          null,
+          {
+            "textLength": 13,
+            "lineCount": 2,
+            "confidence": null
+          }
+        ]
+      }
+    },
+    {
+      "id": "all-pages-rejected",
+      "input": {
+        "status": "success",
+        "ocr": true,
+        "floor": null,
+        "pages": [
+          {
+            "text": "x",
+            "confidence": null
+          },
+          {
+            "text": "y",
+            "confidence": null
+          }
+        ]
+      },
+      "expected": {
+        "status": "rejected",
+        "acceptedPageIndexes": [],
+        "rejectedPageIndexes": [0, 1],
+        "qualities": [
+          {
+            "textLength": 1,
+            "lineCount": 1,
+            "confidence": null
+          },
+          {
+            "textLength": 1,
+            "lineCount": 1,
+            "confidence": null
+          }
+        ]
+      }
+    },
+    {
+      "id": "empty-success",
+      "input": {
+        "status": "success",
+        "ocr": true,
+        "floor": null,
+        "pages": []
+      },
+      "expected": {
+        "status": "success",
+        "acceptedPageIndexes": [],
+        "rejectedPageIndexes": [],
+        "qualities": []
+      }
+    },
+    {
+      "id": "cancelled",
+      "input": {
+        "status": "cancelled",
+        "ocr": true,
+        "floor": null,
+        "pages": []
+      },
+      "expected": {
+        "status": "cancelled",
+        "acceptedPageIndexes": [],
+        "rejectedPageIndexes": [],
+        "qualities": []
+      }
+    }
+  ]
+}
