@@ -26,6 +26,17 @@ const page = (index: number, ocrText?: string): ReceiptImage => ({
 });
 
 describe("mergeOcrPages", () => {
+  it("retains JavaScript final-sigma lowercasing outside the shared corpus", () => {
+    const merged = mergeOcrPages([
+      page(0, "START\nΟΣ 1000\nTOTAL 1000"),
+      page(1, "ος 1000\nTOTAL 1000\nEND"),
+    ]);
+
+    expect(merged.text).toBe("START\nΟΣ 1000\nTOTAL 1000\nEND");
+    expect(merged.isComplete).toBe(true);
+    expect(merged.unmatchedBoundaryIndexes).toEqual([]);
+  });
+
   it("removes an exact two-line overlap exactly once", () => {
     const merged = mergeOcrPages([
       page(0, "GS25 강남점\n2026-01-15 14:30\n삼각김밥 1,500원\n바나나우유 1,800원"),

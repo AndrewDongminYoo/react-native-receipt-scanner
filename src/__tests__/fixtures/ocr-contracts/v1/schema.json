@@ -1,0 +1,216 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Receipt scanner OCR contract corpus v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "mergeCases", "qualityCases"],
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "mergeCases": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/mergeCase"
+      }
+    },
+    "qualityCases": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/qualityCase"
+      }
+    }
+  },
+  "$defs": {
+    "indexes": {
+      "type": "array",
+      "items": {
+        "type": "integer",
+        "minimum": 0
+      }
+    },
+    "quality": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "required": ["textLength", "lineCount", "confidence"],
+      "properties": {
+        "textLength": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "lineCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "confidence": {
+          "type": ["number", "null"],
+          "minimum": 0,
+          "maximum": 1
+        }
+      }
+    },
+    "mergeCase": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "pages", "rejectedPageIndexes", "expectedError", "expected"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "pages": {
+          "type": "array",
+          "items": {
+            "type": ["string", "null"]
+          }
+        },
+        "rejectedPageIndexes": {
+          "type": "array",
+          "items": {
+            "type": "integer"
+          }
+        },
+        "expectedError": {
+          "enum": [null, "RangeError"]
+        },
+        "expected": {
+          "type": ["object", "null"],
+          "additionalProperties": false,
+          "required": ["text", "isComplete", "unmatchedBoundaryIndexes", "rejectedPageIndexes"],
+          "properties": {
+            "text": {
+              "type": "string"
+            },
+            "isComplete": {
+              "type": "boolean"
+            },
+            "unmatchedBoundaryIndexes": {
+              "$ref": "#/$defs/indexes"
+            },
+            "rejectedPageIndexes": {
+              "$ref": "#/$defs/indexes"
+            }
+          }
+        }
+      },
+      "oneOf": [
+        {
+          "properties": {
+            "expectedError": {
+              "const": null
+            },
+            "expected": {
+              "type": "object"
+            }
+          }
+        },
+        {
+          "properties": {
+            "expectedError": {
+              "const": "RangeError"
+            },
+            "expected": {
+              "type": "null"
+            }
+          }
+        }
+      ]
+    },
+    "qualityCase": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "input", "expected"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "input": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "ocr", "floor", "pages"],
+          "properties": {
+            "status": {
+              "enum": ["success", "cancelled"]
+            },
+            "ocr": {
+              "type": "boolean"
+            },
+            "floor": {
+              "oneOf": [
+                {
+                  "const": null
+                },
+                {
+                  "const": false
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["minTextLength", "minLines", "minConfidence"],
+                  "properties": {
+                    "minTextLength": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "minLines": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "minConfidence": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1
+                    }
+                  }
+                }
+              ]
+            },
+            "pages": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["text", "confidence"],
+                "properties": {
+                  "text": {
+                    "type": ["string", "null"]
+                  },
+                  "confidence": {
+                    "type": ["number", "null"],
+                    "minimum": 0,
+                    "maximum": 1
+                  }
+                }
+              }
+            }
+          }
+        },
+        "expected": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "acceptedPageIndexes", "rejectedPageIndexes", "qualities"],
+          "properties": {
+            "status": {
+              "enum": ["success", "rejected", "cancelled"]
+            },
+            "acceptedPageIndexes": {
+              "$ref": "#/$defs/indexes"
+            },
+            "rejectedPageIndexes": {
+              "$ref": "#/$defs/indexes"
+            },
+            "qualities": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/quality"
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
