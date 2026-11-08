@@ -85,6 +85,7 @@ Do not loosen a threshold after seeing measurements to relabel a failed experime
 ## Distribution and rollback
 
 Keep the canonical header, implementation and host tests under RN `cpp/receipt_core`, as scoped by #67.
+The [core source guide](../../cpp/receipt_core/README.md) documents ABI v1, Linux CMake/CTest verification and offline source-manifest checks.
 Vendor source into the Flutter pilot with an immutable upstream commit, license and SHA-256 manifest; do not fetch source during a consumer build or distribute an opaque prebuilt-only core.
 Record the ABI version and exact source revision in both adapter reports, and verify packed source contents independently of the checkout.
 RN and Flutter adapters must run as explicit pilot harnesses while ordinary package calls continue using JS/Dart.

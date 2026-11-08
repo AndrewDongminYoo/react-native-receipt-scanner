@@ -6,6 +6,7 @@ AOSP
 APPL
 appname
 armeabi
+ASAN
 Autoresizing
 buckd
 Buildables
@@ -107,11 +108,14 @@ Subviews
 Testables
 trimmable
 turborepo
+UBSAN
 unblockable
 unmirrored
 unredacted
 unrotated
 Wconversion
+Werror
+Wextra
 xcassets
 xccheckout
 xcconfig
