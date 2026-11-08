@@ -8,6 +8,7 @@ The operator approved the proposed direction and implementation on 2026-11-08.
 Use the existing RN merge contract as the shared target: deepest adjacent exact overlap, two distinct normalized lines, and at least 12 UTF-16 code units when the overlap lines are joined with one space.
 Flutter's short-overlap acceptance is an intentional existing behavior, so adopting the length floor is a documented behavior change.
 Keep Unicode case and whitespace normalization, original trimmed output, rejected-page text, and public result shapes.
+Shared conformance applies to corpus inputs; existing runtime-specific normalization differences, including Greek final sigma, remain separately characterized.
 Keep quality calculation and enforcement in TS/Dart, including the existing absent-confidence compatibility behavior.
 Keep Flutter's camera-only merge restriction and discarded-page completeness adjustment; RN's broader acquisition support and narrower completeness signal are separate policies.
 
@@ -29,9 +30,9 @@ Keep Flutter's camera-only merge restriction and discarded-page completeness adj
 
 ## Acceptance
 
-- Both readers execute all 28 merge and 20 quality cases and produce the same expected diagnostics for the shared input domain.
+- Both readers execute all 29 merge and 21 quality cases and produce the same expected diagnostics for the shared input domain.
 - The corpus covers 11/12/13 UTF-16 units, whitespace-normalized length, supplementary characters, case normalization, repeated rows, deep overlap, empty/rejected pages, invalid indexes, order preservation and confidence boundaries.
-- A changed copied fixture or manifest fails the snapshot checker; a wrong expected result fails the corresponding behavioral reader.
+- A changed copied fixture or manifest fails the snapshot checker; an unsupported corpus version fails even with a refreshed checksum, and a wrong expected result fails the corresponding behavioral reader.
 - RN: `yarn typecheck`, `yarn lint`, `yarn test`, scoped `trunk fmt`, and `trunk check`.
 - Flutter: workspace analysis/tests, package CI-equivalent analysis and coverage, scoped Dart formatting, and scoped Trunk formatting/checks.
 - The snapshot can run from either checkout alone; an explicit local comparison checks both copies together.

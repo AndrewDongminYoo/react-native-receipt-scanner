@@ -2,6 +2,7 @@
 
 This directory owns the synthetic input/output contract shared with `AndrewDongminYoo/flutter_receipt_scanner`.
 `v1/contract.json` contains literal expectations for merge results and OCR-floor behavior; `v1/schema.json` describes its JSON format.
+The checker enforces the supported corpus version and snapshot integrity; the schema is descriptive and is not executed as a JSON Schema validator.
 Both test readers execute production postprocessing code, using `file:///contract/page-<index>.jpg` as synthetic page URIs.
 The corpus contains no captured receipts or personal data.
 
@@ -11,6 +12,8 @@ Merge cases use the rules in `docs/specs/long-receipt-ocr-merge.md`: adjacent pa
 The `known-repeated-block-ambiguity` case preserves the documented limitation: text alone cannot distinguish a repeated block from a recaptured one.
 Quality cases preserve the default 12-unit/two-line floor, optional confidence enforcement, absent-confidence compatibility, and disabled/OCR-off behavior.
 Native dropped-page counts and acquisition restrictions remain package-specific adapter tests.
+The common assertions apply to the corpus inputs, not every Unicode string.
+Each package keeps its runtime's lowercase and whitespace semantics; separate merge tests characterize the JavaScript/Dart VM difference for Greek final sigma.
 
 ## Provenance
 
@@ -37,4 +40,4 @@ node scripts/check-ocr-contracts.js /absolute/flutter_receipt_scanner/flutter_re
 
 Without an argument, the checker verifies the canonical snapshot only.
 It compares actual file bytes and manifest content; matching hashes do not prove that a published upstream commit exists.
-The Jest suite also verifies that changing a copied fixture or its manifest is rejected.
+The Jest suite also verifies that changing a copied fixture or its manifest is rejected, including an unsupported corpus version with a refreshed checksum.

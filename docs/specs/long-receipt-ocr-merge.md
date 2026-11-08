@@ -210,15 +210,19 @@ Depth is the only ordering, it is total, and the scan is deterministic. This is 
 An accepted seam keeps the previous page's suffix in full and removes only the matched prefix lines from the next page.
 An unmatched seam appends every line of the next page and records the boundary index.
 
-The shared conformance target for `flutter_receipt_scanner` uses these same matching rules.
+The shared conformance target for `flutter_receipt_scanner` uses these same overlap-selection and minimum-length rules.
 Flutter already replaced its original approximate matching in [issue #3](https://github.com/AndrewDongminYoo/flutter_receipt_scanner/issues/3); [the contract alignment](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/issues/64) adds this package's 12-unit floor to Flutter's existing exact matcher.
 Released package versions can differ until that change is published.
 
 ### Shared conformance fixtures
 
 The canonical corpus lives in [`src/__tests__/fixtures/ocr-contracts/v1/contract.json`](../../src/__tests__/fixtures/ocr-contracts/v1/contract.json), with a versioned schema and SHA-256 manifest beside it.
-Jest and Flutter readers consume identical snapshots of the merge and quality cases; see the [snapshot maintenance guide](../../src/__tests__/fixtures/ocr-contracts/README.md).
-The shared contract covers postprocessing of identical OCR input, not equal recognition output from Vision and ML Kit.
+Jest and Flutter readers consume identical snapshots and verify matching postprocessing outcomes for the included inputs; see the [snapshot maintenance guide](../../src/__tests__/fixtures/ocr-contracts/README.md).
+Each package retains its runtime's existing lowercase and whitespace normalization; equivalence for every Unicode input is not guaranteed.
+For example, JavaScript lowercases `ΟΣ 1000` to `ος 1000`, while the Dart VM lowercases it to `οσ 1000`.
+An otherwise sufficient overlap against `ος 1000` therefore merges in the JavaScript implementation and remains unproven in the Dart VM; package-specific regression tests preserve this existing difference.
+Changing runtime normalization requires a separate compatibility decision.
+The shared contract does not promise equal recognition output from Vision and ML Kit.
 It does not change Flutter's camera-only restriction or its additional `discardedPageCount` completeness check.
 
 ### Known false positive: a repeated block at the page boundary

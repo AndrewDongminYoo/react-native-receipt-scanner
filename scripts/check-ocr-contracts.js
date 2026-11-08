@@ -11,10 +11,16 @@ assert.equal(manifest.schemaVersion, 1, "unsupported OCR contract manifest versi
 
 for (const name of ["contract.json", "schema.json"]) {
   for (const directory of new Set([source, target])) {
-    const digest = createHash("sha256")
-      .update(readFileSync(path.join(directory, name)))
-      .digest("hex");
+    const bytes = readFileSync(path.join(directory, name));
+    const digest = createHash("sha256").update(bytes).digest("hex");
     assert.equal(digest, manifest.files[name], `${name} checksum mismatch in ${directory}`);
+    if (name === "contract.json") {
+      assert.equal(
+        JSON.parse(bytes.toString("utf8")).schemaVersion,
+        1,
+        "unsupported OCR contract corpus version"
+      );
+    }
   }
 }
 

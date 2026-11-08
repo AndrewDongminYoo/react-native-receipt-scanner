@@ -50,6 +50,18 @@
       }
     },
     {
+      "id": "non-ascii-overlap-below-floor",
+      "pages": ["START\n가가가\n나나나", "가가가\n나나나\nEND"],
+      "rejectedPageIndexes": [],
+      "expectedError": null,
+      "expected": {
+        "text": "START\n가가가\n나나나\n가가가\n나나나\nEND",
+        "isComplete": false,
+        "unmatchedBoundaryIndexes": [0],
+        "rejectedPageIndexes": []
+      }
+    },
+    {
       "id": "overlap-11-units",
       "pages": ["START\naaaaa\nbbbbb", "aaaaa\nbbbbb\nEND"],
       "rejectedPageIndexes": [],
@@ -527,6 +539,32 @@
         "qualities": [
           {
             "textLength": 12,
+            "lineCount": 2,
+            "confidence": null
+          }
+        ]
+      }
+    },
+    {
+      "id": "non-ascii-quality-below-floor",
+      "input": {
+        "status": "success",
+        "ocr": true,
+        "floor": null,
+        "pages": [
+          {
+            "text": "가가가\n나나나",
+            "confidence": null
+          }
+        ]
+      },
+      "expected": {
+        "status": "rejected",
+        "acceptedPageIndexes": [],
+        "rejectedPageIndexes": [0],
+        "qualities": [
+          {
+            "textLength": 7,
             "lineCount": 2,
             "confidence": null
           }

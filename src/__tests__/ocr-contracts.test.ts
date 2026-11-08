@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, jest } from "@jest/globals";
 import { execFileSync, spawnSync } from "node:child_process";
-import { mkdtempSync, readFileSync, cpSync, rmSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { mkdirSync, mkdtempSync, readFileSync, cpSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import NativeReceiptScanner from "../NativeReceiptScanner";
@@ -65,6 +66,32 @@ describe("shared OCR contract v1", () => {
       const changedManifest = spawnSync(process.execPath, [checker, copy], { encoding: "utf8" });
       expect(changedManifest.status).not.toBe(0);
       expect(changedManifest.stderr).toContain("manifest differs from the canonical snapshot");
+    } finally {
+      rmSync(copy, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects an unsupported corpus version even with a refreshed checksum", () => {
+    const copy = mkdtempSync(path.join(tmpdir(), "receipt-ocr-version-"));
+    try {
+      const copiedChecker = path.join(copy, "scripts/check-ocr-contracts.js");
+      const copiedFixtures = path.join(copy, "src/__tests__/fixtures/ocr-contracts/v1");
+      mkdirSync(path.dirname(copiedChecker), { recursive: true });
+      cpSync(checker, copiedChecker);
+      cpSync(fixtureDirectory, copiedFixtures, { recursive: true });
+      const fixture = path.join(copiedFixtures, "contract.json");
+      const changed = { ...corpus, schemaVersion: 2 };
+      writeFileSync(fixture, JSON.stringify(changed));
+      const manifestPath = path.join(copiedFixtures, "manifest.json");
+      const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+      manifest.files["contract.json"] = createHash("sha256")
+        .update(readFileSync(fixture))
+        .digest("hex");
+      writeFileSync(manifestPath, JSON.stringify(manifest));
+
+      const result = spawnSync(process.execPath, [copiedChecker], { encoding: "utf8" });
+      expect(result.status).not.toBe(0);
+      expect(result.stderr).toContain("unsupported OCR contract corpus version");
     } finally {
       rmSync(copy, { recursive: true, force: true });
     }

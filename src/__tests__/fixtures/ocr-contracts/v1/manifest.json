@@ -2,10 +2,10 @@
   "schemaVersion": 1,
   "sourceRepository": "https://github.com/AndrewDongminYoo/react-native-receipt-scanner",
   "sourceDirectory": "src/__tests__/fixtures/ocr-contracts/v1",
-  "sourceCommit": "014d124f0c9922b6f1da01e057cef19e1ad233d3",
+  "sourceCommit": null,
   "sourceBaseCommit": "c3e57696ff64351a3c2d7300eca4670c99b90b74",
   "files": {
-    "contract.json": "1a06bdc9ef6f118b00f696927f8fd36ba73e06fb3a4a17367996b640c768a2ba",
+    "contract.json": "85766e7559610cb1bb051d301f41105315f0368633a72e1e04678aa33b7ba624",
     "schema.json": "570656a54a98a94e060229521024d16fce5448dafbb50bcd8cec13e296eb9863"
   }
 }
