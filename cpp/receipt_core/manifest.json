@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "abiVersion": 1,
+  "sourceRepository": "https://github.com/AndrewDongminYoo/react-native-receipt-scanner",
+  "sourceDirectory": "cpp/receipt_core",
+  "sourceCommit": "d52d169ee6f9381ab43fbbe05d06f611791b9e8a",
+  "files": {
+    "CMakeLists.txt": "e0c3946ffd02191cc351e938579bd5d0668ba872afd0443f5a16c51a77348006",
+    "LICENSE": "052f636f49b6328c6f55e6ea95d37e5ba67630c70e33cf0f17bb29f089f2143b",
+    "README.md": "5c26550915ee6e487dcbd6dc15b2e38e83263dc1dfb1575a11d0ca4af7137ce6",
+    "receipt_core.cpp": "3895d41da1dad256d5d60348d5af27478c5baa4cbf1047bffeb6f8228b4e85d2",
+    "receipt_core.h": "0d917477a7a7b90a8f1221114edbe1d968c1955321cf198d3a9162762ca56b84",
+    "tests/c_header_test.c": "b358c679ed0aca9f928bdc486cabbb34e56dd83761573fcf667482fadeaf6f04",
+    "tests/core_test.cpp": "b95faff79322badbe6f0dd2e63f4fdf500d725cb5d2110010d7b10019fd3dafb",
+    "tests/corpus_runner.js": "ec881bde7c57667364c804f249eb126a9b87aabf859d6f5873e3a3513c0cf248",
+    "tests/corpus_driver.cpp": "1d231165fe4ba0adf2f743072f0ce471d40d4bd44346d77b4ae49bd67580d232",
+    "vendor.py": "f3e05645d017bc9f710ec3f0dadb494d6098c469d5aa47e2b7640591b6ae0a7d"
+  }
+}
