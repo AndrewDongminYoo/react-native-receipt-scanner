@@ -23,10 +23,7 @@ struct Page {
   std::vector<receipt_core_line_v1> lines;
 };
 
-// Readers return a checked JS number; validation always precedes narrowing.
-template <typename UnitAt, typename RangeAt>
-Page decodePage(size_t unitCount, UnitAt unitAt, size_t rangeCount,
-                RangeAt rangeAt) {
+inline void validateCounts(size_t unitCount, size_t rangeCount) {
   if (unitCount > UINT32_MAX || rangeCount % 2 != 0 ||
       rangeCount / 2 > UINT32_MAX ||
       unitCount > static_cast<size_t>(PTRDIFF_MAX) / sizeof(uint16_t) ||
@@ -34,6 +31,13 @@ Page decodePage(size_t unitCount, UnitAt unitAt, size_t rangeCount,
           static_cast<size_t>(PTRDIFF_MAX) / sizeof(receipt_core_line_v1)) {
     throw std::invalid_argument("Invalid UTF-16 buffer or descriptor count");
   }
+}
+
+// Readers return a checked JS number; validation always precedes narrowing.
+template <typename UnitAt, typename RangeAt>
+Page decodePage(size_t unitCount, UnitAt unitAt, size_t rangeCount,
+                RangeAt rangeAt) {
+  validateCounts(unitCount, rangeCount);
   Page page;
   page.units.reserve(unitCount);
   for (size_t index = 0; index < unitCount; ++index) {

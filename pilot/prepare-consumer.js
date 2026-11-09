@@ -1,12 +1,15 @@
 // Creates a disposable, standalone app. The library comes only from the tarball.
 const { cpSync, existsSync, mkdirSync, readFileSync, writeFileSync } = require("node:fs");
 const path = require("node:path");
+const { randomUUID } = require("node:crypto");
 const root = path.resolve(__dirname, "..");
 const archive = path.resolve(process.argv[2]);
 const target = path.resolve(process.argv[3]);
 if (!existsSync(archive) || existsSync(target))
   throw new Error("Require archive and a new target directory");
 mkdirSync(target, { recursive: true });
+const runId = randomUUID();
+writeFileSync(path.join(target, "pilot-run.json"), `${JSON.stringify({ runId })}\n`);
 const example = path.join(root, "example");
 for (const name of ["android", "ios", "app.json", "babel.config.js", "Gemfile", "Gemfile.lock"]) {
   cpSync(path.join(example, name), path.join(target, name), {
@@ -62,9 +65,15 @@ setTimeout(async () => {
     result = { ok: true, platform: Platform.OS, result: runParity(matcher, corpus), rawInputCases: checkRawInputs(matcher), acquisitionPresent: true };
   }
   catch (error) { result = { ok: false, platform: Platform.OS, error: String(error), stack: error.stack }; }
+  result.runId = ${JSON.stringify(runId)};
   console.log("OVERLAP_PILOT", JSON.stringify(result));
   const host = Platform.OS === "android" ? "10.0.2.2" : "127.0.0.1";
-  await fetch("http://" + host + ":18769/result", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(result) });
+  try {
+    const response = await fetch("http://" + host + ":18769/result", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(result) });
+    if (!response.ok) throw new Error("Result receiver HTTP " + response.status);
+  } catch (error) {
+    console.error("OVERLAP_PILOT_DELIVERY_ERROR", String(error));
+  }
 }, 1000);
 `
 );

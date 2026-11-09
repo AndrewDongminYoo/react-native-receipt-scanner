@@ -55,13 +55,15 @@ int main() {
                                  [](size_t) { return 0.0; });
     } catch (const std::invalid_argument &) { oddRejected = true; }
     if (!oddRejected) throw std::runtime_error("odd descriptor count accepted");
-    bool oversizedRejected = false;
-    try {
-      receipt::pilot::decodePage(static_cast<size_t>(UINT32_MAX) + 1,
-          [](size_t) { throw std::runtime_error("reader reached before count validation"); return 0.0; },
-          0, [](size_t) { return 0.0; });
-    } catch (const std::invalid_argument &) { oversizedRejected = true; }
-    if (!oversizedRejected) throw std::runtime_error("oversized buffer accepted");
+    if constexpr (sizeof(size_t) > sizeof(uint32_t)) {
+      bool oversizedRejected = false;
+      try {
+        receipt::pilot::decodePage(static_cast<size_t>(UINT32_MAX) + 1,
+            [](size_t) { throw std::runtime_error("reader reached before count validation"); return 0.0; },
+            0, [](size_t) { return 0.0; });
+      } catch (const std::invalid_argument &) { oversizedRejected = true; }
+      if (!oversizedRejected) throw std::runtime_error("oversized buffer accepted");
+    }
     const auto page = decode({0xd800, 97, 98, 99, 100, 101, 102, 103, 104, 105, 106},
                              {0, 5, 5, 6});
     if (receipt::pilot::findOverlap(page, page, 1) != 2) {

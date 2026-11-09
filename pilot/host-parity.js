@@ -24,8 +24,23 @@ const matcher = {
       input: `${encode(left, leftRanges)}\n${encode(right, rightRanges)}\n`,
       encoding: "utf8",
     });
-    if (result.status !== 0) throw new Error(result.stderr || `Driver failed: ${result.error}`);
-    return Number(result.stdout.trim());
+    if (
+      result.status === 2 &&
+      !result.signal &&
+      !result.error &&
+      /^PILOT_INVALID_INPUT: [^\r\n]+\r?\n?$/.test(result.stderr)
+    ) {
+      throw new Error(result.stderr.trim());
+    }
+    if (result.status !== 0 || result.signal || result.error) {
+      throw new Error(`Driver failed: ${result.error || result.signal || result.stderr}`);
+    }
+    if (result.stderr.trim() !== "") throw new Error(`Driver diagnostics: ${result.stderr}`);
+    const output = result.stdout.trim();
+    if (!/^(0|[1-9][0-9]*)$/.test(output) || !Number.isSafeInteger(Number(output))) {
+      throw new Error("Driver returned no valid overlap count");
+    }
+    return Number(output);
   },
 };
 console.log(JSON.stringify(runParity(matcher, corpus)));

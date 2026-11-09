@@ -1,7 +1,11 @@
 const { createServer } = require("node:http");
-const { writeFileSync } = require("node:fs");
+const { readFileSync, writeFileSync } = require("node:fs");
 const path = require("node:path");
 const directory = path.resolve(process.argv[2]);
+const { runId } = JSON.parse(readFileSync(path.resolve(process.argv[3]), "utf8"));
+if (typeof runId !== "string" || !/^[0-9a-f-]{36}$/.test(runId)) {
+  throw new Error("Require the generated consumer pilot-run.json");
+}
 createServer((request, response) => {
   if (request.method !== "POST" || request.url !== "/result") {
     response.writeHead(404).end();
@@ -15,6 +19,7 @@ createServer((request, response) => {
   request.on("end", () => {
     try {
       const result = JSON.parse(body);
+      if (result.runId !== runId) throw new Error("Result belongs to another pilot run");
       if (!["android", "ios"].includes(result.platform)) throw new Error("Invalid platform");
       writeFileSync(
         path.join(directory, `${result.platform}-parity.json`),

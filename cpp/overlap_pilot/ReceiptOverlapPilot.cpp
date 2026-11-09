@@ -1,5 +1,6 @@
 #include "ReceiptOverlapPilot.h"
 #include "NumericTransport.h"
+#include <string>
 
 namespace facebook::react {
 ReceiptOverlapPilot::ReceiptOverlapPilot(std::shared_ptr<CallInvoker> invoker)
@@ -36,6 +37,8 @@ double ReceiptOverlapPilot::findOverlap(jsi::Runtime &runtime,
     const auto left = decode(leftUnits, leftRanges);
     const auto right = decode(rightUnits, rightRanges);
     return receipt::pilot::findOverlap(left, right, version);
+  } catch (const std::invalid_argument &error) {
+    throw jsi::JSError(runtime, std::string("PILOT_INVALID_INPUT: ") + error.what());
   } catch (const std::exception &error) {
     throw jsi::JSError(runtime, error.what());
   }

@@ -2,6 +2,7 @@ import { describe, expect, it } from "@jest/globals";
 import { mergeWithPilot } from "../overlapPilot";
 import type { PilotMatcher } from "../overlapPilot";
 import type { ReceiptImage } from "../types";
+import { runParity } from "../../pilot/harness";
 
 const pages: ReceiptImage[] = [
   { uri: "file:///a", ocrText: " START \n ABCDE😀 \n한글 가나다 " },
@@ -17,6 +18,36 @@ const pages: ReceiptImage[] = [
 }));
 
 describe("internal overlap pilot host", () => {
+  it("appends large pages without exceeding the engine argument limit", () => {
+    const text = Array(200000).fill("x").join("\n");
+    const result = mergeWithPilot(
+      [
+        { ...pages[0]!, ocrText: "prefix" },
+        { ...pages[1]!, ocrText: text },
+      ],
+      [],
+      { getAbiVersion: () => 1, findOverlap: () => 0 }
+    );
+    expect(result.text).toBe(`prefix\n${text}`);
+  });
+
+  it("does not count infrastructure failures as malformed-input rejection", () => {
+    let calls = 0;
+    expect(() =>
+      runParity(
+        {
+          getAbiVersion: () => 1,
+          findOverlap: () => {
+            if (calls++ === 0) throw new Error("driver infrastructure failure");
+            throw new Error("validation loop continued after infrastructure failure");
+          },
+        },
+        { mergeCases: [] }
+      )
+    ).toThrow("driver infrastructure failure");
+    expect(calls).toBe(1);
+  });
+
   it("rejects an incompatible ABI before calling the matcher", () => {
     const matcher: PilotMatcher = {
       getAbiVersion: () => 2,

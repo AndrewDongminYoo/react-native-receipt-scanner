@@ -3,6 +3,8 @@
 This opt-in harness exercises `ReceiptOverlapPilot`; ordinary package imports and `scan()` still use the production JS implementation.
 The [accepted pilot](../docs/specs/ocr-overlap-pilot.md) owns all thresholds and the separate adoption decision.
 No public export or subpath is added for this experiment.
+The iOS pilot provider requires React Native 0.79 or later; receipt acquisition continues supporting React Native 0.77 and later.
+Older iOS builds omit the experimental provider.
 
 ## Local verification
 
@@ -23,8 +25,8 @@ The source snapshot remains under `cpp/receipt_core`; do not modify it as part o
 yarn prepare
 yarn pack --out /tmp/receipt-pilot.tgz
 node pilot/prepare-consumer.js /tmp/receipt-pilot.tgz /tmp/receipt-pilot-consumer
-yarn --cwd /tmp/receipt-pilot-consumer install --mode=skip-build
-node pilot/result-server.js /tmp
+node .yarn/releases/yarn-4.11.0.cjs --cwd /tmp/receipt-pilot-consumer install --mode=skip-build
+node pilot/result-server.js /tmp /tmp/receipt-pilot-consumer/pilot-run.json
 node pilot/check-web.mjs /tmp/receipt-pilot-consumer
 ```
 
@@ -34,6 +36,8 @@ Its blank component runs parity automatically, opens no scanner UI and posts an 
 Android uses the emulator host alias `10.0.2.2`; iOS Simulator uses `127.0.0.1`.
 Android parity needs a debug app with local cleartext HTTP permitted; release performance runs must store samples through an appropriate local transport.
 The receiver writes `<platform>-parity.json` to the supplied existing directory.
+It accepts only the generated consumer's run ID, preventing stale apps from replacing this run's evidence.
+Parity logs and result-delivery errors are reported separately; a missing result file is incomplete evidence.
 Use a separate consumer directory for each archive; do not replace a package inside an installed consumer without regenerating Codegen and rebuilding.
 
 ## Measurement

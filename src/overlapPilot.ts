@@ -45,7 +45,7 @@ export function mergeWithPilot(
       }
     }
     if (count === 0) unmatched.push(index - 1);
-    merged.push(...current.slice(count));
+    for (const line of current.slice(count)) merged.push(line);
   }
   const sortedRejected = [...rejectedIndexes].sort((a, b) => a - b);
   return {

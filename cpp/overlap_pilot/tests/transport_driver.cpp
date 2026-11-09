@@ -6,6 +6,7 @@
 receipt::pilot::Page readPage() {
   size_t unitCount, rangeCount;
   if (!(std::cin >> unitCount >> rangeCount)) throw std::invalid_argument("Missing counts");
+  receipt::pilot::validateCounts(unitCount, rangeCount);
   std::vector<double> units(unitCount), ranges(rangeCount);
   for (auto *values : {&units, &ranges}) {
     for (auto &value : *values) {
@@ -24,6 +25,9 @@ int main() {
     const auto right = readPage();
     std::cout << receipt::pilot::findOverlap(left, right, receipt_core_abi_version()) << '\n';
     return 0;
+  } catch (const std::invalid_argument &error) {
+    std::cerr << "PILOT_INVALID_INPUT: " << error.what() << '\n';
+    return 2;
   } catch (const std::exception &error) {
     std::cerr << error.what() << '\n';
     return 1;

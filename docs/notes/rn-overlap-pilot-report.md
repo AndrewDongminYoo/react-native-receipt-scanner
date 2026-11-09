@@ -5,6 +5,7 @@
 Issue [#69](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/issues/69), tracking repository `AndrewDongminYoo/react-native-receipt-scanner`.
 This is an internal experiment against the [accepted protocol](../specs/ocr-overlap-pilot.md), with production `scan()` and JS matching unchanged.
 The result is **incomplete** until every required mobile integration and release-device measurement below has evidence.
+The operator approved delivering the implementation and cross-platform package/JSI validation first, while leaving issue #69 open for measurements.
 It does not authorize the separate [#70 adoption decision](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/issues/70).
 
 ## Source identity
@@ -22,26 +23,31 @@ The fixture manifest and canonical core manifest have separate pins; verify each
 
 ## Evidence
 
-| Gate                              | Result                                                                                                | What the evidence reads                                                                                                                          |
-| --------------------------------- | ----------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| JS repository checks              | 135 Jest tests passed; typecheck and lint passed on Node 24.20.0                                      | Public scanner behavior, quality fixtures and pilot host regressions                                                                             |
-| Numeric transport                 | Passed under host ASan/UBSan                                                                          | Non-finite/fractional/negative/overflow values, descriptors, count bounds, ABI mismatch, empty buffers and concurrent local ownership            |
-| Core safety                       | CTest 5/5 including transport, core, C linkage, corpus and source snapshot                            | Shared sanitizer build; mobile memory retention is a separate measurement                                                                        |
-| Host parity                       | 29 merge fixtures, 11 malformed numeric cases, 48 workloads passed                                    | Real TS host normalization/assembly through the numeric C++ helper and pinned core                                                               |
-| Negative controls                 | Corrupted corpus expectation and surrogate-replacement mutation both failed                           | The readers reject wrong expectations and distinguish different lone surrogates                                                                  |
-| Source provenance                 | `vendor.py --check --upstream-check` passed                                                           | Canonical manifest checksums and immutable reachable revision                                                                                    |
-| Codegen and discovery             | Passed                                                                                                | RN 0.88 generated both specs, the iOS provider map and packed-consumer Android configuration with Kotlin plus C++ modules                        |
-| Android packed build/parity       | Passed, arm64 Android 17/API 37 emulator, Debug/Hermes                                                | Actual JSI: 29 merge fixtures, 11 malformed numeric cases, 9 malformed JS-type cases and 48 workloads; acquisition module present                |
-| iOS Simulator packed build/parity | Passed, arm64 iPhone 17 Simulator/iOS 26.5, Release/Hermes                                            | Same 29/11/9/48 cases and acquisition-module presence                                                                                            |
-| Source example integration        | Android Release build, install and startup passed; iOS Release build and direct native startup passed | Existing acquisition example renders with both internal modules linked; no scanner flow was exercised                                            |
-| Native-free web import            | Passed for default and `source` conditions                                                            | Bundled and executed packed web fallbacks; deliberate native import rejected                                                                     |
-| Android 16 KiB                    | Passed for the packed arm64 Debug APK                                                                 | All 11 uncompressed shared objects passed LOAD alignment, RELRO-tail checks and `zipalign -c -P 16 -v 4`; invalid ELF/ZIP controls were rejected |
+| Gate                                   | Result                                                                                                | What the evidence reads                                                                                                                          |
+| -------------------------------------- | ----------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| JS repository checks                   | 137 Jest tests passed; typecheck and lint passed on Node 24.20.0                                      | Public scanner behavior, quality fixtures and pilot host regressions                                                                             |
+| Numeric transport                      | Passed under host ASan/UBSan                                                                          | Non-finite/fractional/negative/overflow values, descriptors, count bounds, ABI mismatch, empty buffers and concurrent local ownership            |
+| Core safety                            | CTest 5/5 including transport, core, C linkage, corpus and source snapshot                            | Shared sanitizer build; mobile memory retention is a separate measurement                                                                        |
+| Host parity                            | 29 merge fixtures, 11 malformed numeric cases, 48 workloads passed                                    | Real TS host normalization/assembly through the numeric C++ helper and pinned core                                                               |
+| Negative controls                      | Corrupted corpus expectation and surrogate-replacement mutation both failed                           | The readers reject wrong expectations and distinguish different lone surrogates                                                                  |
+| Source provenance                      | `vendor.py --check --upstream-check` passed                                                           | Canonical manifest checksums and immutable reachable revision                                                                                    |
+| Codegen and discovery                  | Passed                                                                                                | RN 0.88 generated both specs, the iOS provider map and packed-consumer Android configuration with Kotlin plus C++ modules                        |
+| Android packed build/parity            | Passed, arm64 Android 17/API 37 emulator, Debug/Hermes                                                | Actual JSI: 29 merge fixtures, 11 malformed numeric cases, 9 malformed JS-type cases and 48 workloads; acquisition module present                |
+| iOS Simulator packed build/parity      | Passed, arm64 iPhone 17 Simulator/iOS 26.5, Release/Hermes                                            | Same 29/11/9/48 cases and acquisition-module presence                                                                                            |
+| Source example integration (`05b1bb9`) | Android Release build, install and startup passed; iOS Release build and direct native startup passed | Existing acquisition example renders with both internal modules linked; no scanner flow was exercised                                            |
+| Native-free web import                 | Passed for default and `source` conditions                                                            | Bundled and executed packed web fallbacks; deliberate native import rejected                                                                     |
+| Android 16 KiB                         | Passed for the packed arm64 Debug APK                                                                 | All 11 uncompressed shared objects passed LOAD alignment, RELRO-tail checks and `zipalign -c -P 16 -v 4`; invalid ELF/ZIP controls were rejected |
 
-Code review covered transport and platform registration independently; no implementation blocker was found.
+Independent code reviews covered transport and platform registration.
 Review identified a surrogate-test weakness; the additional distinct-surrogate case detects a deliberately lossy replacement mutation.
+Hosted review additionally identified an iOS provider compatibility regression and weak host error classification.
+The provider is excluded on RN 0.77/0.78 and enabled on RN 0.79+; actual upstream version headers passed preprocessing and syntax checks, with unrelated native dependencies stubbed.
+Full legacy-app linking and runtime were not tested.
+Host validation now distinguishes explicit adapter rejection from process failures and missing output; run IDs prevent stale mobile results from replacing current evidence.
 Host and Codegen passes do not prove mobile linkage or runtime registration.
 The mobile parity rows above separately establish those properties through the installed archive consumer.
 The Android emulator used 4 KiB pages; static packaging checks do not claim execution on a 16 KiB device.
+macOS host runs cover address and undefined-behavior sanitizers with leak detection disabled because that runtime does not support it; Linux CI separately enables leak detection.
 The ELF/RELRO and ZIP readers follow the [Android page-size guide](https://developer.android.com/guide/practices/page-sizes) and [zipalign reference](https://developer.android.com/tools/zipalign).
 
 ## Local integration conditions

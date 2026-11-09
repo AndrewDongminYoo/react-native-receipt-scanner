@@ -74,7 +74,10 @@ export function runParity(matcher: PilotMatcher, corpus: { mergeCases: MergeFixt
     let rejected = false;
     try {
       matcher.findOverlap(input[0] ?? [], input[1] ?? [], input[2] ?? [], input[3] ?? []);
-    } catch {
+    } catch (error) {
+      if (!(error instanceof Error) || !error.message.startsWith("PILOT_INVALID_INPUT: ")) {
+        throw error;
+      }
       rejected = true;
     }
     equal(rejected, true, `malformed/${index}`);
@@ -101,7 +104,8 @@ export function runParity(matcher: PilotMatcher, corpus: { mergeCases: MergeFixt
     0,
     "different lone surrogates must remain distinct"
   );
-  for (const workload of workloads()) {
+  const parityWorkloads = workloads();
+  for (const workload of parityWorkloads) {
     const pages = pagesFor(workload.pages);
     equal(mergeWithPilot(pages, [], matcher), mergeOcrPages(pages), workload.id);
   }
@@ -109,7 +113,7 @@ export function runParity(matcher: PilotMatcher, corpus: { mergeCases: MergeFixt
     abi: 1,
     mergeCases: corpus.mergeCases.length,
     malformedCases: invalid.length,
-    workloadCases: workloads().length,
+    workloadCases: parityWorkloads.length,
   };
 }
 
