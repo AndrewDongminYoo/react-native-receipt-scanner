@@ -16,7 +16,7 @@ Pod::Spec.new do |s|
   s.platforms    = { :ios => "16.0" }
   s.source       = { :git => "https://github.com/AndrewDongminYoo/react-native-receipt-scanner.git", :tag => "#{s.version}" }
 
-  s.source_files = "ios/**/*.{h,m,mm,swift,cpp}"
+  s.source_files = "ios/**/*.{h,m,mm,swift,cpp}", "cpp/overlap_pilot/*.{h,cpp}", "cpp/receipt_core/receipt_core.{h,cpp}"
   s.private_header_files = "ios/RN*.h"
 
   s.frameworks = "VisionKit", "Vision", "PhotosUI", "ImageIO", "CoreImage", "CoreGraphics", "UniformTypeIdentifiers"

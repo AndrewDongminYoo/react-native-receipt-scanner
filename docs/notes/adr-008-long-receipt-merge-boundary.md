@@ -26,7 +26,8 @@ The package merges **OCR text** across ordered pages and never composites pixels
 1. Page JPEGs are returned unchanged. There is no stitched image, PDF, or bitmap.
 2. The merge removes only _proven_ duplicated text at adjacent seams. An unproven seam reports its boundary index and keeps both pages' text in full.
 3. The package never classifies whether two images are the same receipt, never reorders pages, and never compares non-adjacent pages.
-4. The implementation lives entirely in the JS layer, like `ocrFloor`. No native Kotlin, Objective-C, or TurboModule spec change.
+4. The production implementation lives entirely in the JS layer, like `ocrFloor`.
+   The separate internal C++ matcher pilot is governed by the [accepted experiment](../specs/ocr-overlap-pilot.md); it does not change this production decision or the public acquisition module.
 
 `docs/specs/long-receipt-ocr-merge.md` is the normative behaviour reference.
 
