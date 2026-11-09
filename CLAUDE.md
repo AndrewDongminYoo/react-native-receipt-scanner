@@ -95,7 +95,7 @@ Metro resolves `.native.tsx` over `.tsx` on iOS/Android automatically.
 
 ### iOS Layer (`ios/`)
 
-Each component lives in a separate `.h` / `.m` pair (only `ReceiptScanner` itself is `.mm` for the C++ TurboModule glue).
+Most components live in separate `.h` / `.m` pairs; `ReceiptScanner` and the internal `RNReceiptOverlapPilotProvider` use `.mm` for C++ TurboModule glue.
 Minimum deployment target is iOS 16 (Korean OCR via `VNRecognizeTextRequest`).
 
 - `ReceiptScanner.{h,mm}` — TurboModule entry. Routes to camera (`RNDocumentCameraDelegate`) or gallery (`RNGalleryPickerDelegate`) on the main queue. Holds strong references to delegates to keep them alive; clears them in the wrapped resolve/reject blocks.

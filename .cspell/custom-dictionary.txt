@@ -90,6 +90,7 @@ react-native-exify
 realdevice
 receiptscanner
 Recog
+RELRO
 rescan
 rgba
 RNCG
@@ -126,3 +127,4 @@ xctest
 xcuserdata
 xcuserstate
 xcworkspace
+zipalign

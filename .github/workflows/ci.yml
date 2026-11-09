@@ -31,6 +31,8 @@ jobs:
           fetch-depth: 0
       - name: Verify source snapshot
         run: python3 cpp/receipt_core/vendor.py --check --upstream-check
+      - name: Setup
+        uses: ./.github/actions/setup
       - name: Configure core
         env:
           CC: clang
@@ -38,9 +40,9 @@ jobs:
           CORE_MODE: ${{ matrix.mode }}
         run: |
           if [ "$CORE_MODE" = sanitizers ]; then
-            cmake -S cpp/receipt_core -B /tmp/receipt-core -D RECEIPT_CORE_SANITIZERS=ON -D BUILD_SHARED_LIBS=ON
+            cmake -S cpp/overlap_pilot/tests -B /tmp/receipt-core -D RECEIPT_CORE_SANITIZERS=ON -D BUILD_SHARED_LIBS=ON
           else
-            cmake -S cpp/receipt_core -B /tmp/receipt-core -D CMAKE_BUILD_TYPE=Release
+            cmake -S cpp/overlap_pilot/tests -B /tmp/receipt-core -D CMAKE_BUILD_TYPE=Release
           fi
       - name: Build core
         run: cmake --build /tmp/receipt-core --parallel 2
@@ -49,6 +51,11 @@ jobs:
           ASAN_OPTIONS: detect_leaks=1
           UBSAN_OPTIONS: halt_on_error=1
         run: ctest --test-dir /tmp/receipt-core --output-on-failure
+      - name: Test pilot host parity
+        env:
+          ASAN_OPTIONS: detect_leaks=1
+          UBSAN_OPTIONS: halt_on_error=1
+        run: node pilot/host-parity.js /tmp/receipt-core/receipt_transport_driver
 
   lint:
     name: Lint & Typecheck

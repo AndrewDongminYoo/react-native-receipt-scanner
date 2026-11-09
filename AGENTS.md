@@ -7,6 +7,9 @@ A hand-written "generated at commit X" line is precisely the rotting premise thi
 
 React Native TurboModule for receipt scanning. Wraps **ML Kit Document Scanner** (Android) and **VisionKit + Vision** (iOS) behind a single `scan()` API. Output: `file://` JPEG URIs, EXIF, on-device OCR. New Architecture only — no legacy bridge, no base64.
 
+The separate internal C++ overlap-matcher experiment lives in `cpp/overlap_pilot` and `pilot/`; see [the harness guide](pilot/README.md).
+Production `scan()` continues using the JS matcher until the separate adoption decision.
+
 OCR languages are **caller-provided BCP 47 hints** (`ScanReceiptOptions.ocrLanguages`, default `["ko-KR", "en-US"]`), not a fixed pair. Android resolves the list to exactly one ML Kit script family (Latin / Korean / Japanese / Chinese / Devanagari); iOS passes the ordered list to Vision. `getOcrCapabilities()` reports what the platform can serve without opening scanner UI. See `docs/specs/multilingual-ocr.md`.
 
 ## STRUCTURE

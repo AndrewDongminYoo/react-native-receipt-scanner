@@ -19,6 +19,7 @@
     "android",
     "ios",
     "cpp",
+    "pilot",
     "*.podspec",
     "react-native.config.js",
     "!ios/build",
@@ -138,6 +139,11 @@
     "jsSrcsDir": "src",
     "android": {
       "javaPackageName": "com.receiptscanner"
+    },
+    "ios": {
+      "modulesProvider": {
+        "ReceiptOverlapPilot": "RNReceiptOverlapPilotProvider"
+      }
     }
   },
   "create-react-native-library": {

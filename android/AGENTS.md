@@ -2,7 +2,7 @@
 
 ## OVERVIEW
 
-ML Kit Document Scanner integration. All native classes live in `src/main/java/com/receiptscanner/`. Java package `com.receiptscanner` matches `package.json#codegenConfig.android.javaPackageName`. minSdk 24, compile/target SDK 36, Kotlin 2.0.21, AGP 8.7.3.
+ML Kit Document Scanner integration. Acquisition classes live in `src/main/java/com/receiptscanner/`; the separate internal C++ matcher pilot is wired through `CMakeLists.txt` and `../cpp/overlap_pilot/`. Java package `com.receiptscanner` matches `package.json#codegenConfig.android.javaPackageName`. minSdk 24, compile/target SDK 36, Kotlin 2.0.21, AGP 8.7.3.
 
 ## STRUCTURE
 
