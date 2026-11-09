@@ -1301,6 +1301,16 @@
         "id": "reverse-winding",
         "corners": [0, 0, 0, 200, 100, 200, 100, 0],
         "expectedDistorted": false
+      },
+      {
+        "id": "width-ratio-reciprocal-above",
+        "corners": [0, 0, 22.01, 0, 10, 100, 0, 100],
+        "expectedDistorted": true
+      },
+      {
+        "id": "height-ratio-reciprocal-above",
+        "corners": [0, 0, 100, 0, 100, 10, 0, 22.01],
+        "expectedDistorted": true
       }
     ]
   }

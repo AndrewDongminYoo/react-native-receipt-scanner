@@ -45,7 +45,7 @@ The Jest suite also verifies that changing a copied fixture or its manifest is r
 
 ## Geometry numeric contract
 
-The additive `geometry` section has 13 quantization, 14 histogram/dominance, 7 correction, 14 box and 14 quadrilateral cases.
+The additive `geometry` section has 13 quantization, 14 histogram/dominance, 7 correction, 14 box and 16 quadrilateral cases.
 Angles are clockwise-positive degrees; exact ties between quarter turns round toward positive infinity, so -45 maps to 0 and -135 maps to 270.
 Histogram bins are ordered 0/90/180/270; only finite angles count toward the five-line floor and the inclusive 70% majority.
 `NaN`, `+Infinity` and `-Infinity` are explicit string tokens accepted only in angle lists, never JSON numbers or direct quantizer inputs.
