@@ -97,6 +97,12 @@ jobs:
           bundle exec pod repo update --verbose
           bundle exec pod install --project-directory=ios
 
+      - name: Run production geometry conformance
+        run: |
+          SIMULATOR_ID=$(xcrun simctl list devices available -j | python3 -c 'import json,sys; print(next(d["udid"] for devices in json.load(sys.stdin)["devices"].values() for d in devices if d["name"].startswith("iPhone")))')
+          xcrun simctl bootstatus "$SIMULATOR_ID" -b
+          bash scripts/apple-geometry/run.sh "$SIMULATOR_ID"
+
       - name: Build example for iOS
         run: |
           yarn turbo run build:ios --cache-dir="$TURBO_CACHE_DIR"

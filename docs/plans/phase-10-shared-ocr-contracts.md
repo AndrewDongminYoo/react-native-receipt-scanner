@@ -65,4 +65,17 @@ Only tests, test resources/dependencies, CI wiring and directly affected documen
 4. Run normal Kotlin suites and repository gates, compare snapshot bytes, commit the canonical corpus, then pin its retained commit in both manifests.
 5. Review and deliver one PR per repository; keep #65 open until both implementations are verified.
 
-Objective-C/Swift readers remain the separate #66 follow-up.
+## Apple geometry conformance follow-up (#66)
+
+Execute the same 64 geometry cases through production Objective-C and Swift helpers on iOS Simulator.
+RN owns `scripts/apple-geometry/`, native iOS CI wiring and the fixture guide; Flutter owns its corresponding native reader, invocation and CI.
+Preserve all public APIs and production algorithms, and keep Vision coordinate conversion and canonical clockwise geometry distinct from iOS counterclockwise pixel transforms.
+The fixture guide remains the numeric contract; no corpus/schema/provenance changes are required.
+
+1. Compile actual Apple helper sources into a UIKit-linked Simulator executable in each repository.
+2. Read the existing local corpus, assert exact discrete decisions and pixel values within 0.000001, and test Vision conversion/sign on non-square frames.
+3. Corrupt isolated tie and majority expectations, require named behavioral failures, then rerun the original corpus.
+4. Run declared repository gates and relevant example Simulator builds sequentially; review and deliver one linked PR per repository.
+5. Keep #66 open until both implementations and their required gates are verified.
+
+The change adds no visible product output, so operator visual approval is not applicable.
