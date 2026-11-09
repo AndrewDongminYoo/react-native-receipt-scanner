@@ -79,3 +79,35 @@ The fixture guide remains the numeric contract; no corpus/schema/provenance chan
 5. Keep #66 open until both implementations and their required gates are verified.
 
 The change adds no visible product output, so operator visual approval is not applicable.
+
+## Parent geometry acceptance (#61)
+
+Evidence reconciled on 2026-11-10 against the merged child PRs below.
+The bounded acceptance criterion in [#61](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/issues/61) is satisfied: both repositories execute the same versioned geometry cases against their production Kotlin and Apple helpers, with explicit coordinate adapters and numeric comparisons.
+This is an acceptance record for synthetic helper conformance; it does not change algorithms or public APIs.
+
+| Production reader                                 | Merged delivery                                                                    | Verified PR head                           | Passing native CI                                                                                                                                                  |
+| ------------------------------------------------- | ---------------------------------------------------------------------------------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| RN Kotlin `OcrGeometry` / `QuadGeometry`          | [RN #76](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/pull/76) | `bc948775ac039ad78607d46e427e386754069924` | [Android unit-test graph](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/actions/runs/42600423800/job/129103213071)                              |
+| Flutter Kotlin `OcrGeometry` / `QuadGeometry`     | [Flutter #39](https://github.com/AndrewDongminYoo/flutter_receipt_scanner/pull/39) | `f2bf49b39d62045bcba87e6c229e6c54402df8c8` | [Android unit-test graph](https://github.com/AndrewDongminYoo/flutter_receipt_scanner/actions/runs/42600577063/job/129103725238)                                   |
+| RN Objective-C `RNOcrGeometry` / `RNQuadGeometry` | [RN #77](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/pull/77) | `458c23bfe67bd28bb442db2de444c8afbfdec788` | [Simulator conformance and example build](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/actions/runs/42610786676/job/129139166868)              |
+| Flutter Swift `OcrGeometry` / `QuadDetector`      | [Flutter #40](https://github.com/AndrewDongminYoo/flutter_receipt_scanner/pull/40) | `f789902c307c8af926f2deb3c63b41e660ea7f11` | [Simulator conformance, negative control and example build](https://github.com/AndrewDongminYoo/flutter_receipt_scanner/actions/runs/42716701761/job/129500009604) |
+
+- **One versioned corpus:** all four readers enumerate the 64 geometry cases in the shared v1 snapshot.
+  The canonical manifest pins RN source `0179aa4663d1dedd9aa7dd9268ca1744bd6adbc3`; its corpus, schema and manifest match the Flutter copy byte-for-byte.
+  The [fixture guide](../../src/__tests__/fixtures/ocr-contracts/README.md#geometry-numeric-contract) owns the group counts, numeric rules and repeatable commands.
+- **Actual production execution:** the Kotlin CI logs show the normal `testDebugUnitTest` tasks completing successfully; each parameterized reader loads every geometry group.
+  The Apple CI logs explicitly report 64 passing cases, and the runners compile the production helper source files for iOS Simulator.
+  The separate Swift macOS batch host still excludes UIKit/Vision geometry; it is not the Apple geometry acceptance path.
+- **Coordinates and comparisons:** boxes use canonical clockwise, top-left pixels; Apple adapters explicitly convert Vision bottom-left normalized coordinates and scale angle vectors in pixel space.
+  The Swift quad adapter reflects Y without changing corner order, and geometry degrees remain distinct from iOS pixel-rotation degrees.
+  Discrete decisions are exact; Kotlin integer boxes and Swift corpus boxes compare exactly, RN Apple boxes allow absolute error of 0.000001 pixels, and the additional Vision conversion checks allow 0.000001 pixels/degrees as applicable.
+- **Negative controls:** the Kotlin delivery records named failures for corrupted tie and majority expectations and for reciprocal-ratio implementation mutations, followed by restored passing suites.
+  RN Apple recorded named tie, majority and category-count failures; Flutter Apple CI rejects the corrupted `rotate-90` expected X coordinate, and its runner repair also verifies reordered box cases.
+  The earlier Apple follow-up plan listed tie/majority corruption; separate runs of those variants remain unverified for Swift.
+  This limit does not change the parent issue's stated requirement to execute the same geometry cases with explicit adapters and tolerances.
+- **Boundaries retained:** the delivery diffs add tests, fixtures, test resources/dependencies, CI and documentation; production geometry and public APIs remain unchanged.
+  This does not establish real OCR accuracy, scanner UI correctness, image-pixel rotation correctness, release-device performance or native matcher adoption.
+  Geometry migration to C remains outside #61; the overlap pilot and its adoption decision stay separate under #68, #69 and #70.
+
+This reconciliation reads retained CI logs, merged source and snapshot bytes; it does not claim a new native execution or a new measurement campaign.
