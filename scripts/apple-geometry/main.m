@@ -60,6 +60,8 @@ int main(int argc, const char *argv[]) {
             CGSize output = CGSizeMake([out[0] doubleValue], [out[1] doubleValue]);
             CGRect box = rect(c[@"box"]);
             NSInteger degrees = [c[@"degrees"] integerValue];
+            CGRect rotatedFrame = [RNOcrGeometry rectByRotating:CGRectMake(0, 0, frame.width, frame.height) frameSize:frame clockwiseDegrees:degrees];
+            check(CGSizeEqualToSize(rotatedFrame.size, output), [c[@"id"] stringByAppendingString:@" output frame"]);
             check(equalRect([RNOcrGeometry rectByRotating:box frameSize:frame clockwiseDegrees:degrees], rect(c[@"expectedRotated"])), [c[@"id"] stringByAppendingString:@" rotation"]);
             NSDictionary *line = @{@"text": @"synthetic", @"confidence": @0.75, @"frame": @{@"x": @(box.origin.x), @"y": @(box.origin.y), @"width": @(box.size.width), @"height": @(box.size.height)}};
             NSArray *placed = [RNOcrGeometry linesByRotating:@[line] frameSize:frame clockwiseDegrees:degrees outputSize:output];
