@@ -46,6 +46,7 @@ homography
 IgnoredVulns
 infile
 instancetype
+iphonesimulator
 Jamo
 JAVACMD
 Jpan
@@ -104,6 +105,7 @@ sdkmanager
 shellcheck
 shellness
 shfmt
+simctl
 Srcs
 Sublabel
 Sublayer
@@ -113,6 +115,7 @@ Testables
 trimmable
 turborepo
 UBSAN
+udid
 unblockable
 unmirrored
 unredacted

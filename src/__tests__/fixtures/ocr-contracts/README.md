@@ -78,3 +78,26 @@ Both readers load the checked-in corpus as a Gradle test resource and need neith
 For a behavioral negative check, change `negative-45-tie.expected` to 270 or `exactly-70-percent.expectedDominant` to null, then run with `--tests '*GeometryConformanceTest'`.
 Each must fail its named assertion, independently of snapshot checksums; restore the fixture before the passing run.
 Gson is a test-only JSON dependency because Android's stub `org.json` is not a JVM parser; no parser is added to production.
+
+## Apple production geometry readers (#66)
+
+RN compiles `ios/RNOcrGeometry.m` and `ios/RNQuadGeometry.m` directly into an iOS Simulator executable linked with UIKit.
+No React Native mock, copied algorithm, source-text assertion or macOS substitution is used.
+Run from this repository with an already booted Simulator UUID:
+
+```bash
+bash scripts/apple-geometry/run.sh <simulator-uuid>
+# Optional second argument reads an isolated altered corpus for a negative check.
+bash scripts/apple-geometry/run.sh <simulator-uuid> /tmp/corrupted-contract.json
+```
+
+The reader executes all 64 geometry cases and compares pixel coordinates with absolute tolerance 0.000001; counts, turns and distortion decisions remain exact.
+Each box also round-trips through Vision's bottom-left normalized convention using the production converter, and literal non-square angle vectors verify pixel scaling and sign.
+The geometry helpers accept canonical clockwise degrees; the iOS image pipeline negates its counterclockwise pixel rotation before calling them, so the reader must not negate the corpus degrees again.
+Flutter's corresponding command is `SIMULATOR_UDID=<simulator-uuid> VERIFY_CORRUPTION=1 bash flutter_receipt_scanner_ios/ios/tests/run-geometry.sh` from `AndrewDongminYoo/flutter_receipt_scanner`; its reader uses that repository's vendored snapshot and actual Swift helpers.
+Native iOS CI runs the RN reader before the example Simulator build, independently of the Turborepo build cache.
+
+For a behavioral negative check, copy the corpus to a temporary file and change `negative-45-tie.expected` to 270 or `exactly-70-percent.expectedDominant` to null.
+Pass that file as the second argument: the named assertion must fail with a nonzero exit, without invoking the checksum checker.
+Restore/use the checked-in corpus for the passing run.
+These tests exercise synthetic geometry only; they do not establish real OCR accuracy, scanner UI behavior or pixel-image rotation correctness.
