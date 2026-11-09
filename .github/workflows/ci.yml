@@ -18,6 +18,38 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  receipt-core:
+    name: Receipt Core (${{ matrix.mode }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        mode: [release, sanitizers]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: Verify source snapshot
+        run: python3 cpp/receipt_core/vendor.py --check --upstream-check
+      - name: Configure core
+        env:
+          CC: clang
+          CXX: clang++
+          CORE_MODE: ${{ matrix.mode }}
+        run: |
+          if [ "$CORE_MODE" = sanitizers ]; then
+            cmake -S cpp/receipt_core -B /tmp/receipt-core -D RECEIPT_CORE_SANITIZERS=ON -D BUILD_SHARED_LIBS=ON
+          else
+            cmake -S cpp/receipt_core -B /tmp/receipt-core -D CMAKE_BUILD_TYPE=Release
+          fi
+      - name: Build core
+        run: cmake --build /tmp/receipt-core --parallel 2
+      - name: Test core
+        env:
+          ASAN_OPTIONS: detect_leaks=1
+          UBSAN_OPTIONS: halt_on_error=1
+        run: ctest --test-dir /tmp/receipt-core --output-on-failure
+
   lint:
     name: Lint & Typecheck
     runs-on: ubuntu-latest
