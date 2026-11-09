@@ -57,7 +57,8 @@ Quad corners are `[tlx, tly, trx, try, brx, bry, blx, bly]` in a consistent coor
 Kotlin converts angle and quad numbers to IEEE-754 binary32; histogram counts, selected turns and distortion decisions are exact, with no epsilon applied to thresholds.
 The opposite-edge ratio is allowed at 2.2 and rejected above it; both width and height pairs have below/at/above cases.
 There is no shortest/longest-edge rejection: a valid 25:1 receipt stays valid.
-Future floating-point box readers may compare these integer-valued coordinates with absolute tolerance 0.000001 pixels; that tolerance does not relax discrete decisions or thresholds.
+The Objective-C reader compares these integer-valued coordinates with absolute tolerance 0.000001 pixels; the Swift reader compares corpus boxes exactly.
+Both Apple readers allow absolute tolerance 0.000001 for their additional Vision conversion checks, in pixels or degrees as applicable; these tolerances do not relax discrete decisions or thresholds.
 This corpus covers synthetic helper behavior, not scanner UI, real OCR accuracy or image processing.
 
 Run from RN's `example/android` directory:
