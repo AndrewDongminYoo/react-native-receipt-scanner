@@ -51,3 +51,18 @@ Geometry migration, OCR replacement, receipt-domain parsing and native omitted-p
 Production adoption requires both mobile adapter reports and the separate decision in issue #70; ADR-008's JS-only production decision remains in force meanwhile.
 The [pilot decision](../specs/ocr-overlap-pilot.md) supplies the measurement protocol, acceptance budgets, source-distribution policy and rollback for issue #62.
 The operator approved those criteria separately on 2026-11-09; native implementation and production adoption remain subsequent work.
+
+## Geometry conformance follow-up (#65)
+
+Extend the existing v1 corpus and schema with synthetic angle, correction, box and quad cases; keep merge/quality expectations unchanged.
+The fixture guide owns the numeric contract and commands.
+RN owns the canonical snapshot and Kotlin reader; Flutter vendors the exact snapshot and runs its own production Kotlin helpers.
+Only tests, test resources/dependencies, CI wiring and directly affected documentation change; public APIs, geometry algorithms and production pilot defaults remain unchanged.
+
+1. Add literal boundary expectations and a parameterized JVM reader to each normal Android Gradle test graph.
+2. Cover quarter-turn ties, finite-sample and majority boundaries, output frames, empty clamps, degenerate quads, opposite-edge ratios and long receipts.
+3. Deliberately corrupt tie and threshold expectations, observe named assertion failures in both readers, restore the corpus and rerun.
+4. Run normal Kotlin suites and repository gates, compare snapshot bytes, commit the canonical corpus, then pin its retained commit in both manifests.
+5. Review and deliver one PR per repository; keep #65 open until both implementations are verified.
+
+Objective-C/Swift readers remain the separate #66 follow-up.

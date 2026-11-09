@@ -3,7 +3,7 @@
   "title": "Receipt scanner OCR contract corpus v1",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schemaVersion", "mergeCases", "qualityCases"],
+  "required": ["schemaVersion", "mergeCases", "qualityCases", "geometry"],
   "properties": {
     "schemaVersion": {
       "const": 1
@@ -20,6 +20,48 @@
       "minItems": 1,
       "items": {
         "$ref": "#/$defs/qualityCase"
+      }
+    },
+    "geometry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["quantizeCases", "angleCases", "correctionCases", "boxCases", "quadCases"],
+      "properties": {
+        "quantizeCases": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/quantizeCase"
+          }
+        },
+        "angleCases": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/angleCase"
+          }
+        },
+        "correctionCases": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/correctionCase"
+          }
+        },
+        "boxCases": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/boxCase"
+          }
+        },
+        "quadCases": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/quadCase"
+          }
+        }
       }
     }
   },
@@ -209,6 +251,162 @@
               }
             }
           }
+        }
+      }
+    },
+    "angle": {
+      "oneOf": [
+        {
+          "type": "number"
+        },
+        {
+          "enum": ["NaN", "+Infinity", "-Infinity"]
+        }
+      ]
+    },
+    "box": {
+      "type": "array",
+      "items": {
+        "type": "integer"
+      },
+      "minItems": 4,
+      "maxItems": 4
+    },
+    "frame": {
+      "type": "array",
+      "items": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "minItems": 2,
+      "maxItems": 2
+    },
+    "quantizeCase": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "degrees", "expected"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "degrees": {
+          "type": "number"
+        },
+        "expected": {
+          "enum": [0, 90, 180, 270]
+        }
+      }
+    },
+    "angleCase": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "angles", "expectedHistogram", "expectedDominant"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "angles": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/angle"
+          }
+        },
+        "expectedHistogram": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "minItems": 4,
+          "maxItems": 4
+        },
+        "expectedDominant": {
+          "enum": [null, 0, 90, 180, 270]
+        }
+      }
+    },
+    "correctionCase": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "quarterTurn", "expected"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "quarterTurn": {
+          "type": "integer"
+        },
+        "expected": {
+          "enum": [0, 90, 180, 270]
+        }
+      }
+    },
+    "boxCase": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "frame",
+        "box",
+        "degrees",
+        "expectedFrame",
+        "expectedRotated",
+        "expectedClamped"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "frame": {
+          "$ref": "#/$defs/frame"
+        },
+        "box": {
+          "$ref": "#/$defs/box"
+        },
+        "degrees": {
+          "type": "integer"
+        },
+        "expectedFrame": {
+          "$ref": "#/$defs/frame"
+        },
+        "expectedRotated": {
+          "$ref": "#/$defs/box"
+        },
+        "expectedClamped": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/box"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "quadCase": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "corners", "expectedDistorted"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "corners": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 8,
+          "maxItems": 8
+        },
+        "expectedDistorted": {
+          "type": "boolean"
         }
       }
     }

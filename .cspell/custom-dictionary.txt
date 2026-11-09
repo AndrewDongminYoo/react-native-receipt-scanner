@@ -36,6 +36,7 @@ F741NKSS3CZCS
 foojay
 GHSA
 gradlew
+gson
 guoyu
 Hani
 hermesc
@@ -69,6 +70,7 @@ mlkit
 mtrl
 nonatomic
 nonconvex
+nonfinite
 NONNULL
 normalisation
 NSURL

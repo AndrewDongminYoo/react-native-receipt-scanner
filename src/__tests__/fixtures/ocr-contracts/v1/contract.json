@@ -911,5 +911,397 @@
         "qualities": []
       }
     }
-  ]
+  ],
+  "geometry": {
+    "quantizeCases": [
+      {
+        "id": "negative-135-tie",
+        "degrees": -135,
+        "expected": 270
+      },
+      {
+        "id": "negative-45-tie",
+        "degrees": -45,
+        "expected": 0
+      },
+      {
+        "id": "positive-45-tie",
+        "degrees": 45,
+        "expected": 90
+      },
+      {
+        "id": "positive-135-tie",
+        "degrees": 135,
+        "expected": 180
+      },
+      {
+        "id": "below-positive-tie",
+        "degrees": 44.99,
+        "expected": 0
+      },
+      {
+        "id": "above-positive-tie",
+        "degrees": 45.01,
+        "expected": 90
+      },
+      {
+        "id": "below-negative-tie",
+        "degrees": -45.01,
+        "expected": 270
+      },
+      {
+        "id": "above-negative-tie",
+        "degrees": -44.99,
+        "expected": 0
+      },
+      {
+        "id": "negative-wrap",
+        "degrees": -180,
+        "expected": 180
+      },
+      {
+        "id": "positive-wrap",
+        "degrees": 180,
+        "expected": 180
+      },
+      {
+        "id": "upright",
+        "degrees": 0,
+        "expected": 0
+      },
+      {
+        "id": "clockwise",
+        "degrees": 90,
+        "expected": 90
+      },
+      {
+        "id": "counterclockwise",
+        "degrees": -90,
+        "expected": 270
+      }
+    ],
+    "angleCases": [
+      {
+        "id": "empty",
+        "angles": [],
+        "expectedHistogram": [0, 0, 0, 0],
+        "expectedDominant": null
+      },
+      {
+        "id": "four-usable",
+        "angles": [90, 90, 90, 90],
+        "expectedHistogram": [0, 4, 0, 0],
+        "expectedDominant": null
+      },
+      {
+        "id": "five-usable",
+        "angles": [89, 90, 91, 90, 90],
+        "expectedHistogram": [0, 5, 0, 0],
+        "expectedDominant": 90
+      },
+      {
+        "id": "four-plus-nonfinite",
+        "angles": [90, 90, 90, 90, "NaN", "+Infinity", "-Infinity"],
+        "expectedHistogram": [0, 4, 0, 0],
+        "expectedDominant": null
+      },
+      {
+        "id": "five-plus-nonfinite",
+        "angles": [90, 90, 90, 90, 90, "NaN", "+Infinity", "-Infinity"],
+        "expectedHistogram": [0, 5, 0, 0],
+        "expectedDominant": 90
+      },
+      {
+        "id": "all-nonfinite",
+        "angles": ["NaN", "+Infinity", "-Infinity"],
+        "expectedHistogram": [0, 0, 0, 0],
+        "expectedDominant": null
+      },
+      {
+        "id": "below-70-percent",
+        "angles": [90, 90, 90, 90, 90, 90, 0, 0, 0, 0],
+        "expectedHistogram": [4, 6, 0, 0],
+        "expectedDominant": null
+      },
+      {
+        "id": "exactly-70-percent",
+        "angles": [90, 90, 90, 90, 90, 90, 90, 0, 0, 0],
+        "expectedHistogram": [3, 7, 0, 0],
+        "expectedDominant": 90
+      },
+      {
+        "id": "above-70-percent",
+        "angles": [90, 90, 90, 90, 90, 90, 90, 90, 0, 0],
+        "expectedHistogram": [2, 8, 0, 0],
+        "expectedDominant": 90
+      },
+      {
+        "id": "split-evenly",
+        "angles": [0, 0, 0, 0, 0, 90, 90, 90, 90, 90],
+        "expectedHistogram": [5, 5, 0, 0],
+        "expectedDominant": null
+      },
+      {
+        "id": "confirmed-upright",
+        "angles": [0, 1, -1, 2, -2],
+        "expectedHistogram": [5, 0, 0, 0],
+        "expectedDominant": 0
+      },
+      {
+        "id": "wrap-at-180",
+        "angles": [179, -179, 180, -178, 177],
+        "expectedHistogram": [0, 0, 5, 0],
+        "expectedDominant": 180
+      },
+      {
+        "id": "counterclockwise-majority",
+        "angles": [-90, -89, -91, -90, -90, 0],
+        "expectedHistogram": [1, 0, 0, 5],
+        "expectedDominant": 270
+      },
+      {
+        "id": "ties-in-histogram",
+        "angles": [-135, -45, 45, 135, 0],
+        "expectedHistogram": [2, 1, 1, 1],
+        "expectedDominant": null
+      }
+    ],
+    "correctionCases": [
+      {
+        "id": "correction-0",
+        "quarterTurn": 0,
+        "expected": 0
+      },
+      {
+        "id": "correction-90",
+        "quarterTurn": 90,
+        "expected": 270
+      },
+      {
+        "id": "correction-180",
+        "quarterTurn": 180,
+        "expected": 180
+      },
+      {
+        "id": "correction-270",
+        "quarterTurn": 270,
+        "expected": 90
+      },
+      {
+        "id": "correction--90",
+        "quarterTurn": -90,
+        "expected": 90
+      },
+      {
+        "id": "correction-450",
+        "quarterTurn": 450,
+        "expected": 270
+      },
+      {
+        "id": "correction-360",
+        "quarterTurn": 360,
+        "expected": 0
+      }
+    ],
+    "boxCases": [
+      {
+        "id": "rotate-0",
+        "frame": [640, 480],
+        "box": [50, 20, 100, 30],
+        "degrees": 0,
+        "expectedFrame": [640, 480],
+        "expectedRotated": [50, 20, 100, 30],
+        "expectedClamped": [50, 20, 100, 30]
+      },
+      {
+        "id": "rotate-90",
+        "frame": [640, 480],
+        "box": [50, 20, 100, 30],
+        "degrees": 90,
+        "expectedFrame": [480, 640],
+        "expectedRotated": [430, 50, 30, 100],
+        "expectedClamped": [430, 50, 30, 100]
+      },
+      {
+        "id": "rotate-180",
+        "frame": [640, 480],
+        "box": [50, 20, 100, 30],
+        "degrees": 180,
+        "expectedFrame": [640, 480],
+        "expectedRotated": [490, 430, 100, 30],
+        "expectedClamped": [490, 430, 100, 30]
+      },
+      {
+        "id": "rotate-270",
+        "frame": [640, 480],
+        "box": [50, 20, 100, 30],
+        "degrees": 270,
+        "expectedFrame": [480, 640],
+        "expectedRotated": [20, 490, 30, 100],
+        "expectedClamped": [20, 490, 30, 100]
+      },
+      {
+        "id": "rotate--90",
+        "frame": [640, 480],
+        "box": [50, 20, 100, 30],
+        "degrees": -90,
+        "expectedFrame": [480, 640],
+        "expectedRotated": [20, 490, 30, 100],
+        "expectedClamped": [20, 490, 30, 100]
+      },
+      {
+        "id": "rotate-450",
+        "frame": [640, 480],
+        "box": [50, 20, 100, 30],
+        "degrees": 450,
+        "expectedFrame": [480, 640],
+        "expectedRotated": [430, 50, 30, 100],
+        "expectedClamped": [430, 50, 30, 100]
+      },
+      {
+        "id": "clip-top-left",
+        "frame": [640, 480],
+        "box": [-10, -20, 40, 50],
+        "degrees": 0,
+        "expectedFrame": [640, 480],
+        "expectedRotated": [-10, -20, 40, 50],
+        "expectedClamped": [0, 0, 30, 30]
+      },
+      {
+        "id": "clip-bottom-right",
+        "frame": [640, 480],
+        "box": [620, 460, 40, 50],
+        "degrees": 0,
+        "expectedFrame": [640, 480],
+        "expectedRotated": [620, 460, 40, 50],
+        "expectedClamped": [620, 460, 20, 20]
+      },
+      {
+        "id": "outside-right",
+        "frame": [640, 480],
+        "box": [640, 10, 20, 30],
+        "degrees": 0,
+        "expectedFrame": [640, 480],
+        "expectedRotated": [640, 10, 20, 30],
+        "expectedClamped": null
+      },
+      {
+        "id": "outside-left",
+        "frame": [640, 480],
+        "box": [-20, 10, 20, 30],
+        "degrees": 0,
+        "expectedFrame": [640, 480],
+        "expectedRotated": [-20, 10, 20, 30],
+        "expectedClamped": null
+      },
+      {
+        "id": "outside-bottom",
+        "frame": [640, 480],
+        "box": [10, 480, 20, 30],
+        "degrees": 0,
+        "expectedFrame": [640, 480],
+        "expectedRotated": [10, 480, 20, 30],
+        "expectedClamped": null
+      },
+      {
+        "id": "zero-width",
+        "frame": [640, 480],
+        "box": [20, 30, 0, 10],
+        "degrees": 0,
+        "expectedFrame": [640, 480],
+        "expectedRotated": [20, 30, 0, 10],
+        "expectedClamped": null
+      },
+      {
+        "id": "zero-height",
+        "frame": [640, 480],
+        "box": [20, 30, 10, 0],
+        "degrees": 0,
+        "expectedFrame": [640, 480],
+        "expectedRotated": [20, 30, 10, 0],
+        "expectedClamped": null
+      },
+      {
+        "id": "rotate-then-clip",
+        "frame": [640, 480],
+        "box": [-10, 460, 40, 50],
+        "degrees": 90,
+        "expectedFrame": [480, 640],
+        "expectedRotated": [-30, -10, 50, 40],
+        "expectedClamped": [0, 0, 20, 30]
+      }
+    ],
+    "quadCases": [
+      {
+        "id": "rectangle",
+        "corners": [0, 0, 100, 0, 100, 200, 0, 200],
+        "expectedDistorted": false
+      },
+      {
+        "id": "long-receipt",
+        "corners": [0, 0, 100, 0, 100, 2500, 0, 2500],
+        "expectedDistorted": false
+      },
+      {
+        "id": "coincident",
+        "corners": [0, 0, 0, 0, 0, 0, 0, 0],
+        "expectedDistorted": true
+      },
+      {
+        "id": "collapsed-edge",
+        "corners": [0, 0, 100, 0, 50, 200, 50, 200],
+        "expectedDistorted": true
+      },
+      {
+        "id": "collinear",
+        "corners": [0, 0, 25, 0, 50, 0, 75, 0],
+        "expectedDistorted": true
+      },
+      {
+        "id": "concave",
+        "corners": [0, 0, 100, 0, 100, 200, 90, 100],
+        "expectedDistorted": true
+      },
+      {
+        "id": "crossing",
+        "corners": [0, 0, 100, 200, 100, 0, 0, 200],
+        "expectedDistorted": true
+      },
+      {
+        "id": "width-ratio-below",
+        "corners": [0, 0, 10, 0, 21.99, 100, 0, 100],
+        "expectedDistorted": false
+      },
+      {
+        "id": "width-ratio-at",
+        "corners": [0, 0, 10, 0, 22, 100, 0, 100],
+        "expectedDistorted": false
+      },
+      {
+        "id": "width-ratio-above",
+        "corners": [0, 0, 10, 0, 22.01, 100, 0, 100],
+        "expectedDistorted": true
+      },
+      {
+        "id": "height-ratio-below",
+        "corners": [0, 0, 100, 0, 100, 21.99, 0, 10],
+        "expectedDistorted": false
+      },
+      {
+        "id": "height-ratio-at",
+        "corners": [0, 0, 100, 0, 100, 22, 0, 10],
+        "expectedDistorted": false
+      },
+      {
+        "id": "height-ratio-above",
+        "corners": [0, 0, 100, 0, 100, 22.01, 0, 10],
+        "expectedDistorted": true
+      },
+      {
+        "id": "reverse-winding",
+        "corners": [0, 0, 0, 200, 100, 200, 100, 0],
+        "expectedDistorted": false
+      }
+    ]
+  }
 }

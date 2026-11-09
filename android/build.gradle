@@ -46,6 +46,10 @@ android {
     buildConfig true
   }
 
+  sourceSets {
+    test.resources.srcDir "../src/__tests__/fixtures/ocr-contracts"
+  }
+
   buildTypes {
     release {
       minifyEnabled false
@@ -89,4 +93,6 @@ dependencies {
 
   // Unit tests
   testImplementation "junit:junit:4.13.2"
+  // Real JVM JSON reader; Android's org.json classes are non-functional test stubs.
+  testImplementation "com.google.code.gson:gson:2.13.1"
 }

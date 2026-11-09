@@ -1,9 +1,10 @@
 # Shared OCR Contract Fixtures
 
 This directory owns the synthetic input/output contract shared with `AndrewDongminYoo/flutter_receipt_scanner`.
-`v1/contract.json` contains literal expectations for merge results and OCR-floor behavior; `v1/schema.json` describes its JSON format.
+`v1/contract.json` contains literal expectations for merge results, OCR-floor behavior and geometry; `v1/schema.json` describes its JSON format.
 The checker enforces the supported corpus version and snapshot integrity; the schema is descriptive and is not executed as a JSON Schema validator.
-Both test readers execute production postprocessing code, using `file:///contract/page-<index>.jpg` as synthetic page URIs.
+The JS/Dart readers execute production postprocessing code, using `file:///contract/page-<index>.jpg` as synthetic page URIs.
+Kotlin readers execute the production `OcrGeometry` and `QuadGeometry` helpers through each plugin's normal Gradle unit-test graph.
 The corpus contains no captured receipts or personal data.
 
 ## Contract
@@ -41,3 +42,39 @@ node scripts/check-ocr-contracts.js /absolute/flutter_receipt_scanner/flutter_re
 Without an argument, the checker verifies the canonical snapshot only.
 It compares actual file bytes and manifest content; matching hashes do not prove that a published upstream commit exists.
 The Jest suite also verifies that changing a copied fixture or its manifest is rejected, including an unsupported corpus version with a refreshed checksum.
+
+## Geometry numeric contract
+
+The additive `geometry` section has 13 quantization, 14 histogram/dominance, 7 correction, 14 box and 14 quadrilateral cases.
+Angles are clockwise-positive degrees; exact ties between quarter turns round toward positive infinity, so -45 maps to 0 and -135 maps to 270.
+Histogram bins are ordered 0/90/180/270; only finite angles count toward the five-line floor and the inclusive 70% majority.
+`NaN`, `+Infinity` and `-Infinity` are explicit string tokens accepted only in angle lists, never JSON numbers or direct quantizer inputs.
+Correction is the clockwise turn that undoes the supplied text angle.
+
+Boxes use top-left-origin integer pixels as `[x, y, width, height]`; frames are `[width, height]`.
+Rotation and clamping have exact integer expectations, including the swapped output frame at 90/270 degrees and null for an empty intersection.
+Quad corners are `[tlx, tly, trx, try, brx, bry, blx, bly]` in a consistent coordinate space.
+Kotlin converts angle and quad numbers to IEEE-754 binary32; histogram counts, selected turns and distortion decisions are exact, with no epsilon applied to thresholds.
+The opposite-edge ratio is allowed at 2.2 and rejected above it; both width and height pairs have below/at/above cases.
+There is no shortest/longest-edge rejection: a valid 25:1 receipt stays valid.
+Future floating-point box readers may compare these integer-valued coordinates with absolute tolerance 0.000001 pixels; that tolerance does not relax discrete decisions or thresholds.
+This corpus covers synthetic helper behavior, not scanner UI, real OCR accuracy or image processing.
+
+Run from RN's `example/android` directory:
+
+```bash
+./gradlew :react-native-receipt-scanner:testDebugUnitTest
+```
+
+Prepare Flutter's ignored Gradle wrapper from `flutter_receipt_scanner/example`, then run the suite:
+
+```bash
+flutter build apk --debug --config-only
+cd android
+./gradlew :flutter_receipt_scanner_android:testDebugUnitTest
+```
+
+Both readers load the checked-in corpus as a Gradle test resource and need neither the other checkout nor a device.
+For a behavioral negative check, change `negative-45-tie.expected` to 270 or `exactly-70-percent.expectedDominant` to null, then run with `--tests '*GeometryConformanceTest'`.
+Each must fail its named assertion, independently of snapshot checksums; restore the fixture before the passing run.
+Gson is a test-only JSON dependency because Android's stub `org.json` is not a JVM parser; no parser is added to production.
