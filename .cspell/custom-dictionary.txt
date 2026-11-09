@@ -81,6 +81,7 @@ pbxproj
 pbxuser
 perspectivev3
 photopicker
+pinact
 Podfile
 podspec
 postclean
