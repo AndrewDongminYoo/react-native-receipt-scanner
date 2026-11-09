@@ -88,6 +88,11 @@ int main(int argc, const char *argv[]) {
         // Literal non-square Vision vectors catch axis/sign mistakes that square frames hide.
         check(fabs([RNOcrGeometry clockwiseAngleFromTopLeft:CGPointMake(0.1, 0.8) topRight:CGPointMake(0.3, 0.7) pixelSize:CGSizeMake(200, 400)] - 45) <= 1e-6, @"Vision clockwise pixel angle");
         check(fabs([RNOcrGeometry clockwiseAngleFromTopLeft:CGPointMake(0.1, 0.2) topRight:CGPointMake(0.1, 0.8) pixelSize:CGSizeMake(200, 400)] + 90) <= 1e-6, @"Vision counterclockwise pixel angle");
+        check([geometry[@"quantizeCases"] count] == 13, @"quantization case count");
+        check([geometry[@"angleCases"] count] == 14, @"angle case count");
+        check([geometry[@"correctionCases"] count] == 7, @"correction case count");
+        check([geometry[@"boxCases"] count] == 14, @"box case count");
+        check([geometry[@"quadCases"] count] == 16, @"quadrilateral case count");
         check(cases == 64, @"complete geometry corpus (64 cases)");
         printf("Objective-C geometry: %lu cases, %lu failures\n", (unsigned long)cases, (unsigned long)failures);
         return failures ? 1 : 0;
