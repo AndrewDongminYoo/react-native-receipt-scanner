@@ -60,6 +60,8 @@ uint32_t RECEIPT_CORE_CALL receipt_core_find_overlap_v1(
       const uint32_t remaining = 12 - units;
       units += right_lines[i].length < remaining ? right_lines[i].length : remaining;
     }
+    // Every shorter candidate is also constant when this full window is equal.
+    if (equal && !distinct) break;
     if (equal && distinct && units == 12) {
       *out_overlap = depth;
       break;

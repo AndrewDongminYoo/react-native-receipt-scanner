@@ -20,7 +20,7 @@ Sanitizers inspect declared accessible test storage; no C ABI can prove an arbit
 
 ## Host verification
 
-Requirements: CMake 3.20+, C/C++ compiler, threads, and Node for the host-only shared-corpus adapter.
+Requirements: CMake 3.20+, C/C++ compiler, threads, Node for the host-only shared-corpus adapter, and Python 3 for snapshot tests.
 From the repository root on Linux:
 
 ```bash
@@ -33,6 +33,7 @@ ASAN_OPTIONS=detect_leaks=1 UBSAN_OPTIONS=halt_on_error=1 ctest --test-dir /tmp/
 ```
 
 CTest exercises C compilation/linkage, exact matching, malformed descriptors and concurrent calls.
+It also guards against a slow constant-line search and tests offline snapshot integrity, unlisted files and invalid pin arguments.
 The host-only corpus adapter normalizes the shared synthetic merge inputs, invokes the real core for adjacent original pages and compares assembled results with literal expectations.
 It does not move page assembly into native code or replace the existing JS quality tests.
 Run `yarn test` for those host policy tests.
@@ -42,6 +43,7 @@ Run `yarn test` for those host policy tests.
 Copy this source directory and preserve `LICENSE` and `manifest.json`.
 The manifest pins the upstream repository, an immutable commit containing these exact source bytes, ABI version and SHA-256 hashes.
 It excludes only itself; no consumer build fetches source.
+The verifier rejects unlisted files; keep build output outside the source directory.
 Verify a copied directory offline with `python3 vendor.py --check` from that directory.
 When checking the canonical checkout, add `--upstream-check` to compare every file with the pinned local Git revision as well.
 Hashes establish snapshot integrity; offline checking alone cannot authenticate the upstream repository or prove that a revision is published.

@@ -16,8 +16,9 @@ FILES = (
     "receipt_core.h",
     "tests/c_header_test.c",
     "tests/core_test.cpp",
-    "tests/corpus_runner.js",
     "tests/corpus_driver.cpp",
+    "tests/corpus_runner.js",
+    "tests/vendor_test.py",
     "vendor.py",
 )
 REPOSITORY = "https://github.com/AndrewDongminYoo/react-native-receipt-scanner"
@@ -41,8 +42,12 @@ def main():
     parser.add_argument("--upstream-check", action="store_true")
     args = parser.parse_args()
     manifest_path = ROOT / "manifest.json"
+    actual = {entry.relative_to(ROOT).as_posix() for entry in ROOT.rglob("*")
+              if entry.is_file() or entry.is_symlink()}
+    if actual - {"manifest.json"} != set(FILES):
+        raise ValueError("snapshot file inventory mismatch")
     hashes = {name: hashlib.sha256((ROOT / name).read_bytes()).hexdigest() for name in FILES}
-    if args.pin:
+    if args.pin is not None:
         if not re.fullmatch(r"[0-9a-f]{40}", args.pin):
             raise ValueError("sourceCommit must be a full immutable Git SHA")
         upstream_matches(args.pin)

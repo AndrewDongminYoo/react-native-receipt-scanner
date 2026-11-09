@@ -26,6 +26,10 @@ int main() {
   uint32_t out = 99;
   CHECK(receipt_core_abi_version() == RECEIPT_CORE_ABI_VERSION);
   CHECK(match(data, 11, lines, 2, &out) == RECEIPT_CORE_OK && out == 2);
+  const uint16_t upper[] = {'A','A','A','A','A','B','B','B','B','B','B'};
+  out = 99;
+  CHECK(receipt_core_find_overlap_v1(upper, 11, lines, 2, data, 11,
+        lines, 2, &out) == RECEIPT_CORE_OK && out == 0);
   CHECK(match(data, 10, lines, 2, &out) == RECEIPT_CORE_INVALID_INPUT && out == 0);
   CHECK(match(nullptr, 0, nullptr, 0, &out) == RECEIPT_CORE_OK && out == 0);
   CHECK(match(nullptr, 1, nullptr, 0, &out) == RECEIPT_CORE_INVALID_INPUT);
@@ -49,6 +53,11 @@ int main() {
   CHECK(match(data, 11, empty, 2, &out) == RECEIPT_CORE_OK && out == 2);
   const receipt_core_line_v1 null_empty[] = {{0, 0}};
   CHECK(match(nullptr, 0, null_empty, 1, &out) == RECEIPT_CORE_OK && out == 0);
+  // A fully equal constant window cannot gain a distinct line at smaller depths.
+  const std::vector<uint16_t> constant_data(100, 'a');
+  const std::vector<receipt_core_line_v1> constant_lines(10000, {0, 100});
+  CHECK(match(constant_data.data(), 100, constant_lines.data(), 10000, &out)
+        == RECEIPT_CORE_OK && out == 0);
   // Shared borrowed input, independent output, repeated concurrent calls.
   std::atomic<bool> failed{false};
   std::vector<std::thread> threads;
