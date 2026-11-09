@@ -16,7 +16,6 @@ on:
     paths-ignore:
       - "**/*.md"
       - LICENSE
-      - src/__tests__/**
       - .github/workflows/ci.yml
   # Matches ci.yml. Merge groups do not honour paths-ignore, so this runs
   # unconditionally once a merge queue is enabled.
