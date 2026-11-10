@@ -92,6 +92,32 @@ scan(options)
 - OCR passes the caller's validated BCP 47 hints to Vision in caller order.
 - All JPEG operations via `ImageIO` / `CoreGraphics` — never UIImageJPEGRepresentation (lossy metadata loss)
 
+## iOS Output JPEG Metadata
+
+`RNImageProcessor.processImage` reconstructs source EXIF/TIFF metadata using the following allowlist.
+The policy applies after crop, orientation normalization, and optional OCR-driven rotation, including re-encoding.
+
+| Dictionary | Allowed source tags                                                                                                                                                                                                          |
+| ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| EXIF       | `DateTimeOriginal`, `DateTimeDigitized`, `ExposureTime`, `FNumber`, `FocalLength`, `Flash`, `WhiteBalance`, `ExposureMode`, `ExposureProgram`, `MeteringMode`, `ColorSpace`, `LightSource`, `ExifVersion`, `ISOSpeedRatings` |
+| TIFF       | `Make`, `Model`, `Software`, `DateTime`                                                                                                                                                                                      |
+
+File and TIFF orientation are always `1`, matching the encoded pixels.
+ImageIO can generate structural metadata such as dimensions, resolution, color information, and EXIF version; these values describe the output rather than copying arbitrary source tags.
+Source comments, authors, copyright, owner names, serial numbers, unique image IDs, MakerNote, and stale source dimensions are not copied.
+No other source metadata dictionaries are passed to the encoder.
+
+- `includeExif: false`: omit source EXIF/TIFF/GPS from the JPEG and omit JS `exif`, regardless of the GPS/raw flags.
+  ImageIO structural metadata and normalized orientation can remain.
+- `includeExif: true`: copy only the listed EXIF/TIFF source tags.
+  GPS is omitted by default; `includeGpsExif: true` additionally copies the source GPS dictionary and exposes normalized JS GPS when coordinates are available.
+- `includeRawExif: true`: expose the existing filtered, flattened source metadata under JS `exif.raw`; it does not expand the file allowlist.
+  `raw.Orientation` retains the source value, while normalized JS `orientation` is `1`.
+- With no source metadata (VisionKit camera), JS retains synthetic `make`, `model`, and `dateTimeOriginal`; those synthetic values are not written to the JPEG.
+
+Run `bash scripts/apple-metadata/run.sh <booted-simulator-uuid>` to check synthetic source tags against actual output JPEGs and the dictionary forwarded to JS.
+The reader verifies that the fixture writer encoded the relevant tags before trusting their absence from the output.
+
 ## Temp File Policy
 
 Returned JPEGs live in `NSCachesDirectory` on iOS and `context.cacheDir` on Android.

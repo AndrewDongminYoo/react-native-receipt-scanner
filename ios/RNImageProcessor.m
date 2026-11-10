@@ -63,12 +63,42 @@ static CGImagePropertyOrientation RNOrientationFromUIImageOrientation(UIImageOri
             CGImageSourceCopyPropertiesAtIndex(sourceRef, 0, NULL);
 
         if (sourceProps[(NSString *)kCGImagePropertyExifDictionary]) {
-            props[(NSString *)kCGImagePropertyExifDictionary] =
-                sourceProps[(NSString *)kCGImagePropertyExifDictionary];
+            // Keep only source tags represented by the normalized public API.
+            // includeRawExif expands the JS map, never the encoded file's metadata.
+            NSDictionary *sourceExif = sourceProps[(NSString *)kCGImagePropertyExifDictionary];
+            NSMutableDictionary *exif = [NSMutableDictionary new];
+            for (NSString *key in @[
+                (NSString *)kCGImagePropertyExifDateTimeOriginal,
+                (NSString *)kCGImagePropertyExifDateTimeDigitized,
+                (NSString *)kCGImagePropertyExifExposureTime,
+                (NSString *)kCGImagePropertyExifFNumber,
+                (NSString *)kCGImagePropertyExifFocalLength,
+                (NSString *)kCGImagePropertyExifFlash,
+                (NSString *)kCGImagePropertyExifWhiteBalance,
+                (NSString *)kCGImagePropertyExifExposureMode,
+                (NSString *)kCGImagePropertyExifExposureProgram,
+                (NSString *)kCGImagePropertyExifMeteringMode,
+                (NSString *)kCGImagePropertyExifColorSpace,
+                (NSString *)kCGImagePropertyExifLightSource,
+                (NSString *)kCGImagePropertyExifVersion,
+                (NSString *)kCGImagePropertyExifISOSpeedRatings,
+            ]) {
+                if (sourceExif[key]) exif[key] = sourceExif[key];
+            }
+            props[(NSString *)kCGImagePropertyExifDictionary] = [exif copy];
         }
         if (sourceProps[(NSString *)kCGImagePropertyTIFFDictionary]) {
-            // Strip TIFF orientation — output pixels are already correctly oriented.
-            NSMutableDictionary *tiff = [sourceProps[(NSString *)kCGImagePropertyTIFFDictionary] mutableCopy];
+            NSDictionary *sourceTiff = sourceProps[(NSString *)kCGImagePropertyTIFFDictionary];
+            NSMutableDictionary *tiff = [NSMutableDictionary new];
+            for (NSString *key in @[
+                (NSString *)kCGImagePropertyTIFFMake,
+                (NSString *)kCGImagePropertyTIFFModel,
+                (NSString *)kCGImagePropertyTIFFSoftware,
+                (NSString *)kCGImagePropertyTIFFDateTime,
+            ]) {
+                if (sourceTiff[key]) tiff[key] = sourceTiff[key];
+            }
+            // Output pixels are already correctly oriented.
             tiff[(NSString *)kCGImagePropertyTIFFOrientation] = @(kCGImagePropertyOrientationUp);
             props[(NSString *)kCGImagePropertyTIFFDictionary] = [tiff copy];
         }

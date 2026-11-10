@@ -226,9 +226,9 @@ if (result.status === "success") {
 
 > **Note:** Output JPEG pixels are always written orientation-normalized, so `exif.orientation` is always `1`. Callers must not re-rotate.
 
-> **iOS metadata limitation:** `includeRawExif` controls the returned `exif.raw` field; it does not sanitize the output JPEG.
-> With `includeExif: true`, gallery JPEGs preserve the source EXIF and TIFF dictionaries, while GPS copying remains controlled by `includeGpsExif`.
-> Review or remove file metadata before sharing images when your application requires a strict metadata allowlist.
+> **iOS metadata policy:** JPEGs retain only the allowed source EXIF/TIFF tags; source GPS requires both `includeExif` and `includeGpsExif`.
+> `includeRawExif` affects JS `exif.raw` only and never expands file retention.
+> See the [output JPEG policy](docs/specs/scan-pipeline.md#ios-output-jpeg-metadata) for allowed tags and encoder-generated metadata.
 
 > **Note:** On the gallery path EXIF is read from the original source image. On the camera path (VNDocumentCameraViewController on iOS, GmsDocumentScanner on Android) the source EXIF is stripped during the scan, so the library synthesizes `make` / `model` / `dateTimeOriginal` from the device — `software` and `gps` are absent unless the source carried them.
 
@@ -414,6 +414,12 @@ console.log(result.images[0].exif?.raw);
 // → { Make: "samsung", Software: "F741NKSS3CZCS", Orientation: "6",
 //     DateTimeOriginal: "...", FNumber: "1.8", ISOSpeedRatings: "100", ... }
 ```
+
+On iOS, output JPEGs retain only [allowed EXIF/TIFF source tags](docs/specs/scan-pipeline.md#ios-output-jpeg-metadata).
+`includeExif: false` strips source metadata from the file and omits JS `exif`; normalized orientation and encoder-generated structural metadata can remain.
+Source GPS is copied only when both `includeExif` and `includeGpsExif` are true.
+`includeRawExif` controls JS exposure only and never broadens the file allowlist.
+Camera metadata synthesized for JS is not written to the JPEG.
 
 ### Error codes
 

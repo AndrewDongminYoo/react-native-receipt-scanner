@@ -372,10 +372,13 @@ exif.raw ===
 - Binary fields (`Thumbnail*`, `MakerNote`, `UserComment`, `JPEGInterchangeFormat`, etc.) are excluded.
 - GPS-prefixed keys are excluded from `raw` whenever `includeGpsExif === false`, matching the white-list `gps` policy.
 
-### Output JPEG metadata asymmetry (known limitation)
+### Output JPEG metadata policy
 
-- **iOS** preserves the full EXIF / TIFF / GPS dictionaries on the output JPEG via `CGImageDestinationAddImage`.
-  GPS is stripped only when `includeGpsExif === false`.
+- **iOS** rebuilds source EXIF/TIFF from an explicit [allowlist](scan-pipeline.md#ios-output-jpeg-metadata) matching normalized API fields.
+  Source GPS is copied only when both `includeExif` and `includeGpsExif` are true.
+  `includeExif: false` strips source metadata from the file and omits JS `exif`; ImageIO structural metadata and orientation `1` can remain.
+  `includeRawExif` affects only JS `exif.raw`, never file retention.
+  Camera metadata synthesized for JS is not written to the file.
 - **Android** writes the JPEG via `Bitmap.compress(JPEG, …)`, then `ImageProcessor.writeExifToFile`
   copies the parsed structured tags back onto the output file after the final compression.
   Written tags: `make`, `model`, `software`, `dateTime` / `dateTimeOriginal` /
@@ -385,7 +388,7 @@ exif.raw ===
 
 Server-side validators that re-read EXIF from the uploaded file now see metadata on
 both iOS and Android uploads. The JS-side `exif` field remains the richer source
-(it also carries `raw` and the source `orientation` value).
+(it can also carry `raw`, including the original `raw.Orientation` value).
 
 ## Package Responsibilities
 

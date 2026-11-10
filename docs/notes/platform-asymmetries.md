@@ -17,7 +17,7 @@
 
 | 항목                  | iOS                                             | Android                                                       |
 | --------------------- | ----------------------------------------------- | ------------------------------------------------------------- |
-| 출력 JPEG에 EXIF 작성 | ✅ `CGImageDestinationAddImage`로 보존          | ✅ `ImageProcessor.writeExifToFile` → `exif.saveAttributes()` |
+| 출력 JPEG에 EXIF 작성 | ✅ EXIF/TIFF allowlist + opt-in GPS             | ✅ `ImageProcessor.writeExifToFile` → `exif.saveAttributes()` |
 | 결과                  | 파일 자체에 EXIF 존재 → server-side 재검증 가능 | 동일 — 파일 자체에 EXIF 존재                                  |
 
 **Resolution path.** 해소됨. 원래 ADR-005 "출력 JPEG metadata asymmetry" 및 ADR-006 D11(deferred)에 "server-side 검증 정책에 따라 `saveAttributes()` 추가 가능, 1-call fix"로 기록돼 있었고, 그 fix가 이후 실제로 적용됐다 — `ReceiptScannerModule`이 카메라·갤러리 양 경로에서 `writeExifToFile`을 호출해 파싱된 EXIF를 최종 JPEG(autoRotate 재압축 이후)에 다시 쓴다. 표는 갱신되지 않은 채 남아 있었다 (2026-07-30 정정).

@@ -45,22 +45,26 @@ NS_ASSUME_NONNULL_BEGIN
 
 /**
  * Recompresses `cgImage` to JPEG at the given quality and writes it to
- * `NSCachesDirectory`. Optionally copies EXIF / TIFF / GPS dictionaries
- * from `sourceRef`, or synthesizes a minimal device dict when no source is
- * available.
+ * `NSCachesDirectory`. Copies only allowed EXIF / TIFF source tags and,
+ * when opted in, the GPS dictionary. Without a source, synthesizes a minimal
+ * device dictionary for the JS result only.
  *
  * @param cgImage Pre-oriented pixels to encode. Must already match the
  *                desired output orientation; orientation is always written
  *                as `kCGImagePropertyOrientationUp` (1).
  * @param quality JPEG quality in `[0.0, 1.0]`.
- * @param sourceRef Source image whose EXIF should be preserved. Pass `NULL`
+ * @param sourceRef Source image from which allowed EXIF tags are read. Pass `NULL`
  *                  for the camera path (VisionKit strips EXIF) — the
  *                  processor synthesizes `make` / `model` / `dateTimeOriginal`
  *                  from `UIDevice` instead. Held only for the duration of
  *                  the call.
- * @param includeExif When `YES`, populates `RNProcessedImage.exifData`.
- * @param includeGpsExif When `YES`, includes the GPS dictionary specifically.
- * @param includeRawExif When `YES`, attaches a flat raw EXIF map under `exif.raw`.
+ * @param includeExif When `YES`, copies allowed source tags to the file and populates
+ *                    `RNProcessedImage.exifData`. When `NO`, strips source metadata;
+ *                    the file still carries normalized orientation.
+ * @param includeGpsExif When `YES` and `includeExif` is `YES`, includes source GPS
+ *                       in the file and JS result.
+ * @param includeRawExif When `YES`, attaches a flat source EXIF map under `exif.raw`.
+ *                       Does not expand the JPEG file allowlist.
  * @param error Out-error pointer for write failures.
  * @return The cached `RNProcessedImage`, or `nil` on failure (with `*error` set).
  */
