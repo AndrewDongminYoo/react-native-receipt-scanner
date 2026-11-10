@@ -59,8 +59,8 @@ describe("Android gallery crop editor", () => {
 
   it("shows localized guidance for choosing the document corners", () => {
     const cropEditorActivity = androidSource("CropEditorActivity.kt");
-    const koreanStrings = androidRes("values", "strings.xml");
-    const englishStrings = androidRes("values-en", "strings.xml");
+    const koreanStrings = androidRes("values-ko", "strings.xml");
+    const englishStrings = androidRes("values", "strings.xml");
 
     expect(cropEditorActivity).toContain("RNReceiptScanner_cropInstruction");
     expect(cropEditorActivity).toContain("TextView(this)");
