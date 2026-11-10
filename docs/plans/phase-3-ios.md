@@ -64,7 +64,7 @@ Gallery import uses `PHPickerViewController` with a custom rectangle-detection c
 
 - [x] Build result dictionary matching the Android shape: `uri`, `width`, `height`, `fileName`, `mimeType`, `fileSize`, `ocrText?`, `exif?`
 - [x] Resolve JS promise
-- [x] Delete previous session temp files at start of each `scan()` call
+- [x] Attempt previous-session cache cleanup after capture or gallery selection, before page processing; see [Temp File Policy](../specs/scan-pipeline.md#temp-file-policy) for limits.
 
 ## Definition of Done
 

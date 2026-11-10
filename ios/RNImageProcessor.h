@@ -110,9 +110,10 @@ NS_ASSUME_NONNULL_BEGIN
     CF_RETURNS_RETAINED;
 
 /**
- * Deletes all `receipt_*.jpg` files in `NSCachesDirectory` from a previous
- * `scan()` session. Called at the start of each new scan to keep the cache
- * bounded.
+ * Attempts to delete `receipt_*.jpg` files in `NSCachesDirectory` from prior
+ * scans. Called after camera capture or a nonempty gallery selection, before
+ * page processing. Earlier cancellation or rejection skips this cleanup;
+ * deletion failures are ignored.
  */
 + (void)deletePreviousSessionFiles;
 
