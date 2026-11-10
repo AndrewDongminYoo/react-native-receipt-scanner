@@ -54,6 +54,7 @@ describe("DEFAULT_OCR_FLOOR", () => {
       minTextLength: 12,
       minLines: 2,
       minConfidence: 0,
+      missingConfidence: "accept",
     });
   });
 });
@@ -191,6 +192,77 @@ describe("scan (native)", () => {
 
     expect(result.status).toBe("success");
     expect(result.images).toHaveLength(1);
+  });
+
+  it.each([
+    ["accept", undefined, 0.9, "success"],
+    ["reject", undefined, 0.9, "rejected"],
+    ["reject", undefined, 0, "success"],
+    ["accept", 0, 0.9, "rejected"],
+    ["reject", 0, 0.9, "rejected"],
+    ["reject", 0, 0, "success"],
+    ["accept", 0.89, 0.9, "rejected"],
+    ["reject", 0.89, 0.9, "rejected"],
+    ["accept", 0.9, 0.9, "success"],
+    ["reject", 0.9, 0.9, "success"],
+    ["accept", 0.95, 0.9, "success"],
+    ["reject", 0.95, 0.9, "success"],
+  ] as const)(
+    "%s policy with confidence %s and floor %s yields %s",
+    async (missingConfidence, confidence, minConfidence, status) => {
+      mockNative.scan.mockResolvedValueOnce({
+        status: "success",
+        images: [
+          baseImage({
+            ocrText: "GS25 강남점\n합계 5,400원",
+            ocrQuality: {
+              textLength: 0,
+              lineCount: 0,
+              ...(confidence === undefined ? {} : { confidence }),
+            },
+          }),
+        ],
+      });
+
+      const result = await scan({ ocrFloor: { minConfidence, missingConfidence } });
+
+      expect(result.status).toBe(status);
+      expect(result.images).toHaveLength(status === "success" ? 1 : 0);
+      expect(result.rejectedImages).toHaveLength(status === "rejected" ? 1 : 0);
+      const image = status === "success" ? result.images[0] : result.rejectedImages?.[0];
+      expect(image?.ocrQuality?.confidence).toBe(confidence);
+    }
+  );
+
+  it("skips strict missing-confidence policy when OCR is disabled", async () => {
+    mockNative.scan.mockResolvedValueOnce({ status: "success", images: [baseImage({})] });
+    const result = await scan({
+      ocr: false,
+      ocrFloor: { minConfidence: 0.9, missingConfidence: "reject" },
+    });
+    expect(result.status).toBe("success");
+  });
+
+  it("keeps measured and missing line confidence diagnostics on strict partial rejection", async () => {
+    const measured = baseImage({
+      uri: "file:///measured.jpg",
+      ocrText: "GS25 강남점\n합계 5,400원",
+      ocrQuality: { textLength: 0, lineCount: 0, confidence: 0.95 },
+      ocrLines: [{ text: "합계", frame: { x: 0, y: 0, width: 10, height: 10 }, confidence: 0.95 }],
+    });
+    const unavailable = baseImage({
+      uri: "file:///unavailable.jpg",
+      ocrText: measured.ocrText,
+      ocrLines: [{ text: "합계", frame: { x: 0, y: 0, width: 10, height: 10 } }],
+    });
+    mockNative.scan.mockResolvedValueOnce({ status: "success", images: [measured, unavailable] });
+    const result = await scan({ ocrFloor: { minConfidence: 0.9, missingConfidence: "reject" } });
+    expect(result.status).toBe("success");
+    expect(result.images.map((image) => image.uri)).toEqual([measured.uri]);
+    expect(result.rejectedImages?.map((image) => image.uri)).toEqual([unavailable.uri]);
+    expect(result.images[0]?.ocrLines).toEqual(measured.ocrLines);
+    expect(result.rejectedImages?.[0]?.ocrLines).toEqual(unavailable.ocrLines);
+    expect(result.rejectedImages?.[0]?.ocrQuality).not.toHaveProperty("confidence");
   });
 
   it("forwards ocrGeometry to the native module, off by default", async () => {

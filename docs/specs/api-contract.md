@@ -108,23 +108,36 @@ The package gates obviously bad captures (blank pages, landscape photos, text-fr
 type OcrFloor = {
   minTextLength?: number; // default 12
   minLines?: number; // default 2
-  minConfidence?: number; // default 0 — populated on both platforms when OCR runs; absent confidence is treated as satisfied
+  minConfidence?: number; // default 0 — compared when available
+  missingConfidence?: "accept" | "reject"; // default "accept"; applies when minConfidence > 0
 };
 
 type OcrQuality = {
   textLength: number; // trimmed character count of ocrText
   lineCount: number; // non-empty line count
-  confidence?: number; // mean recognition confidence — populated on both platforms when OCR runs
+  confidence?: number; // mean usable recognition confidence, when available
 };
 ```
 
-The default — `{ minTextLength: 12, minLines: 2, minConfidence: 0 }` — is calibrated for Korean retail receipts: store name + total = at least two lines and roughly twelve characters of trimmed content. Override with `ocrFloor: { minLines: 3 }` to tighten or `ocrFloor: false` to disable.
+The default — `{ minTextLength: 12, minLines: 2, minConfidence: 0, missingConfidence: "accept" }` — is calibrated for Korean retail receipts: store name + total = at least two lines and roughly twelve characters of trimmed content. Override with `ocrFloor: { minLines: 3 }` to tighten or `ocrFloor: false` to disable.
 
 Floor evaluation rules:
 
 - When `ocr: false` the floor is a no-op (there is nothing to measure). Result `status` is `"success"` with `ocrQuality` absent.
 - When `ocr: true` and `ocrFloor: false` the floor is a no-op but `ocrQuality` is still derived and exposed for the consumer to inspect.
 - When the floor is active, every image has `ocrQuality` populated. Images that fail the thresholds are moved to `rejectedImages`. If no image passes, `status` becomes `"rejected"`.
+
+Missing confidence is accepted by default for compatibility.
+To require a measured score, use `ocrFloor: { minConfidence: 0.9, missingConfidence: "reject" }`; images with unavailable confidence then move to `rejectedImages`, with `ocrQuality.confidence` still absent.
+A measured zero is compared normally; values equal to the threshold pass.
+The missing-value policy has no effect when `minConfidence` is zero, `ocr` is false, or `ocrFloor` is false.
+Text-length and line-count thresholds still apply independently.
+
+Android uses one filter for per-line and aggregate confidence: bundled Korean retains real zeros, while Play-services Latin/Japanese/Chinese/Devanagari exact-zero values are omitted as potential provider sentinels; aggregate confidence averages only remaining usable lines and is absent when none remain.
+This is a provider-based heuristic, not a Play Services version probe: a genuine zero from those dynamic models is indistinguishable from a sentinel and is also omitted.
+iOS uses Vision observation confidence.
+Confidence distributions have not been validated comparable across providers; calibrate thresholds for the chosen provider.
+Old/new Play Services device behavior was not measured for this JS policy change.
 
 ### Long receipt OCR merge
 
