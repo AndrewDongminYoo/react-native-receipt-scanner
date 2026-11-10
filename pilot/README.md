@@ -54,3 +54,23 @@ No memory or binary/build budget is inferred from latency samples.
 Run five batches of 10,000 typical-input operations after warm-up, observing retained managed-plus-native memory after quiescence with a profiler.
 Record stripped per-architecture native-code growth, compressed artifacts, source-package growth and five paired cached-dependency clean/no-op builds separately.
 Simulator timings and missing profiler coverage stay incomplete in the report.
+
+## Source-package size gate
+
+Use Python 3 to compare two existing `yarn pack` archives offline:
+
+```bash
+python3 pilot/package-size.py /tmp/receipt-baseline.tgz /tmp/receipt-candidate.tgz > /tmp/receipt-package-size.json
+```
+
+The JSON report includes archive paths and SHA-256, compressed byte counts, each regular file's uncompressed byte count, total unpacked bytes and signed growth.
+The 256 KiB source-package budget applies to total regular-file payload growth, including generated JS/types and all distributed sources; tar headers, padding and gzip overhead are excluded from that budget.
+Compressed archive growth is reported separately and has no acceptance threshold.
+Exit status is `0` within budget (including exactly 262,144 bytes), `1` over budget with a report, or `2` for invalid/unreadable input without a report.
+The reader validates every tar header, both zero end blocks, zero-only trailing padding and the complete gzip CRC/size trailer before reporting totals.
+The reader never extracts archive members and rejects links, duplicate/noncanonical paths, paths outside `package/`, corrupt payloads and a missing or mismatched package name.
+
+Build both revisions with the same Node/Yarn and dependency versions, run `yarn prepare` before packing, and preserve both archives plus logs.
+Record exact source commits and tool versions alongside the report; archive checksums identify the measured bytes but do not attest that those bytes came from a claimed commit.
+Use a baseline before the pilot and name any other intervening changes, rather than attributing their total growth to the adapter alone.
+This gate measures distribution payload only; it supplies no stripped native-code, build-time, latency or memory evidence.

@@ -27,6 +27,14 @@ Prove fixture expectation corruption fails before treating corpus parity as evid
 Use the accepted 100 warm-ups, 1,000 operations and five paired runs for device performance; preserve raw samples and frozen generator identity.
 Inspect the final diff for contract omissions and source inclusion/registration failures before hosted review.
 
+## Remaining source-package measurement
+
+Compare baseline and candidate `yarn pack` archives offline with `pilot/package-size.py`.
+The reader owns archive identity, per-file payload accounting, separate compressed growth and the existing 256 KiB distribution budget.
+Jest regressions use real synthetic tarballs to verify the exact threshold, budget rejection, shrinking packages and malformed archives.
+Record the source revisions, shared build toolchain and archive checksums with measured results in the pilot report.
+This bounded follow-up leaves physical-device, native-code size and build-time gates incomplete.
+
 ## Limits
 
 No production adoption, new public API, unrelated dependency upgrades or receipt-domain logic.
