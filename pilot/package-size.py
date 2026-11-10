@@ -11,6 +11,26 @@ BUDGET_BYTES = 256 * 1024
 PACKAGE_NAME = "react-native-receipt-scanner"
 
 
+class StrictTarInfo(tarfile.TarInfo):
+    """Do not let TarFile.next silently accept invalid headers as EOF."""
+
+    @classmethod
+    def fromtarfile(cls, archive):
+        try:
+            return super().fromtarfile(archive)
+        except tarfile.EOFHeaderError:
+            # Require both zero end blocks and reject hidden trailing payload.
+            if archive.fileobj.read(512) != bytes(512):
+                raise tarfile.ReadError("Missing tar end blocks") from None
+            for block in iter(lambda: archive.fileobj.read(1024 * 1024), b""):
+                if any(block):
+                    raise tarfile.ReadError("Nonzero data after tar end blocks")
+            # Reading through gzip EOF also verifies CRC and the size trailer.
+            raise
+        except tarfile.HeaderError as error:
+            raise tarfile.ReadError(str(error)) from None
+
+
 def inspect_archive(filename):
     archive = Path(filename).resolve(strict=True)
     digest = hashlib.sha256()
@@ -19,7 +39,7 @@ def inspect_archive(filename):
             digest.update(block)
     files = {}
     manifest = None
-    with tarfile.open(archive, "r:gz") as package:
+    with tarfile.open(archive, "r:gz", tarinfo=StrictTarInfo) as package:
         for member in package:
             parts = PurePosixPath(member.name).parts
             if (

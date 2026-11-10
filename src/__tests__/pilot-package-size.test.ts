@@ -91,3 +91,44 @@ it("rejects a corrupt archive instead of recording zero bytes", () => {
   expect(result.status).toBe(2);
   expect(result.stdout).toBe("");
 });
+
+it.each(["header", "gzip-trailer", "gzip-crc", "tar-terminator", "hidden-payload"])(
+  "rejects %s damage after a valid manifest without emitting partial totals",
+  (damage) => {
+    const baseline = archive("baseline", 1);
+    const candidate = archive("candidate", 300000);
+    const mutation = spawnSync(
+      "python3",
+      [
+        "-c",
+        `import gzip, pathlib, sys
+p = pathlib.Path(sys.argv[1])
+packed = p.read_bytes()
+raw = bytearray(gzip.decompress(packed))
+mode = sys.argv[2]
+if mode == 'header':
+    raw[1024] ^= 1
+elif mode == 'tar-terminator':
+    raw = raw[:1536 + ((300000 + 511) // 512) * 512]
+elif mode == 'hidden-payload':
+    raw[1024:1024] = bytes(1024)
+if mode == 'gzip-trailer':
+    packed = packed[:-8]
+elif mode == 'gzip-crc':
+    packed = packed[:-8] + bytes([packed[-8] ^ 1]) + packed[-7:]
+else:
+    packed = gzip.compress(raw)
+p.write_bytes(packed)
+`,
+        candidate,
+        damage,
+      ],
+      { encoding: "utf8" }
+    );
+    expect(mutation.status).toBe(0);
+    const result = compare(baseline, candidate);
+    expect(result.status).toBe(2);
+    expect(result.stdout).toBe("");
+    expect(result.stderr).toContain("measurement failed");
+  }
+);
