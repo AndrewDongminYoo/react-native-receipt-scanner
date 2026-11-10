@@ -188,8 +188,9 @@ For Android, override the same resource names in the host app's `strings.xml` fi
 The iOS library uses `NSLocalizedStringWithDefaultValue` against `[NSBundle mainBundle]`, so the host app's strings file is picked up automatically when the device language matches.
 If a key is absent, the English defaults (`"Drag the corners to frame the document"` /
 `"Cancel"` / `"Use Photo"`) are used.
-Android ships Korean defaults in `values/strings.xml` and English defaults in
-`values-en/strings.xml`; host app resources with the same names override them.
+Android ships English defaults in `values/strings.xml` and Korean translations in
+`values-ko/strings.xml`; unsupported locales fall back to English.
+Host app resources with the same names and locale qualifiers override the library strings.
 
 This has no effect on the camera scanner.
 
