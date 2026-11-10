@@ -238,6 +238,10 @@ type ReceiptImage = {
 | `imageOrigin` | Always present (see platform notes below)                                    |
 
 `uri` is a `file://` path. Never a `data:` URI — base64 is disabled to prevent OOM on low-end devices.
+The JPEG is a temporary cache file: scan processing attempts to remove previous session files, and the OS may reclaim cached files.
+App restart guarantees neither deletion nor retention.
+Copy files needed for lasting storage, and explicitly delete sensitive files after use through the consuming app's file API when prompt cleanup is required.
+See [Temp File Policy](scan-pipeline.md#temp-file-policy) for platform cleanup timing; the library exposes no public file-deletion API.
 
 ### `imageOrigin` platform behavior
 

@@ -85,9 +85,9 @@ class ImageProcessor(
 
   /**
    * Result of [process] / [processGallery]. Owns a JPEG written to
-   * `context.cacheDir`; callers do not need to delete it explicitly —
-   * [deletePreviousSessionFiles] sweeps the directory at the start of
-   * the next scan.
+   * `context.cacheDir`. [deletePreviousSessionFiles] attempts cleanup during
+   * later scan preparation. Restarting the app does not guarantee deletion;
+   * callers requiring prompt cleanup must explicitly delete the file after use.
    *
    * @property file The cached JPEG file.
    * @property width Pixel width of the encoded image.

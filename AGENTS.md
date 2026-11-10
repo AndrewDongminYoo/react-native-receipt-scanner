@@ -137,7 +137,7 @@ yarn typecheck && yarn lint && yarn test && trunk fmt && trunk check
 
 ## NOTES
 
-- **Temp file lifecycle**: `scan()` deletes the previous session's `receipt_*.jpg` files first. URIs are stable until the next `scan()` call; the OS clears `cacheDir`/`NSCachesDirectory` on app restart.
+- **Temp file lifecycle**: Returned JPEGs are temporary cache files; scan processing attempts to remove previous session files, and the OS may reclaim them. App restart guarantees neither deletion nor retention. See [Temp File Policy](docs/specs/scan-pipeline.md#temp-file-policy) for cleanup timing and caller responsibilities.
 - **iOS camera path produces synthetic UIImages** — original shutter EXIF unavailable. `RNImageProcessor` synthesizes `make`/`model`/`dateTimeOriginal` from `UIDevice` + now.
 - **Android camera path also synthesizes EXIF** — ML Kit re-encodes pages and strips originals; `ImageProcessor.process(synthesizeDeviceInfo = true)` injects `Build.MANUFACTURER`/`Build.MODEL`/now() **only for camera scans**. Gallery images honestly report null.
 - **`imageOrigin` field**: `"camera"` for camera, `"unknown"` for Android gallery, omitted (or `"camera"`) for iOS camera.

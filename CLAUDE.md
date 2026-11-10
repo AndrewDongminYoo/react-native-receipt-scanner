@@ -150,7 +150,9 @@ These constraints apply specifically to `RNCropEditorViewController` and `RNGall
 
 ## Temp File Lifecycle
 
-Output `file://` URIs are stable until the **next `scan()` call**, which deletes the previous session's temp files. URIs do not survive app restarts (OS clears the cache directory).
+Output `file://` URIs refer to temporary cache files.
+Scan processing attempts to remove previous session files, and the OS may reclaim cached files; app restart guarantees neither deletion nor retention.
+See [Temp File Policy](docs/specs/scan-pipeline.md#temp-file-policy) for platform cleanup timing and caller responsibilities.
 
 ## Build Output
 
