@@ -9,7 +9,6 @@ import {
   Pressable,
   SafeAreaView,
   ScrollView,
-  Share,
   StatusBar,
   StyleSheet,
   Text,
@@ -28,6 +27,9 @@ import {
   type ScanReceiptOptions,
   type ScanReceiptResult,
 } from "react-native-receipt-scanner";
+
+import { FixtureReviewEditor } from "./FixtureReviewEditor";
+import { createFixtureReview, type FixtureReview } from "./fixtureReview";
 
 import { ANDROID_STATUS_BAR_INSET, C, R, S } from "./theme";
 
@@ -304,111 +306,6 @@ function OriginBadge({ origin }: { origin: ImageOrigin }) {
       <Text style={[styles.originBadgeText, { color: colors.fg }]}>{ORIGIN_LABEL[origin]}</Text>
     </View>
   );
-}
-
-// ─── Fixture dump (Phase 5 Step 0) ────────────────────────────────────────────
-//
-// Collects real-device OCR output and shares it as a JSON blob matching
-// `src/__tests__/fixtures/ocr/types.ts#OcrFixture`. The user labels each
-// dump as "normal" or "mirrored"; the resulting file goes into
-// `src/__tests__/fixtures/ocr/` after anonymization (see that folder's
-// README for redaction rules).
-
-type FixtureCategory = "normal" | "mirrored";
-
-function tokenize(text: string): string[] {
-  return text
-    .split(/\s+/)
-    .map((t) => t.trim())
-    .filter(Boolean);
-}
-
-function splitLines(text: string): string[] {
-  return text
-    .split(/\n+/)
-    .map((l) => l.trim())
-    .filter(Boolean);
-}
-
-function buildFixture(
-  image: ReceiptImage,
-  source: "camera" | "gallery",
-  category: FixtureCategory,
-  sequenceTag: string
-) {
-  const text = image.ocrText ?? "";
-  const platform: "ios" | "android" = Platform.OS === "ios" ? "ios" : "android";
-  return {
-    id: `${category}-${sequenceTag}`,
-    platform,
-    source,
-    transform: category === "mirrored" ? "horizontalFlip" : "none",
-    tokens: tokenize(text),
-    lines: splitLines(text),
-    confidence: image.ocrQuality?.confidence ?? null,
-    notes: "TODO — redact PII per src/__tests__/fixtures/ocr/README.md before committing",
-  };
-}
-
-async function dumpFixture(
-  image: ReceiptImage,
-  source: "camera" | "gallery",
-  category: FixtureCategory
-) {
-  const tag = new Date()
-    .toISOString()
-    .replace(/[-:.TZ]/g, "")
-    .slice(0, 14);
-  const fixture = buildFixture(image, source, category, tag);
-  try {
-    await Share.share({
-      title: `${fixture.id}.json`,
-      message: JSON.stringify(fixture, null, 2),
-    });
-  } catch (e) {
-    console.warn("[fixture-dump] share failed", e);
-  }
-}
-
-// Human checklist gate. Auto-redaction would risk false negatives on
-// region-specific name/address shapes; the gate forces the contributor to
-// confirm review before the JSON leaves the app.
-function confirmRedactionAndDump(
-  image: ReceiptImage,
-  source: "camera" | "gallery",
-  category: FixtureCategory
-) {
-  Alert.alert(
-    "PII 검토 필수",
-    "공유 후 외부 편집기에서 다음 항목을 redact 한 뒤 " +
-      "src/__tests__/fixtures/ocr/ 로 저장하세요:\n\n" +
-      "• 점원/대표자 이름 → XXX\n" +
-      "• 전화번호 → XX-XXXX-XXXX\n" +
-      "• 카드번호 → ****-****-****-XXXX\n" +
-      "• 사업자등록번호 → XXX-XX-XXXXX\n" +
-      '• 거래번호/영수증번호 → 끝자리 "X"\n' +
-      '• 주소 번지수 이하 → "…XXX"\n' +
-      '• 매장 분점명 → "XXX점"\n\n' +
-      "익명화 완료 후 notes 필드에 처리 내역을 기록하세요.",
-    [
-      { text: "취소", style: "cancel" },
-      { text: "확인 — 공유", onPress: () => dumpFixture(image, source, category) },
-    ]
-  );
-}
-
-function promptFixtureCategory(image: ReceiptImage, source: "camera" | "gallery") {
-  Alert.alert("Fixture로 저장", "이 영수증의 OCR 출력을 어느 카테고리로 dump 할까요?", [
-    {
-      text: "정상 영수증",
-      onPress: () => confirmRedactionAndDump(image, source, "normal"),
-    },
-    {
-      text: "좌우반전 영수증",
-      onPress: () => confirmRedactionAndDump(image, source, "mirrored"),
-    },
-    { text: "취소", style: "cancel" },
-  ]);
 }
 
 // ─── OCR quality + EXIF detail ─────────────────────────────────────────────---
@@ -1010,11 +907,36 @@ function ResultPage({
   onBack: () => void;
   onRescan: () => void;
 }) {
+  const [fixture, setFixture] = useState<FixtureReview | null>(null);
+  function promptFixtureCategory(image: ReceiptImage, scanSource: "camera" | "gallery") {
+    const open = (category: "normal" | "mirrored") =>
+      setFixture(
+        createFixtureReview(
+          image,
+          scanSource,
+          category,
+          new Date()
+            .toISOString()
+            .replace(/[-:.TZ]/g, "")
+            .slice(0, 14),
+          Platform.OS === "ios" ? "ios" : "android"
+        )
+      );
+    Alert.alert("Fixture로 저장", "검토할 OCR의 카테고리를 선택해 주세요.", [
+      { text: "정상 영수증", onPress: () => open("normal") },
+      { text: "좌우반전 영수증", onPress: () => open("mirrored") },
+      { text: "취소", style: "cancel" },
+    ]);
+  }
   const hasImages = result.images.length > 0;
   const hasOcr = hasImages && result.images.some((img) => img.ocrText);
   const isWarn = result.status !== "success";
   // Hoisted so the merged block renders even when every page was floor-rejected.
   const merged = result.mergedOcr;
+
+  if (fixture) {
+    return <FixtureReviewEditor initial={fixture} onClose={() => setFixture(null)} />;
+  }
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -1071,7 +993,7 @@ function ResultPage({
               <View style={styles.section}>
                 <SectionHeader
                   title="Fixture 입력"
-                  description="OCR 출력을 회귀 테스트 fixture로 dump 합니다"
+                  description="공유 전에 OCR을 편집하고 개인정보를 검토해 주세요"
                 />
                 {result.images.map((img, i) =>
                   img.ocrText ? (

@@ -151,7 +151,7 @@ export type OcrQuality = {
 - [ ] 정상 영수증 OCR 텍스트 **10건** (`normal-*.json`)
 - [ ] 좌우반전 영수증 OCR 텍스트 **10건** (`mirrored-*.json`)
 - [ ] 텍스트량은 비슷하지만 자모/깨짐 비율이 높은 케이스 포함
-- [ ] fixture 수집 방법은 `src/__tests__/fixtures/ocr/README.md` 에 기록 (실기기에서 example 앱 dump → JSON 저장 → 익명화 절차)
+- [ ] fixture 수집 방법은 `src/__tests__/fixtures/ocr/README.md` 에 기록 (실기기에서 example 앱 OCR 편집 → 앱 내 최종 JSON 검토·익명화 확인 → 공유 → JSON 저장; 현재 절차는 `docs/specs/fixture-sharing.md` 참조)
 - [ ] 예제 앱에 OCR 결과를 fixture JSON 으로 dump 하는 디버그 UI 추가 (수집 가능 인프라)
 
 ### Fixture JSON 스키마
