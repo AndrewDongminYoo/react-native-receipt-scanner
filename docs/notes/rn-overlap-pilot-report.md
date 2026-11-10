@@ -14,7 +14,7 @@ It does not authorize the separate [#70 adoption decision](https://github.com/An
 | ------------------- | -------------------------------------------------------------------------------- |
 | Production baseline | `992a68d084b061066a7ca225bf982ee10405945a`                                       |
 | Canonical core      | `fb37f24a86014829a31897ca891d45a78208aa6c`, ABI v1                               |
-| Candidate           | Measurement revision not frozen; implementation is at the PR head                |
+| Candidate           | Release-device revision not frozen; source-package snapshot identified below     |
 | Generator           | `pilot/workloads.js`, v1, seed `0x69c0ffee`                                      |
 | Host environment    | macOS, Apple Clang, Node 24; exact executable versions belong with each campaign |
 
@@ -75,9 +75,32 @@ No physical-device installation or launch occurred.
 | Small/typical latency budgets                                       | Not evaluated                                                                |
 | Stress geometric-mean benefit and p95 budget                        | Not evaluated                                                                |
 | Five quiescent memory batches with managed/native profiler coverage | Not collected                                                                |
-| Packed source and compressed size growth                            | Pending                                                                      |
+| Packed source and compressed size growth                            | Passed for the identified archive pair below; +61,164 unpacked bytes         |
 | Stripped release native-code growth by architecture                 | Not measured                                                                 |
 | Five paired cached-dependency clean/no-op build comparisons         | Not measured                                                                 |
 
-No performance, retained-memory, binary-size or build-time acceptance is claimed.
+No performance, retained-memory, stripped native-code size or build-time acceptance is claimed.
 The approved budgets remain unchanged; simulator integration cannot substitute for device measurements.
+
+## Source-package distribution measurement
+
+The offline `pilot/package-size.py` reader compared two `yarn pack` archives on 2026-11-11 using Node 24.22.2 and Yarn 4.11.0.
+Both packages were built with `bob build` (`yarn prepare`) and the primary workspace's installed dependencies; this is not a dependency-reproducibility or build-time measurement.
+The baseline is the accepted pre-pilot revision `992a68d084b061066a7ca225bf982ee10405945a`, exported with `git archive` into a temporary directory.
+The candidate is `80093852a006c8e388f7e3166fa88850ebf21f3f` plus this follow-up's shipped `pilot/package-size.py` and `pilot/README.md`; repository-only tests and report edits are excluded by package-file rules.
+The measured script SHA-256 is `32be6f7642754e139dbb2c771681cede841f4314136d3e1c0ac08756b6b96ea2`, and the measured pilot README SHA-256 is `2c498729773d5e33f35d268acae305625ccecb71f5a5344bc17d1e8846a45f1a`.
+Archive identity, rather than an uncommitted source revision claim, identifies these exact candidate bytes.
+The comparison includes all intervening distributed changes, including OCR confidence policy and iOS JPEG metadata fixes; it does not attribute all growth to the adapter.
+
+| Metric                     | Baseline | Candidate | Growth |
+| -------------------------- | -------- | --------- | ------ |
+| Regular-file payload bytes | 513,376  | 574,540   | 61,164 |
+| Compressed archive bytes   | 152,348  | 172,037   | 19,689 |
+
+The source-package growth passes the existing 262,144-byte budget.
+Payload accounting includes all regular files in the distributed package, including generated JS/types; tar metadata and padding are excluded, while compressed growth is reported separately without a threshold.
+Baseline archive SHA-256: `0512ed264c2da97ecc840780287492f7aa1b87fadc448ee8f6610406cb1f3ee9`.
+Candidate archive SHA-256: `a878828e2f5862b0349ff20e6fa23fc70b7b8a6c5117c49742d4511d4607d4d6`.
+The local review deliverable retains both archives, per-file JSON accounting and pack logs; those binary artifacts are not repository sources.
+Jest exercises actual synthetic archives below, at and above the budget, shrinking payloads, corrupt archives, duplicate/noncanonical paths, traversal and links.
+Passing this distribution gate supplies no evidence for the remaining physical-device, stripped native-code or paired build-time gates and leaves #69 incomplete.
