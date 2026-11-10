@@ -89,11 +89,16 @@
 | Android ML Kit Korean (번들)     | ✅ `Text.Line.getConfidence()` 노출                                                              |
 | Android ML Kit 그 외 (unbundled) | ⚠️ Play Services < 22.30에서 전 라인 `0` 센티넬 → 이 패키지는 confidence를 **absent로 보고**한다 |
 
-**Resolution path.** 해소됨 (0.5.0). 이 표는 원래 "Android 미노출"로 기록돼 있었으나 0.5.0이 `meanLineConfidence`로 양 플랫폼 모두 `ocrQuality.confidence`를 채우도록 바꿨고, 표만 갱신되지 않았다 (2026-07-18 정정). `ocrFloor.minConfidence`는 여전히 absent 시 satisfied로 간주한다(ADR-006 D6) — OCR 미실행이나 무텍스트에서는 양 플랫폼 모두 absent이기 때문.
+**Resolution path.** 해소됨 (0.5.0). 이 표는 원래 "Android 미노출"로 기록돼 있었으나 0.5.0이 `meanLineConfidence`로 양 플랫폼 모두 `ocrQuality.confidence`를 채우도록 바꿨고, 표만 갱신되지 않았다 (2026-07-18 정정). `ocrFloor.minConfidence`는 기본 `missingConfidence: "accept"`에서 absent 시 satisfied로 간주한다(ADR-006 D6). OCR 미실행 시 양 플랫폼 모두 confidence가 absent이다. 무텍스트 시에는 경로에 따라 다르며, iOS 카메라는 빈 인식 결과의 confidence로 `0.0`을 전달하고 갤러리는 confidence를 생략한다.
 
-**다국어 확장 이후 (Phase 8).** Latin/Japanese/Chinese/Devanagari는 Play services로 전달되는 unbundled 인식기라 위 센티넬에 걸린다. `meanLineConfidence`는 unbundled 인식기의 평균이 정확히 `0`일 때 이를 점수가 아니라 "미보고"로 처리한다 — 그렇지 않으면 `ocrFloor.minConfidence > 0`을 설정한 호출자가 멀쩡한 스캔을 거부하게 된다. 따라서 **Android는 iOS와 달리 OCR이 텍스트를 찾았는데도 confidence가 absent일 수 있다.** 기본 언어(`["ko-KR", "en-US"]`)는 번들 Korean 인식기로 해석되므로 영향받지 않는다.
+**다국어 확장 이후 (Phase 8).** Latin/Japanese/Chinese/Devanagari는 Play services로 전달되는 unbundled 인식기라 위 센티넬에 걸린다. `meanLineConfidence`는 unbundled 인식기의 각 라인에서 정확히 `0`인 값을 제외하고 평균을 계산하며, 사용할 값이 없으면 "미보고"로 처리한다 — 그렇지 않으면 `ocrFloor.minConfidence > 0`을 설정한 호출자가 멀쩡한 스캔을 거부하게 된다. 따라서 **Android는 iOS와 달리 OCR이 텍스트를 찾았는데도 confidence가 absent일 수 있다.** 기본 언어(`["ko-KR", "en-US"]`)는 번들 Korean 인식기로 해석되므로 영향받지 않는다.
 
-⚠️ 다만 두 값의 **분포는 비교 가능하다고 검증되지 않았다**. `api-contract.md`가 명시한 대로 confidence는 reporting-only이며, cross-platform 임계값으로 쓰지 말 것.
+호출자는 `ocrFloor: { minConfidence: 0.9, missingConfidence: "reject" }`를 지정해 confidence 누락 시 이미지를 거절할 수 있다. 기본값은 `"accept"`이다.
+이 정책은 양수 confidence 임계값에만 적용되며, 텍스트 길이·라인 수 조건이나 비활성화된 게이트를 변경하지 않는다.
+네이티브의 라인별 값과 평균값은 같은 필터를 사용한다. 동적 모델의 정확한 `0`은 제외하고, 사용할 수 있는 라인만 평균에 포함한다.
+이 필터는 Play Services 버전을 조회하지 않으므로 동적 모델의 실제 `0` 점수와 센티넬을 구분하지 못한다. 번들 Korean 모델의 `0`은 측정값으로 유지한다.
+이번 JS 정책 변경에서는 구형·신형 Play Services 기기를 비교하지 않았다.
+모델별 confidence 분포가 서로 비교 가능한지는 검증되지 않았으므로, 임계값은 사용하는 모델에 맞춰 보정해야 한다.
 
 ### 2.3 `Line.boundingBox` 좌표계
 

@@ -12,14 +12,18 @@ export type OcrFloor = {
   minLines?: number;
   /**
    * Minimum mean OCR confidence (0.0–1.0). Defaults to 0.
-   * Populated on both platforms when OCR runs — iOS from Vision's per-observation
-   * confidence, Android from ML Kit's per-line `getConfidence()`.
-   * It can still be undefined (OCR disabled, or no text recognized); in that case
-   * this threshold is treated as satisfied so the gate never penalizes a missing
-   * field. Confidence remains reporting-only — not a cross-platform enforcement
-   * signal until its distributions are validated comparable.
+   * When unavailable, follows `missingConfidence`. Android Play-services models
+   * can omit confidence even when text is recognized. Platform distributions
+   * have not been validated comparable; calibrate thresholds per provider.
    */
   minConfidence?: number;
+  /**
+   * Policy for unavailable confidence when `minConfidence > 0`.
+   * `"accept"` preserves compatibility; `"reject"` moves the image to
+   * `rejectedImages`. Has no effect when the confidence threshold is zero,
+   * OCR is disabled, or the floor is disabled. Defaults to `"accept"`.
+   */
+  missingConfidence?: "accept" | "reject";
 };
 
 /**
@@ -298,9 +302,11 @@ export type OcrQuality = {
   lineCount: number;
   /**
    * Mean OCR confidence (0.0–1.0) across recognized lines/observations.
-   * Populated on both platforms when OCR runs — iOS from Vision, Android from
-   * ML Kit per-line `getConfidence()`. Undefined when OCR is disabled
-   * or no text was recognized.
+   * iOS uses Vision observations; Android averages usable ML Kit line scores.
+   * May be absent even with recognized text on Android Play-services models.
+   * Their exact-zero values are treated as unavailable; this heuristic cannot
+   * distinguish a real zero from a provider sentinel. Bundled Korean zeros
+   * are retained. See `OcrFloor.missingConfidence` for acceptance policy.
    */
   confidence?: number;
 };
@@ -491,6 +497,7 @@ export const DEFAULT_OCR_FLOOR: Required<OcrFloor> = {
   minTextLength: 12,
   minLines: 2,
   minConfidence: 0,
+  missingConfidence: "accept",
 };
 
 /**

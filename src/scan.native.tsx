@@ -251,20 +251,19 @@ function deriveQuality(text: string, confidence?: number): OcrQuality {
 }
 
 /**
- * Predicate for the {@link OcrFloor} gate. Absent confidence is treated as
- * "satisfied" so the gate never rejects on a field that wasn't produced — it is
- * absent when OCR is off or found no text, and also on Android when the
- * Play-services-delivered recognizer cannot supply a real value (see
- * `OcrProcessor.meanLineConfidence`). Confidence stays reporting-only — not a
- * cross-platform enforcement signal until validated comparable.
+ * Predicate for the {@link OcrFloor} gate. Missing confidence follows the
+ * caller's explicit policy only when a positive confidence floor is requested.
+ * Native confidence and its absence are preserved in the returned diagnostics.
  */
 function meetsFloor(image: ReceiptImage, floor: Required<OcrFloor>): boolean {
   const q = image.ocrQuality;
   if (!q) return false;
   if (q.textLength < floor.minTextLength) return false;
   if (q.lineCount < floor.minLines) return false;
-  // Absent confidence => satisfied: undefined when OCR is off / no text, or
-  // when the provider can't supply one — don't gate on that.
-  if (q.confidence !== undefined && q.confidence < floor.minConfidence) return false;
+  if (q.confidence === undefined) {
+    if (floor.minConfidence > 0 && floor.missingConfidence === "reject") return false;
+  } else if (q.confidence < floor.minConfidence) {
+    return false;
+  }
   return true;
 }

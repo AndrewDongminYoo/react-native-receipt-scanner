@@ -314,9 +314,10 @@ class OcrProcessor(
    *
    * Built from [usableConfidence], so a sentinel-only pass yields null rather
    * than a score of zero — otherwise a caller with `ocrFloor.minConfidence > 0`
-   * would reject perfectly good scans. Absent confidence satisfies that floor
-   * by design, and the same filter feeds [linesOf] so the per-line and
-   * aggregate views never disagree.
+   * would reject perfectly good scans under the compatibility policy. Absent
+   * confidence satisfies that floor by default (`missingConfidence: "accept"`);
+   * callers can choose `"reject"` for a positive threshold in the JS gate.
+   * The same filter feeds [linesOf] so the per-line and aggregate views agree.
    */
   private fun meanLineConfidence(result: Text): Float? {
     var sum = 0f

@@ -355,13 +355,14 @@ type ImageOrigin = "camera" | "screenshot" | "download" | "unknown";
 type OcrFloor = {
   minTextLength?: number; // default 12
   minLines?: number; // default 2
-  minConfidence?: number; // default 0 — iOS only
+  minConfidence?: number; // default 0 — compared when available
+  missingConfidence?: "accept" | "reject"; // default "accept"; applies when minConfidence > 0
 };
 
 type OcrQuality = {
   textLength: number; // trimmed character count
   lineCount: number; // non-empty line count
-  confidence?: number; // mean recognition confidence (iOS only)
+  confidence?: number; // mean usable recognition confidence, when available
 };
 
 type ReceiptExif = {
@@ -406,6 +407,18 @@ type ReceiptExif = {
   raw?: Record<string, string | number | Array<string | number>>;
 };
 ```
+
+Missing confidence is accepted by default for compatibility.
+To require a measured score, use `ocrFloor: { minConfidence: 0.9, missingConfidence: "reject" }`; images with unavailable confidence then move to `rejectedImages`, with `ocrQuality.confidence` still absent.
+A measured zero is compared normally; values equal to the threshold pass.
+The missing-value policy has no effect when `minConfidence` is zero, `ocr` is false, or `ocrFloor` is false.
+Text-length and line-count thresholds still apply independently.
+
+Android uses one filter for per-line and aggregate confidence: bundled Korean retains real zeros, while Play-services Latin/Japanese/Chinese/Devanagari exact-zero values are omitted as potential provider sentinels; aggregate confidence averages only remaining usable lines and is absent when none remain.
+This is a provider-based heuristic, not a Play Services version probe: a genuine zero from those dynamic models is indistinguishable from a sentinel and is also omitted.
+iOS uses Vision observation confidence.
+Confidence distributions have not been validated comparable across providers; calibrate thresholds for the chosen provider.
+Old/new Play Services device behavior was not measured for this JS policy change.
 
 ```ts
 // Pull every available EXIF tag (e.g. for migrations from @lodev09/react-native-exify)
