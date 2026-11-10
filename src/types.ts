@@ -55,7 +55,8 @@ export type ScanReceiptOptions = {
   /**
    * Read EXIF / TIFF / GPS metadata from the source image and attach the
    * normalized white-list to {@link ReceiptImage.exif}. When `false`, the
-   * `exif` field is omitted entirely.
+   * `exif` field is omitted entirely. On iOS this also strips source metadata
+   * from the output JPEG; normalized file orientation remains `1`.
    *
    * @defaultValue `true`
    */
@@ -63,7 +64,8 @@ export type ScanReceiptOptions = {
   /**
    * Copy the GPS dictionary onto `exif.gps` (and into `exif.raw` when raw
    * passthrough is enabled). The package never reads `CLLocationManager`;
-   * this only forwards GPS already embedded in the source image.
+   * this only forwards GPS already embedded in the source image. On iOS,
+   * also controls source GPS in the output JPEG. Requires `includeExif: true`.
    *
    * @defaultValue `false`
    */
@@ -121,7 +123,8 @@ export type ScanReceiptOptions = {
    * are always excluded.
    *
    * GPS keys are excluded from `raw` whenever `includeGpsExif === false`.
-   * Effective only when `includeExif === true`.
+   * Effective only when `includeExif === true`. This controls JS exposure only;
+   * on iOS it never expands the output JPEG metadata allowlist.
    *
    * @defaultValue `false`
    */
