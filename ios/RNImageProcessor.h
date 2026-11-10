@@ -8,9 +8,10 @@ NS_ASSUME_NONNULL_BEGIN
 
 /**
  * Result of `+[RNImageProcessor processImage:...]`. Owns a JPEG written to
- * `NSCachesDirectory`; callers do not need to delete it explicitly —
- * `+deletePreviousSessionFiles` sweeps the directory at the start of the
- * next scan.
+ * `NSCachesDirectory`. `+deletePreviousSessionFiles` attempts cleanup when
+ * a later scan processes selected or captured pages. Restarting the app
+ * does not guarantee deletion; callers requiring prompt cleanup must
+ * explicitly delete the file after use.
  *
  * Field shape mirrors `ReceiptImage` in `src/types.ts` for direct
  * forwarding over the bridge.
@@ -109,9 +110,10 @@ NS_ASSUME_NONNULL_BEGIN
     CF_RETURNS_RETAINED;
 
 /**
- * Deletes all `receipt_*.jpg` files in `NSCachesDirectory` from a previous
- * `scan()` session. Called at the start of each new scan to keep the cache
- * bounded.
+ * Attempts to delete `receipt_*.jpg` files in `NSCachesDirectory` from prior
+ * scans. Called after camera capture or a nonempty gallery selection, before
+ * page processing. Earlier cancellation or rejection skips this cleanup;
+ * deletion failures are ignored.
  */
 + (void)deletePreviousSessionFiles;
 

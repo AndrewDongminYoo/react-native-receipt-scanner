@@ -64,7 +64,7 @@ implementation("androidx.exifinterface:exifinterface:1.3.7")
 
 ### Cleanup
 
-- [x] Delete previous session temp files at the start of each `scan()` call
+- [x] Attempt previous-session cache cleanup during scan preparation after options and activity checks; see [Temp File Policy](../specs/scan-pipeline.md#temp-file-policy) for limits.
 
 ## Definition of Done
 

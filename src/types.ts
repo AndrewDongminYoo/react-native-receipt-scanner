@@ -321,9 +321,11 @@ export type OcrLine = {
 };
 
 /**
- * One image returned by {@link scan}. Backed by a JPEG file in the app
- * cache directory; the `uri` is stable until the next `scan()` call (which
- * deletes prior session files) and does not survive app restarts.
+ * One image returned by {@link scan}, backed by a temporary cached JPEG.
+ * Scan processing attempts to remove prior session files; the OS may also
+ * reclaim cached files. App restart guarantees neither deletion nor retention.
+ * Copy files needed for lasting storage and explicitly delete sensitive files
+ * after use through the consuming app's file API when prompt cleanup is required.
  */
 export type ReceiptImage = {
   /** `file://`-scheme URI to the cached JPEG. Percent-encoded by the native layer. */

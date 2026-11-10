@@ -39,6 +39,10 @@ Built exclusively for the [React Native New Architecture](https://reactnative.de
 **TurboModule on both platforms.** The module calls go through JSI on iOS and the codegen-generated `NativeReceiptScannerSpec` on Android. There is no asynchronous bridge serialization for the call path.
 
 **`file://` URIs only.** Images are written to the app cache directory and returned as `file://` paths. Base64 is never used — it doubles memory usage and is slower to transfer across the bridge.
+These JPEGs are temporary: scan processing attempts to remove previous session files, and the OS may reclaim cached files.
+Restarting the app guarantees neither deletion nor retention.
+Copy images needed for lasting storage; when prompt removal is required, delete sensitive files after use through your app's file API.
+See [Temp File Policy](docs/specs/scan-pipeline.md#temp-file-policy) for platform cleanup timing.
 
 ---
 

@@ -56,7 +56,7 @@ scan(options)
   ├─ write final JPEG to app cache directory
   │
   ├─ return ScanReceiptResult to JS
-  │    (temp working files cleaned up on next scan() call)
+  │    (later scan processing attempts prior-session cache cleanup)
   │
   ├─ [JS] derive OcrQuality per image from ocrText
   │
@@ -94,11 +94,28 @@ scan(options)
 
 ## Temp File Policy
 
-| Event           | Action                                                        |
-| --------------- | ------------------------------------------------------------- |
-| `scan()` called | Delete previous session's temp files                          |
-| Scan cancelled  | Delete any partially-written temp files                       |
-| App restart     | OS clears `NSCachesDirectory` / `getCacheDir()` automatically |
+Returned JPEGs live in `NSCachesDirectory` on iOS and `context.cacheDir` on Android.
+They are temporary files, with cleanup timing determined by the following paths.
 
-The `uri` returned in `ReceiptImage` is stable until the next `scan()` call.
-Do not assume it persists across app restarts.
+| Event                                     | Action                                                                                                                                |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| Android scan preparation                  | Schedule `ImageProcessor.deletePreviousSessionFiles()` on the executor after options and activity checks, before image acquisition.   |
+| iOS camera scan completed                 | Call `RNImageProcessor.deletePreviousSessionFiles` before processing the captured pages.                                              |
+| iOS gallery images selected               | Call `RNImageProcessor.deletePreviousSessionFiles` after picker dismissal, before processing the selection.                           |
+| Scan cancelled or rejected before cleanup | Previous session files may remain; cancellation or rejection is not a deletion guarantee.                                             |
+| Scan fails after writing files            | JPEGs written before the failure may remain without their URIs being returned.                                                        |
+| App restart                               | No restart-triggered cleanup is implemented; cached files may still exist after relaunch.                                             |
+| OS cache reclamation                      | The system may remove cached files independently of scan processing; neither retention nor deletion at a specific time is guaranteed. |
+
+Both cleanup helpers attempt to remove cached files whose names start with `receipt_` and end with `.jpg`.
+Deletion errors are not surfaced as a cleanup result, so a later scan is not proof that a particular file was removed.
+The returned `uri` is therefore neither permanent storage nor evidence of deletion after a restart.
+
+Consuming apps must copy images to appropriate persistent storage if they need to retain them.
+When prompt removal is required, the app must explicitly delete sensitive files after use through its own file API and handle deletion failures.
+Deleting returned URIs covers only those known files; it does not guarantee cleanup of JPEGs left by a failed scan before their URIs were returned.
+Apps with strict cleanup deadlines need a cache-management policy that also accounts for such unreturned files.
+The library exposes no public file-deletion API.
+Do not rely on an app restart, a future scan, or eventual OS reclamation to meet a deletion deadline.
+
+This follows the platform cache guidance: [Android app-specific cache files](https://developer.android.com/training/data-storage/app-specific#internal-remove-cache) and [Apple file-system guidance](https://developer.apple.com/documentation/foundation/using-the-file-system-effectively).
