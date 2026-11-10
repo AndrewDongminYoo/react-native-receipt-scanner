@@ -42,7 +42,7 @@ with tarfile.open(sys.argv[1], 'w:gz') as tar:
     ],
     { encoding: "utf8" }
   );
-  if (result.status !== 0) throw new Error(result.stderr);
+  if (result.status !== 0) throw new Error(result.error?.message ?? result.stderr);
   return target;
 }
 function compare(baseline: string, candidate: string) {

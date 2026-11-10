@@ -87,9 +87,10 @@ The approved budgets remain unchanged; simulator integration cannot substitute f
 The offline `pilot/package-size.py` reader compared two `yarn pack` archives on 2026-11-11 using Node 24.22.2 and Yarn 4.11.0.
 Both packages were built with `bob build` (`yarn prepare`) and the primary workspace's installed dependencies; this is not a dependency-reproducibility or build-time measurement.
 The baseline is the accepted pre-pilot revision `992a68d084b061066a7ca225bf982ee10405945a`, exported with `git archive` into a temporary directory.
-The candidate is `80093852a006c8e388f7e3166fa88850ebf21f3f` plus this follow-up's shipped `pilot/package-size.py` and `pilot/README.md`; repository-only tests and report edits are excluded by package-file rules.
+The frozen candidate is `84073e73c2f3aee0334529845499cdcb0f3800c6`, which includes the shipped `pilot/package-size.py` and `pilot/README.md`; repository-only tests and report edits are excluded by package-file rules.
+The comparison was repeated after freezing that commit, and all archived source files were verified against it (allowing Yarn's package.json trailing-newline normalization); generated library files were verified against the local `bob build` output.
 The measured script SHA-256 is `aeceb26e41b405f258545da8655e55c3ae2a03a873468b0d534e811f31f0d4b9`, and the measured pilot README SHA-256 is `165e1c8765aa560a9f3a0eb78dd411098ff6f6e4f277f69377cc6319bcf7d01c`.
-Archive identity, rather than an uncommitted source revision claim, identifies these exact candidate bytes.
+The frozen commit, source-content verification and archive checksum identify the measured candidate.
 The comparison includes all intervening distributed changes, including OCR confidence policy and iOS JPEG metadata fixes; it does not attribute all growth to the adapter.
 
 | Metric                     | Baseline | Candidate | Growth |
