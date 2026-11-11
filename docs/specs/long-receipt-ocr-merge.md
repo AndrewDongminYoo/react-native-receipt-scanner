@@ -9,9 +9,26 @@
 
 ## Status
 
-Implemented in the JS layer; device verification pending.
+Implemented in the JS layer; the legacy `mergeOcrPages` option is deprecated in favor of app-owned assembly.
 This document is the normative reference for the behaviour — read it as the contract, not as a proposal.
 The plan's §Verification records exactly what has and has not been observed.
+
+## App-owned migration
+
+The consuming app should own page assembly; acquisition and per-page OCR remain library primitives.
+The [example reference](../../example/src/receiptMerge.ts) implements the unchanged behavior below and is checked against the existing shared corpus.
+The example uses that app-owned reference with the library merge option disabled.
+
+Updated runtimes return `ScanReceiptResult.pageUris` independently of the legacy option, recording all native-returned URIs before OCR-floor partitioning, including rejected pages.
+The field is optional in the type for compatibility with older result objects; the app reference explicitly rejects absent order metadata rather than guessing from the partitions.
+It validates one-to-one URI coverage, restores original returned-page order and preserves rejection and unmatched-boundary indexes.
+Missing OCR text remains a rejected page; missing expected images, duplicate URIs and images unlisted in the order snapshot are explicit structural errors.
+Native-dropped pages remain unknowable without another native signal; completeness still covers returned pages only.
+
+The legacy option, `mergedOcr` result, defaults and validation remain available during migration.
+The deprecation is announced after the alternative's fixture and orchestration tests pass; removal belongs to a separately announced breaking release.
+No removal version or date is set here.
+The [migration plan](../plans/phase-16-app-owned-ocr-merge.md) records scope and verification.
 
 ## Problem
 

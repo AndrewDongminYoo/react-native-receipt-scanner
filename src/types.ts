@@ -168,6 +168,8 @@ export type ScanReceiptOptions = {
    *
    * @see `docs/specs/long-receipt-ocr-merge.md` for the merge algorithm.
    * @defaultValue `false`
+   * @deprecated Merge in the consuming app using result.pageUris and the
+   * example's app-owned reference. Retained until an announced breaking release.
    */
   mergeOcrPages?: boolean;
 };
@@ -440,6 +442,13 @@ export type ScanReceiptResult = {
    * a null-check.
    */
   rejectedImages: ReceiptImage[];
+  /**
+   * All returned page URIs in native order, before OCR-floor partitioning,
+   * including rejected pages. Updated runtimes always populate this field;
+   * it is optional for compatibility with older results. Empty on cancellation.
+   * It cannot identify a page discarded before the native result reached JS.
+   */
+  pageUris?: string[];
   /**
    * Cross-page OCR assembly. Present whenever
    * {@link ScanReceiptOptions.mergeOcrPages} is `true` and the scan captured

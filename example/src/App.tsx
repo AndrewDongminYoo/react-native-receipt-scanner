@@ -25,17 +25,21 @@ import {
   type ReceiptExif,
   type ReceiptImage,
   type ScanReceiptOptions,
-  type ScanReceiptResult,
 } from "react-native-receipt-scanner";
 
 import { FixtureReviewEditor } from "./FixtureReviewEditor";
 import { createFixtureReview, type FixtureReview } from "./fixtureReview";
+import {
+  mergeScanResultInApp,
+  validateAppMergeOptions,
+  type AppScanReceiptResult,
+} from "./receiptMerge";
 
 import { ANDROID_STATUS_BAR_INSET, C, R, S } from "./theme";
 
 // ─── Scan options state ─────────────────────────────────────────────────────--
 //
-// Every ScanReceiptOptions field is surfaced as a demo control. The state is a
+// Scanner options and app-owned merging are surfaced as demo controls. The state is a
 // single object (with a generic `set` updater) rather than ~14 individual
 // useState hooks threaded as props — the option set is the whole point of this
 // screen, so one bag keeps ScanPage's signature flat.
@@ -94,9 +98,6 @@ function buildOptions(o: ScanOptionsState): ScanReceiptOptions {
     cropAutoConfirm: o.cropAutoConfirm,
     minimumTextHeight: o.minimumTextHeight,
     ocrGeometry: o.ocrGeometry,
-    // Forwarded as-is even when the combination is invalid, so the demo shows
-    // the real INVALID_MERGE_OPTION rejection instead of hiding it.
-    mergeOcrPages: o.mergeOcrPages,
     ocrFloor: o.ocrFloorEnabled
       ? {
           minTextLength: o.floorMinTextLength,
@@ -537,7 +538,7 @@ type ScanPageProps = {
   capabilityError: { code: string; message: string } | null;
   scanning: boolean;
   error: { code: string; message: string } | null;
-  lastResult: ScanReceiptResult | null;
+  lastResult: AppScanReceiptResult | null;
   onScan: () => void;
 };
 
@@ -884,7 +885,7 @@ function ScanPage({
 
 // ─── Result page ──────────────────────────────────────────────────────────────
 
-function statusSummary(result: ScanReceiptResult): string {
+function statusSummary(result: AppScanReceiptResult): string {
   switch (result.status) {
     case "success":
       return `✅ 스캔 성공 — ${result.images.length}페이지`;
@@ -902,7 +903,7 @@ function ResultPage({
   onBack,
   onRescan,
 }: {
-  result: ScanReceiptResult;
+  result: AppScanReceiptResult;
   source: "camera" | "gallery";
   onBack: () => void;
   onRescan: () => void;
@@ -1073,7 +1074,7 @@ function ResultPage({
 export default function App() {
   const [page, setPage] = useState<"scan" | "result">("scan");
   const [scanning, setScanning] = useState(false);
-  const [result, setResult] = useState<ScanReceiptResult | null>(null);
+  const [result, setResult] = useState<AppScanReceiptResult | null>(null);
   const [error, setError] = useState<{
     code: string;
     message: string;
@@ -1113,6 +1114,7 @@ export default function App() {
     setError(null);
     setScanning(true);
     try {
+      if (opts.mergeOcrPages) validateAppMergeOptions(opts.ocr, opts.maxPages);
       const ocrLanguages = ocrLanguageInput.split(",").map((tag) => tag.trim());
       const scanResult = await scan({ ...buildOptions(opts), ocrLanguages });
       // Keep receipt contents, file URIs and metadata out of diagnostic logs.
@@ -1121,7 +1123,8 @@ export default function App() {
         imageCount: scanResult.images.length,
         rejectedImageCount: scanResult.rejectedImages.length,
       });
-      setResult(scanResult);
+      const mergedOcr = opts.mergeOcrPages ? mergeScanResultInApp(scanResult) : undefined;
+      setResult({ ...scanResult, ...(mergedOcr ? { mergedOcr } : {}) });
       // Navigate to the result screen for both success and rejected so the
       // rejectedImages (ocrFloor effect) are visible; stay on scan for cancel.
       if (scanResult.status !== "cancelled") {

@@ -6,11 +6,19 @@ import { isValidElement } from "react";
 import { scan } from "react-native-receipt-scanner";
 import type { ReceiptImage, ScanReceiptResult } from "../types";
 
+const stateWrites = jest.fn<(value: unknown) => void>();
+let appMergeOptions: { mergeOcrPages?: boolean; maxPages?: number } = {};
+
 // Exercise the real example handler without mounting native UI or using a device.
 // Resolve React from the example workspace, which may have its own peer instance.
 jest.doMock(require.resolve("react", { paths: [path.join(__dirname, "../../example")] }), () => ({
   ...jest.requireActual<typeof import("react")>("react"),
-  useState: (initial: unknown) => [initial, jest.fn()],
+  useState: (initial: unknown) => [
+    initial !== null && typeof initial === "object" && "mergeOcrPages" in initial
+      ? { ...initial, ...appMergeOptions }
+      : initial,
+    stateWrites,
+  ],
   useEffect: jest.fn(),
 }));
 
@@ -67,6 +75,7 @@ const results: ScanReceiptResult[] = [
 describe("example scan logging", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    appMergeOptions = {};
   });
 
   afterEach(() => {
@@ -93,6 +102,56 @@ describe("example scan logging", () => {
           rejectedImageCount: result.rejectedImages.length,
         },
       ],
+    ]);
+  });
+
+  it("uses app-owned merging without forwarding the legacy option", async () => {
+    appMergeOptions = { mergeOcrPages: true, maxPages: 3 };
+    const first = {
+      ...syntheticImage,
+      uri: "file:///synthetic/first.jpg",
+      ocrText: "FIRST PAGE\nROW 100",
+    };
+    const middle = { ...syntheticImage, uri: "file:///synthetic/middle.jpg", ocrText: "short" };
+    const last = {
+      ...syntheticImage,
+      uri: "file:///synthetic/last.jpg",
+      ocrText: "LAST PAGE\nROW 200",
+    };
+    jest.mocked(scan).mockResolvedValueOnce({
+      status: "success",
+      images: [last, first],
+      rejectedImages: [middle],
+      pageUris: [first.uri, middle.uri, last.uri],
+    });
+    jest.spyOn(console, "debug").mockImplementation(() => {});
+    const app = App();
+    if (!isValidElement<{ onScan: () => Promise<void> }>(app))
+      throw new Error("Expected scan page");
+    await app.props.onScan();
+    expect(jest.mocked(scan).mock.calls[0]?.[0]).not.toHaveProperty("mergeOcrPages");
+    expect(stateWrites.mock.calls).toContainEqual([
+      expect.objectContaining({
+        mergedOcr: {
+          text: "FIRST PAGE\nROW 100\nshort\nLAST PAGE\nROW 200",
+          pageUris: [first.uri, middle.uri, last.uri],
+          isComplete: false,
+          rejectedPageIndexes: [1],
+          unmatchedBoundaryIndexes: [0, 1],
+        },
+      }),
+    ]);
+  });
+
+  it("reports invalid app merge requests before starting acquisition", async () => {
+    appMergeOptions = { mergeOcrPages: true, maxPages: 1 };
+    const app = App();
+    if (!isValidElement<{ onScan: () => Promise<void> }>(app))
+      throw new Error("Expected scan page");
+    await app.props.onScan();
+    expect(scan).not.toHaveBeenCalled();
+    expect(stateWrites.mock.calls).toContainEqual([
+      expect.objectContaining({ code: "INVALID_MERGE_OPTION" }),
     ]);
   });
 });

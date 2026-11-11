@@ -11,7 +11,7 @@ import type { OcrCapabilities, ScanReceiptOptions, ScanReceiptResult } from "./t
  * pure-JS scan path is ever added.
  */
 export async function scan(_options?: ScanReceiptOptions): Promise<ScanReceiptResult> {
-  return { status: "cancelled", images: [], rejectedImages: [] };
+  return { status: "cancelled", images: [], rejectedImages: [], pageUris: [] };
 }
 
 /** Returns the web fallback's lack of native OCR support. */

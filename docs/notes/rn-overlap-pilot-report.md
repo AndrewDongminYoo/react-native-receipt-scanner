@@ -7,7 +7,7 @@ This is an internal experiment against the [accepted protocol](../specs/ocr-over
 The result is **incomplete**, and the measured candidate fails the accepted typical-input latency budget on iPhone 16 Pro as recorded below.
 Missing measurements cannot turn that failed necessary criterion into a pass.
 The operator approved delivering the implementation and cross-platform package/JSI validation first, while leaving issue #69 open for measurements.
-It does not authorize the separate [#70 adoption decision](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/issues/70).
+The operator's [#70 disposition](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/issues/70) below retains production JS/Dart; it does not authorize a native production switch.
 
 ## Source identity
 
@@ -299,11 +299,14 @@ The reader checks run identity, exact per-side counts, duplicate keys and raw me
 Synthetic controls distinguish exact-budget acceptance from over-budget failure and reject missing completion, duplicates, wrong run IDs and mismatched statistics.
 These controls do not replace actual device evidence or establish memory acceptance.
 
-### Input to the adoption decision
+### Adoption disposition and next boundary
 
 The current RN candidate cannot qualify for production adoption because a required iOS latency criterion failed.
 The [Flutter pilot report](https://github.com/AndrewDongminYoo/flutter_receipt_scanner/blob/main/docs/notes/flutter-overlap-pilot-report.md), inspected on 2026-11-11 with file blob `2db5db5ca46cb160d1d84190883cdb2732aed412`, reports passing host/emulator/Simulator parity but incomplete physical timing, retained memory and paired size/build-cost gates.
 RN's measured regression does not establish Flutter FFI performance; that adapter remains unqualified on its own evidence.
-The recommended #70 outcome is no adoption of the current candidates, retaining production JS/Dart and shared fixtures without another unchanged-candidate retry.
-This is a proposal for the operator's decision, not an adoption decision, issue closure or authorization to remove the pilot.
+On 2026-11-11 the operator confirmed no adoption of the current native candidate and retention of the existing JS/Dart paths and shared fixtures.
+The pilot implemented the native adapter and established parity; the measured RN candidate failed the performance adoption criterion.
+UTF-16 conversion and array copying are plausible overhead sources, not confirmed causes without phase-specific profiling.
+This is not a failure to implement FFI, a general conclusion about Flutter FFI performance, an issue closure or permission to remove the pilot.
+The operator's next direction is an [app-owned merge migration](../plans/phase-16-app-owned-ocr-merge.md): preserve order and rejection/missing-page diagnostics, validate the alternative against existing fixtures, then deprecate the legacy option, with removal only in a separately announced breaking release.
 Any optimization or new measurement campaign needs a separate bounded follow-up decision under the accepted protocol.

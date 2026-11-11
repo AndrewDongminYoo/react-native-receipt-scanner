@@ -45,13 +45,20 @@ export async function scan(options?: ScanReceiptOptions): Promise<ScanReceiptRes
   const native = (await NativeReceiptScanner.scan(forwardedOptions)) as ScanReceiptResult;
 
   if (native.status !== "success") {
-    return { ...native, rejectedImages: native.rejectedImages ?? [] };
+    return {
+      ...native,
+      rejectedImages: native.rejectedImages ?? [],
+      pageUris: native.images.map((image) => image.uri),
+    };
   }
 
   const withQuality = native.images.map(annotateQuality);
   // Snapshot capture order before the floor gate partitions the array — the
-  // merge needs page order, and `images` / `rejectedImages` no longer carry it.
-  const nativePageUris = merged.mergeOcrPages ? snapshotPageUris(withQuality) : null;
+  // app and legacy mergers need the rejected pages' original positions.
+  // Preserve legacy duplicate validation only when that option is enabled.
+  const nativePageUris = merged.mergeOcrPages
+    ? snapshotPageUris(withQuality)
+    : withQuality.map((image) => image.uri);
 
   // Floor only applies when OCR ran. Without OCR there's nothing to measure.
   // ocrFloor === false explicitly disables the check.
@@ -60,10 +67,11 @@ export async function scan(options?: ScanReceiptOptions): Promise<ScanReceiptRes
     ? partitionByFloor(withQuality, floor)
     : { ...native, images: withQuality, rejectedImages: [] };
 
-  if (nativePageUris === null) return gated;
+  const ordered = { ...gated, pageUris: nativePageUris };
+  if (!merged.mergeOcrPages) return ordered;
   // Attached even when the gate downgraded the status to "rejected": that is
   // exactly when the consumer needs the diagnostics to prompt a re-shoot.
-  return { ...gated, mergedOcr: buildMergedOcr(nativePageUris, gated) };
+  return { ...ordered, mergedOcr: buildMergedOcr(nativePageUris, gated) };
 }
 
 /** Splits images by the {@link OcrFloor} gate into the accepted / rejected result shape. */
