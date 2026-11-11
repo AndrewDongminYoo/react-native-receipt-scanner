@@ -27,13 +27,24 @@ Prove fixture expectation corruption fails before treating corpus parity as evid
 Use the accepted 100 warm-ups, 1,000 operations and five paired runs for device performance; preserve raw samples and frozen generator identity.
 Inspect the final diff for contract omissions and source inclusion/registration failures before hosted review.
 
-## Remaining source-package measurement
+## Source-package measurement
 
 Compare baseline and candidate `yarn pack` archives offline with `pilot/package-size.py`.
 The reader owns archive identity, per-file payload accounting, separate compressed growth and the existing 256 KiB distribution budget.
 Jest regressions use real synthetic tarballs to verify the exact threshold, budget rejection, shrinking packages and malformed archives.
 Record the source revisions, shared build toolchain and archive checksums with measured results in the pilot report.
-This bounded follow-up leaves physical-device, native-code size and build-time gates incomplete.
+This source-package gate does not evaluate physical-device, native-code size or build-time budgets.
+
+## Native-code size measurement
+
+Freeze baseline `992a68d084b061066a7ca225bf982ee10405945a` and candidate `293e2f085bcbd4df96aef5478416de0e5a924ebe` before building.
+Use independent packed consumers with identical application sources, dependency versions and Release settings.
+Build all four Android ABIs and unsigned iOS device arm64 without installing or launching either application.
+Count complete stripped native images conservatively, including registration and linked runtime changes; compare each architecture against the unchanged 131,072-byte budget.
+Report APK and consistently compressed unsigned iOS app archives separately from native-image totals.
+Preserve archives, hashes, build logs, native-tool inspection and per-image accounting in the local review evidence; reject wrong architectures, unstripped images and missing app images before trusting totals.
+Record results and verification limits in the existing report and reproducible commands in the harness guide.
+This measurement does not supply release-device latency, retained-memory or paired build-time evidence.
 
 ## Limits
 

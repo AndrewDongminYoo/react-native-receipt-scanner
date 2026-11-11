@@ -5,6 +5,7 @@ anonymization
 AOSP
 APPL
 appname
+archs
 armeabi
 ASAN
 Autoresizing
@@ -46,6 +47,7 @@ homography
 IgnoredVulns
 infile
 instancetype
+iphoneos
 iphonesimulator
 Jamo
 JAVACMD
@@ -58,6 +60,7 @@ KORIE
 ktlint
 letterboxing
 licence
+lipo
 lobanov
 lodev09
 logcat
@@ -78,6 +81,7 @@ NSURL
 NSUUID
 nvmrc
 objc
+otool
 oxipng
 pasteable
 pbxproj
@@ -120,6 +124,7 @@ unblockable
 unmirrored
 unredacted
 unrotated
+vtool
 Wconversion
 Werror
 Wextra

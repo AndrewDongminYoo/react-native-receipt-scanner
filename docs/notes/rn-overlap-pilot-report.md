@@ -14,7 +14,7 @@ It does not authorize the separate [#70 adoption decision](https://github.com/An
 | ------------------- | -------------------------------------------------------------------------------- |
 | Production baseline | `992a68d084b061066a7ca225bf982ee10405945a`                                       |
 | Canonical core      | `fb37f24a86014829a31897ca891d45a78208aa6c`, ABI v1                               |
-| Candidate           | Release-device revision not frozen; source-package snapshot identified below     |
+| Candidate           | Runtime-measurement revision not frozen; package/native-size snapshots below     |
 | Generator           | `pilot/workloads.js`, v1, seed `0x69c0ffee`                                      |
 | Host environment    | macOS, Apple Clang, Node 24; exact executable versions belong with each campaign |
 
@@ -76,10 +76,10 @@ No physical-device installation or launch occurred.
 | Stress geometric-mean benefit and p95 budget                        | Not evaluated                                                                |
 | Five quiescent memory batches with managed/native profiler coverage | Not collected                                                                |
 | Packed source and compressed size growth                            | Passed for the identified archive pair below; +62,208 unpacked bytes         |
-| Stripped release native-code growth by architecture                 | Not measured                                                                 |
+| Stripped release native-code growth by architecture                 | Passed for four Android ABIs and iOS device arm64 in the campaign below      |
 | Five paired cached-dependency clean/no-op build comparisons         | Not measured                                                                 |
 
-No performance, retained-memory, stripped native-code size or build-time acceptance is claimed.
+No latency, retained-memory or build-time acceptance is claimed.
 The approved budgets remain unchanged; simulator integration cannot substitute for device measurements.
 
 ## Source-package distribution measurement
@@ -105,4 +105,74 @@ Candidate archive SHA-256: `a48add1316b430967b430bc88196357c82b9fd61ea44a5ac6684
 The local review deliverable retains both archives, per-file JSON accounting and pack logs; those binary artifacts are not repository sources.
 Jest exercises actual synthetic archives below, at and above the budget, shrinking payloads, corrupt archives, duplicate/noncanonical paths, traversal and links.
 Additional negative controls damage a header after the valid manifest, remove tar end blocks, hide payload after end blocks, and remove or corrupt gzip trailers; each must fail without emitting partial totals.
-Passing this distribution gate supplies no evidence for the remaining physical-device, stripped native-code or paired build-time gates and leaves #69 incomplete.
+Passing this source-package gate supplies no evidence for physical-device, stripped native-code or paired build-time gates; the separate native-code campaign below covers only the native-code size gate.
+
+## Release native-code size campaign
+
+Measured on 2026-11-11 against baseline `992a68d084b061066a7ca225bf982ee10405945a` and frozen candidate `293e2f085bcbd4df96aef5478416de0e5a924ebe`.
+Canonical core remains `fb37f24a86014829a31897ca891d45a78208aa6c`, ABI v1.
+The candidate archive is byte-identical to the source-package snapshot above; intervening commits changed no distributed bytes.
+Baseline and candidate archive SHA-256 remain `0512ed264c2da97ecc840780287492f7aa1b87fadc448ee8f6610406cb1f3ee9` and `a48add1316b430967b430bc88196357c82b9fd61ea44a5ac6684a531f6367a7a`, respectively.
+Every installed library file matched its archive.
+
+Both independent consumers use the same current example template, application entry, Android app configuration, Podfile and dependency versions, except the archive locator and the library's generated sources.
+Yarn reported 1,304 identical resolved package locators after excluding the measured library.
+The identical entry retains the public `scan` function and registers a blank component; it does not call the pilot or scanner.
+Entry SHA-256 is `df6f5a73c6750e762da3dbb655289e9bdfce6e6dc99857d211dfb7dc5caab6a9`.
+These are whole-revision app comparisons, including intervening production fixes and generated registration changes, not an isolated attribution to the C++ core or adapter.
+
+The shared host is macOS 26.7.3 build 25G342 with Node 24.20.0, Yarn 4.11.0 and React Native 0.88.0/Hermes.
+Android uses Java 21.0.13.0.3, Gradle 9.4.1, NDK 27.1.12297006/Clang 18.0.2 and build tools/compile SDK 37; Release minification remains disabled on both sides.
+Release APKs retain the template's debug-keystore signing configuration.
+iOS uses Xcode 26.6 build 17F113, iPhoneOS SDK 26.5, Apple Clang 21.0.0 and CocoaPods 1.17.0 with prebuilt RN core/dependencies enabled.
+The existing RN local-archive switches select the same official, checksum-verified Release core, dependencies and Hermes archives on both sides, avoiding redundant CocoaPods HTTP downloads.
+The [harness guide](../../pilot/README.md#release-native-code-size) records the build and accounting procedure.
+
+### Android results
+
+Both packed consumers built successfully in Release for all four ABIs without installation or launch.
+Each APK contains 11 shared objects per ABI.
+The reader checked each ELF's actual machine and absence of `.symtab` and `.debug_*` sections, then counted complete image bytes, including headers, data and alignment.
+All ten non-app libraries per ABI are byte-identical across the pair; only `libappmodules.so` changed.
+The linked candidate contains the pilot's defined constructor and `findOverlap` symbols.
+
+| Architecture | Baseline native bytes | Candidate native bytes | Growth | 131,072-byte budget |
+| ------------ | --------------------- | ---------------------- | ------ | ------------------- |
+| arm64-v8a    | 23,782,208            | 23,804,664             | 22,456 | Pass                |
+| armeabi-v7a  | 15,542,384            | 15,558,524             | 16,140 | Pass                |
+| x86          | 25,341,860            | 25,364,484             | 22,624 | Pass                |
+| x86_64       | 24,762,736            | 24,785,528             | 22,792 | Pass                |
+
+Whole four-ABI APK bytes increase from 98,480,240 to 98,561,644, a separate increase of 81,404 bytes without an acceptance threshold.
+APK SHA-256 is `fc3233cceccf34b2662b8387465fe83d209b609c46c6889dc81f5ba7f12dcd21` for baseline and `b71e5ab8ee041db696fc21c86f942686b6e5b7fab16f00aee22537b494563089` for candidate.
+This includes the APK's actual compression/alignment, JS, DEX, resources and signing; it is not a per-device download estimate.
+Controls rejected a missing app image, an invalid ELF, a mislabeled ABI and an unstripped app image.
+Real ELF fixtures with appended padding verified native growth of 131,071 and 131,072 bytes passes, while 131,073 bytes fails.
+
+### iOS results
+
+Both packed consumers built successfully with the device SDK in unsigned Release for arm64, without installation or launch.
+Their Podfile locks are identical after excluding the library's own podspec checksum.
+The measurement includes the app executable and all three embedded frameworks: React, ReactNativeDependencies and Hermes.
+Copies of all four images were normalized with `xcrun strip -S -x`; the original build products remain preserved.
+The reader confirmed thin arm64 Mach-O images, the `IOS` device platform, absence of local symbols and absence of `__DWARF` segments before summing full file bytes.
+All three normalized frameworks are byte-identical across the pair; the app executable increases from 193,736 to 213,280 bytes and contains the pilot's defined `findOverlap` symbol only in the candidate.
+
+| Architecture | Baseline native bytes | Candidate native bytes | Growth | 131,072-byte budget |
+| ------------ | --------------------- | ---------------------- | ------ | ------------------- |
+| arm64        | 9,801,592             | 9,821,136              | 19,544 | Pass                |
+
+The separate unsigned app archives use identical `Payload/ReceiptScannerExample.app` layout, ZIP deflate level 9, fixed 1980 timestamps and fixed file permissions.
+Archive bytes increase from 4,209,438 to 4,214,565, a separate increase of 5,127 bytes without an acceptance threshold.
+Their SHA-256 values are `312c012103b372c8c221c8325b3d24000a618ebe679c971bc9ab2642fec483e5` for baseline and `2dba9db91ccc4dac81c410735cdb60dc7291e935ba08aa48141c0b2b01185ab4` for candidate.
+These local archives exclude distribution signing, App Store encryption and thinning; they do not establish a store download size.
+Controls rejected missing/invalid app images, a missing framework, a real unstripped device Mach-O and an arm64 Simulator executable; the stripped device fixture passed.
+
+### Verification and remaining gates
+
+All five measured architecture/platform combinations pass the unchanged 128 KiB native-code budget.
+The local review deliverable retains source/package identities, both APKs, original iOS build products, normalized unsigned archives, per-image accounting/checksums, platform-tool reader and controls, and complete build logs.
+The report and harness-guide changes do not modify native compilation inputs; the measurements remain bound to the frozen source candidate above.
+Repository typecheck, lint and all 172 Jest tests passed; the existing Watchman recrawl warning did not fail the suite.
+Neither this build-only campaign nor its elapsed build logs supply release-device latency, quiescent retained-memory measurements, five paired clean/no-op build comparisons or new runtime-parity results.
+Issue #69 remains incomplete and open; production JS matching and the separate #70 adoption boundary remain unchanged.
