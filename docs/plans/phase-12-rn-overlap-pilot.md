@@ -46,6 +46,17 @@ Preserve archives, hashes, build logs, native-tool inspection and per-image acco
 Record results and verification limits in the existing report and reproducible commands in the harness guide.
 This measurement does not supply release-device latency, retained-memory or paired build-time evidence.
 
+## Build-time measurement
+
+Reuse the frozen native-size baseline/candidate archives and their independent packed consumers after verifying installed source bytes and unchanged application inputs.
+Run Android and iOS sequentially, alternating baseline/candidate order across five pairs per platform.
+For each side, reset generated build products outside the timed interval, time a Release build with dependencies already cached, then time the identical no-op command without editing inputs or resetting products.
+Disable Android build/configuration caches and dependency networking; retain compiler/dependency caches and document the clean boundary on both platforms.
+Preserve monotonic wall-clock samples, complete command logs, host load and toolchain identities.
+Compare the median of five candidate times against the median of five baseline times using the accepted clean/no-op budgets; report per-pair variability and do not reinterpret inconclusive results as acceptance.
+No application installation, launch or physical-device write is needed.
+This measurement supplies no release-device latency or retained-memory evidence.
+
 ## Limits
 
 No production adoption, new public API, unrelated dependency upgrades or receipt-domain logic.

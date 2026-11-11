@@ -119,3 +119,27 @@ For iOS, archive each normalized app under the same `Payload/<name>.app` layout 
 These unsigned local archives do not predict App Store encryption, thinning, signing or download size.
 Keep compression parameters identical and preserve the original artifacts, normalized artifacts and their hashes.
 This build-only measurement requires no physical-device write and supplies no runtime latency, memory or paired build-time result.
+
+## Cached-dependency build time
+
+Use the same frozen packed consumers, application entry and Release configurations as the native-code size comparison.
+Verify archive hashes and all installed library source bytes before measuring; dependency installation and archive preparation remain outside the timer.
+Run one mobile job at a time and queue each command until the one-minute host load is no greater than the logical core count.
+Record queue time separately from elapsed build time.
+Alternate baseline/candidate order for five pairs on each platform.
+
+For Android, run `./gradlew clean` outside the timed interval, including native clean for all four ABIs.
+Time the Release assemble command above with `--offline --no-build-cache --no-configuration-cache` added, retaining `--no-daemon --max-workers=2` and the same architecture list.
+Then time that exact assemble command again without changing inputs or cleaning products.
+Keep downloaded dependencies and Gradle plugin compilation caches; this is a cached-dependency clean build, not a cold SDK/toolchain installation.
+
+For iOS, run the unsigned Release `xcodebuild` command above with its final `build` action replaced by `clean`, outside the timer.
+Time the original `build` command, then repeat it unchanged for the no-op sample.
+Retain the same derived-data directory, module/compiler caches, installed Pods and checksum-verified Release RN/Hermes prebuilts.
+A no-op means an unchanged build invocation; always-run React Native scripts may still execute.
+
+Capture monotonic wall-clock time, exact command, exit status, start timestamp and host load for every invocation, preserving complete logs.
+Collect all five pairs even if an early pair exceeds the budget; a failed build makes the campaign incomplete rather than a timing sample to discard.
+Report baseline/candidate medians, individual paired differences and the unchanged clean/no-op allowances from the accepted protocol.
+Document shared-host variability and mixed directions without claiming a consistent speedup.
+This build-only campaign neither installs applications nor supplies device latency or retained-memory evidence.
