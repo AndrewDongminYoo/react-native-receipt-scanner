@@ -4,7 +4,8 @@
 
 Issue [#69](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/issues/69), tracking repository `AndrewDongminYoo/react-native-receipt-scanner`.
 This is an internal experiment against the [accepted protocol](../specs/ocr-overlap-pilot.md), with production `scan()` and JS matching unchanged.
-The result is **incomplete** until every required mobile integration and release-device measurement below has evidence.
+The result is **incomplete**, and the measured candidate fails the accepted typical-input latency budget on iPhone 16 Pro as recorded below.
+Missing measurements cannot turn that failed necessary criterion into a pass.
 The operator approved delivering the implementation and cross-platform package/JSI validation first, while leaving issue #69 open for measurements.
 It does not authorize the separate [#70 adoption decision](https://github.com/AndrewDongminYoo/react-native-receipt-scanner/issues/70).
 
@@ -14,7 +15,7 @@ It does not authorize the separate [#70 adoption decision](https://github.com/An
 | ------------------- | -------------------------------------------------------------------------------- |
 | Production baseline | `992a68d084b061066a7ca225bf982ee10405945a`                                       |
 | Canonical core      | `fb37f24a86014829a31897ca891d45a78208aa6c`, ABI v1                               |
-| Candidate           | Runtime-measurement revision not frozen; package/native-size snapshots below     |
+| Candidate           | Runtime candidate `293e2f085bcbd4df96aef5478416de0e5a924ebe`; snapshots below    |
 | Generator           | `pilot/workloads.js`, v1, seed `0x69c0ffee`                                      |
 | Host environment    | macOS, Apple Clang, Node 24; exact executable versions belong with each campaign |
 
@@ -63,21 +64,21 @@ An explicitly approved temporary SDK/runtime match made simulator destinations a
 The repository example compiled in Release and its startup screen rendered after direct native installation.
 RN CLI's custom build-folder lookup and subsequent `PLATFORM_NAME` lookup failed in its installation helper; no CLI dependency patch was made.
 Android Debug initially waited for React Native's local-network permission prompt; the permission was granted only in the disposable AVD to reach its dedicated Metro server.
-No physical-device installation or launch occurred.
+The initial integration-only campaign performed no physical-device installation or launch.
 
 ## Measurements
 
-| Required result                                                     | Status                                                                       |
-| ------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| Identified Android release device, thermal state and versions       | Unavailable; operator confirmed no physical Android device                   |
-| Identified iOS release device, thermal state and versions           | iPhone 16 Pro, iOS 27.0.1 identified; no write authorization or measurements |
-| Five paired latency runs, raw samples, median/p95                   | Not collected                                                                |
-| Small/typical latency budgets                                       | Not evaluated                                                                |
-| Stress geometric-mean benefit and p95 budget                        | Not evaluated                                                                |
-| Five quiescent memory batches with managed/native profiler coverage | Not collected                                                                |
-| Packed source and compressed size growth                            | Passed for the identified archive pair below; +62,208 unpacked bytes         |
-| Stripped release native-code growth by architecture                 | Passed for four Android ABIs and iOS device arm64 in the campaign below      |
-| Five paired cached-dependency clean/no-op build comparisons         | Numerical budgets met on both platforms; variability recorded below          |
+| Required result                                                     | Status                                                                  |
+| ------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| Identified Android release device, thermal state and versions       | Unavailable; operator confirmed no physical Android device              |
+| Identified iOS release device, thermal state and versions           | iPhone 16 Pro, iOS 27.0.1; partial Release campaign below               |
+| Five paired latency runs, raw samples, median/p95                   | Collected for 22 workloads; full campaign stopped by operator           |
+| Small/typical latency budgets                                       | Failed on four thermally nominal typical ASCII inputs                   |
+| Stress geometric-mean benefit and p95 budget                        | Not evaluated                                                           |
+| Five quiescent memory batches with managed/native profiler coverage | Not collected                                                           |
+| Packed source and compressed size growth                            | Passed for the identified archive pair below; +62,208 unpacked bytes    |
+| Stripped release native-code growth by architecture                 | Passed for four Android ABIs and iOS device arm64 in the campaign below |
+| Five paired cached-dependency clean/no-op build comparisons         | Numerical budgets met on both platforms; variability recorded below     |
 
 No latency or retained-memory acceptance is claimed; the build-time observations below do not establish a consistent speedup.
 The approved budgets remain unchanged; simulator integration cannot substitute for device measurements.
@@ -233,5 +234,76 @@ This is not evidence to adopt the native matcher.
 The local review deliverable preserves frozen identities, installed-file verification, the timer/aggregation scripts, all raw samples, complete logs and a full-log audit.
 Aggregation controls reject missing/duplicate pairs, failed builds and non-finite times; an above-budget synthetic sample fails its budget check.
 
-Physical Android/iOS release-device latency and quiescent managed-plus-native retained-memory measurements remain unavailable.
+Android release-device latency and managed-plus-native retained-memory measurements on both platforms remain unavailable.
+Partial iOS latency evidence is recorded in the following campaign.
 Issue #69 remains incomplete and open; production JS matching and the separate #70 adoption decision are unchanged.
+
+## iPhone 16 Pro runtime campaign
+
+Measured on 2026-11-11 using frozen candidate `293e2f085bcbd4df96aef5478416de0e5a924ebe`, canonical core `fb37f24a86014829a31897ca891d45a78208aa6c`, ABI v1.
+The packed-source candidate SHA-256 remains `a48add1316b430967b430bc88196357c82b9fd61ea44a5ac6684a531f6367a7a`; all 124 installed library files matched the archive byte-for-byte after measurement.
+The explicit app-only runner compares the unchanged production JS matcher with the packed native adapter on the same raw synthetic pages.
+Both operations come from the same packed candidate; `src/mergeOcrPages.ts` is byte-identical between the production baseline and candidate, Git blob `f611effeaac7bf8e66a229cbbec4fae5fcae4f71`.
+The runner adds per-side recording and thermal-state sampling outside the operation timer; it does not change library source, normalization, matching or result assembly.
+The frozen generator SHA-256 is `e87ff1183c54e17ee4790485591eb50c2e3e08fde2942d4717b869f3444941ba` and the packaged harness SHA-256 is `bd77d8f2ea314df08a2baa10508bd4c10cd946be8849b7040b933005939f5dc1`.
+App-only entry SHA-256 is `940970623b68cb8ea813337d6a9cf9c8fc04aaffaf5d99c7877fdf125e03ff52`.
+Executable SHA-256 is `a14738b48201e1af24c72cee903e6356d170bd9be848e2d2e92b1bdbaef4b368`; bundled Hermes bytecode SHA-256 is `d7d88f77bded2463366180ccee362ef9a51ab3486c437d6c386906e0e8740e4b`.
+Both built-product hashes were rechecked after termination.
+
+The physical device is iPhone 16 Pro, iOS 27.0.1 build 24A446, running optimized Release/Hermes `260318099.0.4`, static Hermes with concurrent Hades GC and debugger disabled.
+The app uses the same Xcode 26.6/SDK 26.5 and checksum-verified Release RN/Hermes inputs as the native-size consumers.
+The dedicated development-signed measurement app opens no scanner and requests no camera/photo access.
+The operator approved installation and execution, then explicitly stopped collection after the latency failure was established.
+The agent terminated the verified app PID with SIGTERM; the operator subsequently confirmed personally deleting the app.
+No reinstall or unchanged-candidate retry is needed: additional stress or memory results cannot repair a failed necessary latency criterion.
+This does not approve an optimization experiment or waive any unmeasured gate.
+
+### Parity and latency
+
+Actual iPhone JSI parity passed all 29 merge fixtures, 11 malformed numeric cases, 9 malformed JS-type cases and 48 synthetic workloads; ABI and acquisition-module presence were checked.
+`performance.now()` measured the complete host operation, including normalization, conversion, allocation, native calls, local buffer cleanup and result assembly.
+Each side performs 100 warm-ups then 1,000 measured operations; five paired runs alternate baseline/candidate order.
+Outputs are consumed outside the operation timer, matching the original harness.
+The minimum observed positive timer delta was approximately 0.000291 ms, below the 0.1 ms absolute allowance.
+
+All four completed typical ASCII inputs failed both median and p95 allowances.
+Every measured side of these four inputs began and ended at nominal thermal state.
+Values are milliseconds; baseline/candidate columns are medians across five runs.
+Each excess column is the median of five paired candidate-minus-baseline-minus-allowance comparisons, with allowance max(10% of that pair's baseline, 0.1 ms), separately for median and p95.
+A positive excess fails the unchanged budget; these paired excesses are not differences of independently aggregated medians.
+
+| Input              | JS median | Native-path median | JS p95 | Native-path p95 | Median excess | p95 excess |
+| ------------------ | --------: | -----------------: | -----: | --------------: | ------------: | ---------: |
+| typical/ascii/none |     0.811 |              3.194 |  0.990 |           3.348 |        +2.285 |     +2.268 |
+| typical/ascii/half |     0.858 |              3.326 |  1.035 |           3.484 |        +2.358 |     +2.367 |
+| typical/ascii/full |     0.880 |              3.358 |  1.083 |           3.604 |        +2.365 |     +2.410 |
+| typical/ascii/near |     1.165 |              3.593 |  1.359 |           3.828 |        +2.315 |     +2.337 |
+
+The native path is roughly 3.1–3.9 times the JS median on these inputs.
+This is not a core-only timing result or a diagnosis of the dominant overhead; no phase-specific profile was collected.
+
+### Stopped-campaign limits
+
+The final file contains 223 latency records and 223,000 raw samples: 22 complete workloads and three sides of the next workload, with six thermal-wait records.
+The operator stopped before the campaign-complete marker; the reader's complete mode rejects this dataset rather than accepting partial coverage.
+Two later candidate sides changed from nominal to fair thermal state: `typical/korean/none` pair 1 and `typical/korean/full` pair 1, using zero-based pairs.
+Those sides are flagged; they do not overlap the four nominal-thermal ASCII failures above.
+No outliers were removed or replaced, and no threshold changed after measurement.
+Stress timings, stress geometric-mean benefit, memory batches and managed/native retained-memory profiler coverage remain unmeasured.
+Incidental process RSS metadata during latency collection is diagnostic and does not satisfy the memory gate.
+Android physical-device performance also remains unmeasured.
+
+The surviving local deliverable `issue-69-iphone-20261111` retains source/binary identities, app-only runner/recorder source, signed-build logs, raw JSONL, recomputed analysis, reader controls and device-operation receipts.
+Final raw JSONL SHA-256 is `0eec111a3539e6cfbc32f668be2e2deed94a8c6a1d8091f93bc19c521805b949`.
+The reader checks run identity, exact per-side counts, duplicate keys and raw median/p95 consistency.
+Synthetic controls distinguish exact-budget acceptance from over-budget failure and reject missing completion, duplicates, wrong run IDs and mismatched statistics.
+These controls do not replace actual device evidence or establish memory acceptance.
+
+### Input to the adoption decision
+
+The current RN candidate cannot qualify for production adoption because a required iOS latency criterion failed.
+The [Flutter pilot report](https://github.com/AndrewDongminYoo/flutter_receipt_scanner/blob/main/docs/notes/flutter-overlap-pilot-report.md), inspected on 2026-11-11 with file blob `2db5db5ca46cb160d1d84190883cdb2732aed412`, reports passing host/emulator/Simulator parity but incomplete physical timing, retained memory and paired size/build-cost gates.
+RN's measured regression does not establish Flutter FFI performance; that adapter remains unqualified on its own evidence.
+The recommended #70 outcome is no adoption of the current candidates, retaining production JS/Dart and shared fixtures without another unchanged-candidate retry.
+This is a proposal for the operator's decision, not an adoption decision, issue closure or authorization to remove the pilot.
+Any optimization or new measurement campaign needs a separate bounded follow-up decision under the accepted protocol.
