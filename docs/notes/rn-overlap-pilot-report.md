@@ -77,9 +77,9 @@ No physical-device installation or launch occurred.
 | Five quiescent memory batches with managed/native profiler coverage | Not collected                                                                |
 | Packed source and compressed size growth                            | Passed for the identified archive pair below; +62,208 unpacked bytes         |
 | Stripped release native-code growth by architecture                 | Passed for four Android ABIs and iOS device arm64 in the campaign below      |
-| Five paired cached-dependency clean/no-op build comparisons         | Not measured                                                                 |
+| Five paired cached-dependency clean/no-op build comparisons         | Numerical budgets met on both platforms; variability recorded below          |
 
-No latency, retained-memory or build-time acceptance is claimed.
+No latency or retained-memory acceptance is claimed; the build-time observations below do not establish a consistent speedup.
 The approved budgets remain unchanged; simulator integration cannot substitute for device measurements.
 
 ## Source-package distribution measurement
@@ -176,3 +176,62 @@ The report and harness-guide changes do not modify native compilation inputs; th
 Repository typecheck, lint and all 172 Jest tests passed; the existing Watchman recrawl warning did not fail the suite.
 Neither this build-only campaign nor its elapsed build logs supply release-device latency, quiescent retained-memory measurements, five paired clean/no-op build comparisons or new runtime-parity results.
 Issue #69 remains incomplete and open; production JS matching and the separate #70 adoption boundary remain unchanged.
+
+## Cached-dependency build-time campaign
+
+Measured on 2026-11-11 using the same frozen baseline `992a68d084b061066a7ca225bf982ee10405945a`, candidate `293e2f085bcbd4df96aef5478416de0e5a924ebe` and archives identified in the native-code size campaign above.
+Canonical core remains `fb37f24a86014829a31897ca891d45a78208aa6c`, ABI v1.
+Before measurement, all 88 baseline and 124 candidate installed library files matched their archives byte-for-byte, and both application entries matched the recorded SHA-256.
+Application configuration and resolved dependencies remain those of the native-code size consumers; this is a whole-revision comparison, including intervening production changes, rather than an isolated attribution to the adapter.
+
+The same macOS/Xcode/Java/Gradle/NDK toolchain described above was used.
+Android shell and Metro use Node 24.22.2; iOS's existing `.xcode.env.local` pins Node 24.20.0, matching `.nvmrc`.
+Each baseline/candidate pair uses the same platform-specific Node executable; these results do not compare Node versions.
+Both builds use RN 0.88.0/Hermes and the same application sources.
+Android covers all four ABIs; iOS uses unsigned device arm64 Release with the same checksum-verified Release RN/Hermes prebuilts.
+No application was installed or launched.
+
+Five pairs per platform alternate baseline-first on pairs 1/3/5 and candidate-first on 2/4.
+Each side runs an untimed clean, a timed Release build and an identical timed invocation without input changes or product reset.
+The Python runner uses `time.perf_counter_ns()` around the entire child process, records exit status, timestamp and host load, and preserves complete stdout/stderr logs.
+Each command waits outside the timer until the one-minute load is at most the host's 10 logical cores; the shared host is not otherwise isolated.
+Build phases can raise load above that entry threshold.
+Start timestamps and elapsed samples preserve inter-command gaps, including queue waits.
+
+Android uses `--offline --no-daemon --no-build-cache --no-configuration-cache --max-workers=2` with the four-ABI Release assemble command.
+Gradle clean includes native clean for all four ABIs; downloaded dependencies, Gradle plugin products and toolchain caches remain warm.
+iOS uses `xcodebuild clean` followed by the documented unsigned Release build, retaining its derived-data location, module/compiler caches and installed Pods.
+The iOS clean logs show 20 baseline versus 23 candidate C/Obj-C compilation actions; no-op logs show zero, while always-run RN scripts and relinking still execute.
+Dependency installation, package preparation, SDK downloads and untimed clean operations are excluded.
+These are cached-dependency rebuild costs, not cold-machine installation costs.
+
+All 40 measured build invocations and 20 untimed clean commands exited successfully; complete logs contain their expected success markers and no compiler error lines.
+The table reports medians of five baseline/candidate times and the median of five paired candidate-minus-baseline differences.
+Allowances remain the accepted larger of 10% or 15 seconds for clean, and 10% or 1 second for no-op.
+
+| Platform / build | Baseline median (s) | Candidate median (s) | Difference of medians (s) | Median paired difference (s) | Allowance (s) |
+| ---------------- | ------------------- | -------------------- | ------------------------- | ---------------------------- | ------------- |
+| android / clean  | 52.464              | 54.182               | +1.718                    | +1.718                       | 15.000        |
+| android / noop   | 9.566               | 9.563                | -0.003                    | +0.365                       | 1.000         |
+| ios / clean      | 18.479              | 18.081               | -0.397                    | +0.878                       | 15.000        |
+| ios / noop       | 8.744               | 9.418                | +0.674                    | +0.648                       | 1.000         |
+
+Both the difference-of-medians check and the median paired excess over each baseline's allowance are within the numerical budgets on both platforms.
+No threshold was changed after measurement.
+Individual samples below are seconds in pair order 1 through 5, with no outlier removal.
+
+| Platform / build | Baseline samples (s)                   | Candidate samples (s)                  |
+| ---------------- | -------------------------------------- | -------------------------------------- |
+| android / clean  | 61.994, 48.103, 55.125, 52.464, 44.463 | 57.937, 49.533, 60.041, 54.182, 46.634 |
+| android / noop   | 9.106, 14.057, 10.135, 9.566, 8.844    | 9.444, 9.563, 10.691, 9.931, 9.514     |
+| ios / clean      | 18.895, 18.479, 17.902, 18.801, 16.891 | 18.081, 17.982, 20.358, 19.699, 17.769 |
+| ios / noop       | 8.615, 9.241, 8.744, 8.770, 7.993      | 8.870, 8.164, 11.653, 9.418, 9.516     |
+
+Paired differences change direction, and two iOS no-op pairs individually exceed one second of growth.
+The five-pair medians meet the numerical cost limits, but consistent speedup or a stable attribution to the pilot is inconclusive on this shared host.
+This is not evidence to adopt the native matcher.
+The local review deliverable preserves frozen identities, installed-file verification, the timer/aggregation scripts, all raw samples, complete logs and a full-log audit.
+Aggregation controls reject missing/duplicate pairs, failed builds and non-finite times; an above-budget synthetic sample fails its budget check.
+
+Physical Android/iOS release-device latency and quiescent managed-plus-native retained-memory measurements remain unavailable.
+Issue #69 remains incomplete and open; production JS matching and the separate #70 adoption decision are unchanged.
