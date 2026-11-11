@@ -36,7 +36,7 @@ and the system cannot show the rationale dialog).
 | `includeRawExif`    | `boolean`               | `false`              | Include the full raw EXIF / TIFF / GPS dictionary on `exif.raw`. Off by default to keep IPC payloads small (raw maps are typically 30–60 fields). Effective only when `includeExif === true`. GPS keys are excluded from `raw` whenever `includeGpsExif === false`.                                                       |
 | `minimumTextHeight` | `number` (0.0–1.0)      | `0`                  | **iOS only.** Vision `minimumTextHeight` as a fraction of image height; text shorter than this is skipped during recognition. Lowering it (e.g. `0.02`) can recover small receipt line items at the cost of more noise. `0` uses the package default (≈ 1/32). Android (ML Kit) has no equivalent and ignores this field. |
 | `ocrGeometry`       | `boolean`               | `false`              | Attach per-line OCR boxes to `ReceiptImage.ocrLines` (see "OCR line geometry" below). Effective only when `ocr === true`.                                                                                                                                                                                                 |
-| `mergeOcrPages`     | `boolean`               | `false`              | Assemble the pages' OCR text into one ordered string on `ScanReceiptResult.mergedOcr` (see "Long receipt OCR merge" below). Requires `ocr: true` and an integer `maxPages >= 2`; page JPEGs are never combined.                                                                                                           |
+| `mergeOcrPages`     | `boolean`               | `false`              | **Deprecated:** prefer app-owned assembly using `pageUris`. Assemble the pages' OCR text into one ordered string on `ScanReceiptResult.mergedOcr` (see "Long receipt OCR merge" below). Requires `ocr: true` and an integer `maxPages >= 2`; page JPEGs are never combined.                                               |
 
 ### Multilingual OCR and capabilities
 
@@ -141,6 +141,9 @@ Old/new Play Services device behavior was not measured for this JS policy change
 
 ### Long receipt OCR merge
 
+The legacy option is deprecated after app-owned fixture/orchestration verification; it remains supported until a separately announced breaking release, with no removal version or date set.
+See the [app-owned migration guidance](long-receipt-ocr-merge.md#app-owned-migration).
+
 A receipt too long for one frame is captured across several overlapping pages — by camera, or as a set of screenshots picked from the gallery. With `mergeOcrPages: true`, the JS layer assembles those pages' OCR text into one ordered string and removes the text duplicated at each seam.
 
 Page JPEGs are never combined. A single tall image would lose text resolution on both platforms — see [`../notes/adr-008-long-receipt-merge-boundary.md`](../notes/adr-008-long-receipt-merge-boundary.md) for the measurements.
@@ -214,9 +217,15 @@ type ScanReceiptResult = {
   status: "success" | "cancelled" | "rejected";
   images: ReceiptImage[];
   rejectedImages: ReceiptImage[];
-  mergedOcr?: MergedOcrResult; // only with mergeOcrPages: true
+  pageUris?: string[]; // updated runtimes: original returned-page order, including rejects
+  mergedOcr?: MergedOcrResult; // legacy mergeOcrPages: true
 };
 ```
+
+`pageUris` snapshots every native-returned page before OCR-floor partitioning, independently of OCR or the legacy merge option.
+Updated runtimes always populate it, with `[]` on cancellation and web; the optional type preserves compatibility with older result objects.
+It does not detect a page dropped before the native result reached JS.
+The [app-owned reference](../../example/src/receiptMerge.ts) validates one-to-one coverage rather than guessing missing order.
 
 `images` and `rejectedImages` are **always arrays** — empty when there are no items. Consumers can read `.length` on both without a null-check.
 

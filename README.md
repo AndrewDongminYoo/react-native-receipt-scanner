@@ -155,17 +155,25 @@ if (result.status === "success") {
 ### Long receipts — merging OCR across pages
 
 A receipt too long for one frame is captured across several overlapping pages, or saved as a run of screenshots and picked from the gallery.
-`mergeOcrPages` assembles their OCR text into one ordered string and removes the text duplicated where two captures overlap.
+Use app-owned assembly to preserve page order and diagnostics while removing proven duplicated text at adjacent seams.
+Copy the dependency-free [example reference](example/src/receiptMerge.ts) into your app; it is app code, not a package export.
 
 ```ts
-const result = await scan({ maxPages: 6, mergeOcrPages: true });
+import { mergeScanResultInApp } from "./receiptMerge"; // your app-owned copy
 
-const merged = result.mergedOcr;
+const result = await scan({ maxPages: 6 });
+const merged = mergeScanResultInApp(result);
 if (merged && !merged.isComplete) {
   // A seam that could not be proven; both pages' text is still in merged.text.
   console.log(`unproven seams: ${merged.unmatchedBoundaryIndexes.join(", ")}`);
 }
 ```
+
+`result.pageUris` contains every returned page in native order, including OCR-floor rejects.
+The reference restores that order from `images` and `rejectedImages`, reports missing/duplicate/unlisted pages explicitly, and keeps all-rejected results' text and diagnostics.
+Older results without order metadata are rejected rather than concatenated in a guessed order; use an updated library runtime before migrating.
+The existing `mergeOcrPages` option is deprecated but remains compatible, including `mergedOcr`, defaults and validation.
+Removal will occur only in a separately announced breaking release; no removal version or date is set.
 
 Capture each page so it repeats **at least a couple of lines** from the end of the previous one — the merge proves a seam from repeated text, so with no overlap there is nothing to match. There is no upper limit: the deepest repeated run wins, so a generous overlap is strictly safer than a thin one. With no provable overlap the boundary is reported and every line is kept.
 
@@ -295,22 +303,22 @@ if (result.status === "success") {
 
 ### `scan(options?): Promise<ScanReceiptResult>`
 
-| Option              | Type                    | Default                                   | Description                                                                                                                                                                                                                                     |
-| ------------------- | ----------------------- | ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `source`            | `'camera' \| 'gallery'` | `'camera'`                                | Open document camera or system image picker                                                                                                                                                                                                     |
-| `maxPages`          | `number`                | `1`                                       | Maximum pages per scan session                                                                                                                                                                                                                  |
-| `quality`           | `number` (0.0–1.0)      | `0.82`                                    | JPEG compression quality after crop                                                                                                                                                                                                             |
-| `includeExif`       | `boolean`               | `true`                                    | Attach EXIF metadata to each result image                                                                                                                                                                                                       |
-| `includeGpsExif`    | `boolean`               | `false`                                   | Include GPS coordinates in EXIF (off by default — privacy risk)                                                                                                                                                                                 |
-| `ocr`               | `boolean`               | `true`                                    | Run on-device text recognition and return `ocrText`                                                                                                                                                                                             |
-| `ocrLanguages`      | `readonly string[]`     | `["ko-KR", "en-US"]`                      | Ordered BCP 47 hints that select native OCR. Empty arrays or entries reject while OCR is enabled. These hints do not infer a receipt country or parse receipt / invoice fields.                                                                 |
-| `cropAutoConfirm`   | `boolean`               | `false`                                   | iOS gallery only: skip the crop editor when document detection confidence is ≥ 0.85 and apply the detected corners automatically                                                                                                                |
-| `ocrFloor`          | `OcrFloor \| false`     | conservative default (12 chars / 2 lines) | Reject blank / non-text captures (e.g. landscape photo of a wall). Pass `false` to disable. Only applies when `ocr: true`.                                                                                                                      |
-| `autoRotate`        | `boolean`               | `true`                                    | Detect 90° / 180° / 270° content rotation via OCR confidence and rotate the output JPEG to upright. Only applies when `ocr: true`.                                                                                                              |
-| `includeRawExif`    | `boolean`               | `false`                                   | Include the full raw EXIF / TIFF / GPS dictionary on `exif.raw`. Off by default to keep IPC payloads small. GPS keys excluded when `includeGpsExif: false`.                                                                                     |
-| `minimumTextHeight` | `number` (0.0–1.0)      | `0`                                       | iOS only: minimum text height as a fraction of image height for Vision OCR (`0` = platform default ≈ 1/32). Lower it to recover small receipt line items; Android (ML Kit) has no equivalent and ignores it. Only applies when `ocr: true`.     |
-| `ocrGeometry`       | `boolean`               | `false`                                   | Attach per-line text boxes to `ocrLines`, in output-image pixels. Enable it to draw text-region overlays. Off by default because a long receipt can carry hundreds of lines. Only applies when `ocr: true`.                                     |
-| `mergeOcrPages`     | `boolean`               | `false`                                   | Assemble the pages' OCR text into one ordered string on `mergedOcr`, removing text duplicated where captures overlap. For a receipt too long for one frame. Requires `ocr: true` and an integer `maxPages >= 2`; page JPEGs are never combined. |
+| Option              | Type                    | Default                                   | Description                                                                                                                                                                                                                                                                                                         |
+| ------------------- | ----------------------- | ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `source`            | `'camera' \| 'gallery'` | `'camera'`                                | Open document camera or system image picker                                                                                                                                                                                                                                                                         |
+| `maxPages`          | `number`                | `1`                                       | Maximum pages per scan session                                                                                                                                                                                                                                                                                      |
+| `quality`           | `number` (0.0–1.0)      | `0.82`                                    | JPEG compression quality after crop                                                                                                                                                                                                                                                                                 |
+| `includeExif`       | `boolean`               | `true`                                    | Attach EXIF metadata to each result image                                                                                                                                                                                                                                                                           |
+| `includeGpsExif`    | `boolean`               | `false`                                   | Include GPS coordinates in EXIF (off by default — privacy risk)                                                                                                                                                                                                                                                     |
+| `ocr`               | `boolean`               | `true`                                    | Run on-device text recognition and return `ocrText`                                                                                                                                                                                                                                                                 |
+| `ocrLanguages`      | `readonly string[]`     | `["ko-KR", "en-US"]`                      | Ordered BCP 47 hints that select native OCR. Empty arrays or entries reject while OCR is enabled. These hints do not infer a receipt country or parse receipt / invoice fields.                                                                                                                                     |
+| `cropAutoConfirm`   | `boolean`               | `false`                                   | iOS gallery only: skip the crop editor when document detection confidence is ≥ 0.85 and apply the detected corners automatically                                                                                                                                                                                    |
+| `ocrFloor`          | `OcrFloor \| false`     | conservative default (12 chars / 2 lines) | Reject blank / non-text captures (e.g. landscape photo of a wall). Pass `false` to disable. Only applies when `ocr: true`.                                                                                                                                                                                          |
+| `autoRotate`        | `boolean`               | `true`                                    | Detect 90° / 180° / 270° content rotation via OCR confidence and rotate the output JPEG to upright. Only applies when `ocr: true`.                                                                                                                                                                                  |
+| `includeRawExif`    | `boolean`               | `false`                                   | Include the full raw EXIF / TIFF / GPS dictionary on `exif.raw`. Off by default to keep IPC payloads small. GPS keys excluded when `includeGpsExif: false`.                                                                                                                                                         |
+| `minimumTextHeight` | `number` (0.0–1.0)      | `0`                                       | iOS only: minimum text height as a fraction of image height for Vision OCR (`0` = platform default ≈ 1/32). Lower it to recover small receipt line items; Android (ML Kit) has no equivalent and ignores it. Only applies when `ocr: true`.                                                                         |
+| `ocrGeometry`       | `boolean`               | `false`                                   | Attach per-line text boxes to `ocrLines`, in output-image pixels. Enable it to draw text-region overlays. Off by default because a long receipt can carry hundreds of lines. Only applies when `ocr: true`.                                                                                                         |
+| `mergeOcrPages`     | `boolean`               | `false`                                   | **Deprecated:** use the app-owned reference with `result.pageUris`. Assemble the pages' OCR text into one ordered string on `mergedOcr`, removing text duplicated where captures overlap. For a receipt too long for one frame. Requires `ocr: true` and an integer `maxPages >= 2`; page JPEGs are never combined. |
 
 ### Result types
 
@@ -319,7 +327,8 @@ type ScanReceiptResult = {
   status: "success" | "cancelled" | "rejected";
   images: ReceiptImage[]; // always an array — empty when none
   rejectedImages: ReceiptImage[]; // always an array — empty when none
-  mergedOcr?: MergedOcrResult; // with mergeOcrPages: true, unless the scan was cancelled
+  pageUris?: string[]; // updated runtimes: all returned pages before floor partitioning
+  mergedOcr?: MergedOcrResult; // legacy mergeOcrPages: true, unless cancelled
 };
 
 type MergedOcrResult = {

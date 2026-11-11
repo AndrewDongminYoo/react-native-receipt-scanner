@@ -60,13 +60,13 @@ scan(options)
   │
   ├─ [JS] derive OcrQuality per image from ocrText
   │
-  ├─ [JS] when mergeOcrPages: snapshot native page order by URI
-  │        (must happen before the floor gate, which partitions the array)
+  ├─ [JS] snapshot every returned page URI into result.pageUris
+  │        (before the floor gate, including pages it will reject)
   │
   ├─ [JS] OcrFloor gate → images / rejectedImages
   │        no image passes → status becomes "rejected"
   │
-  └─ [JS] when mergeOcrPages: restore page order by URI, merge adjacent
+  └─ [JS] legacy mergeOcrPages only: restore page order by URI, merge adjacent
            OCR text, attach mergedOcr — including on a "rejected" status
 ```
 

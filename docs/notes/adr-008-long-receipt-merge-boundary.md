@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted (2026-07-31)
+Accepted (2026-07-31); app-ownership migration approved 2026-11-11.
 
 ## Context
 
@@ -38,3 +38,12 @@ The package merges **OCR text** across ordered pages and never composites pixels
 - **`isComplete` is narrower than its name.** Both iOS paths can silently drop a page that fails to process — the camera delegate `continue`s past a failed page and rejects only if every page failed, and the gallery delegate appends only non-nil results — and the JS layer cannot see it, so the field means "everything that came back joined up". Android is not affected: it rejects the whole scan on a per-image failure rather than returning a partial batch. Closing the iOS gap needs a native page-count signal and is deferred.
 - **No length or aspect-ratio support claim.** The Flutter package's 11.0 ratio claim is backed by image fixtures and physical-device runs; this package has run neither and claims neither.
 - **A guided overlap-capture UI stays rejected.** `VNDocumentCameraViewController` and the GMS document scanner expose no previous-frame overlay or per-frame callback, so guidance would require a custom camera on both platforms — reversing ADR-001 and ADR-002 for a UX affordance.
+
+## App-ownership migration
+
+The operator subsequently chose to move page assembly into consuming applications while retaining the existing JS/Dart production paths during migration.
+The measured RN native candidate passed parity but failed the latency adoption criterion; Flutter physical performance remains unverified.
+The library preserves all returned page URIs before OCR-floor partitioning so app-owned assembly can retain order, rejected-page positions and unmatched-boundary diagnostics.
+The [example reference](../../example/src/receiptMerge.ts) follows the existing merge contract and is checked against the shared fixtures before the legacy option is deprecated.
+The current library option and result remain compatible; removal requires a separately announced breaking release.
+This amendment does not authorize removing the internal native pilot or claiming detection of native-dropped pages.

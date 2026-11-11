@@ -409,6 +409,22 @@ describe("scan (mergeOcrPages orchestration)", () => {
     expect(result.mergedOcr).toBeUndefined();
   });
 
+  it("exposes original order including floor rejects when library merging is disabled", async () => {
+    const pages = [
+      page(0, "First complete page\nSecond complete line"),
+      page(1, "short"),
+      page(2, "Last complete page\nSecond complete line"),
+    ];
+    mockNative.scan.mockResolvedValueOnce({ status: "success", images: pages });
+
+    const result = await scan({ mergeOcrPages: false });
+
+    expect(result.images.map((image) => image.uri)).toEqual([pages[0]?.uri, pages[2]?.uri]);
+    expect(result.rejectedImages.map((image) => image.uri)).toEqual([pages[1]?.uri]);
+    expect(result.pageUris).toEqual(pages.map((image) => image.uri));
+    expect(result.mergedOcr).toBeUndefined();
+  });
+
   it("restores native page order after the floor gate partitions the images", async () => {
     // Page 1 falls below the floor, so the gate moves it into rejectedImages
     // and the accepted list no longer carries capture order.
