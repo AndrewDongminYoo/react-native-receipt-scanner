@@ -3659,6 +3659,18 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@react-native-community/cli-config-android@npm:21.0.0":
+  version: 21.0.0
+  resolution: "@react-native-community/cli-config-android@npm:21.0.0"
+  dependencies:
+    "@react-native-community/cli-tools": "npm:21.0.0"
+    fast-glob: "npm:^3.3.2"
+    fast-xml-parser: "npm:^5.3.6"
+    picocolors: "npm:^1.1.1"
+  checksum: 10c0/9fcf0e86abbae2d5bbf78c6f2d14e38762cf796a717939fbd0fb6cf83701c39ddf0184c8ea490cbf6a890971ae620d3e0ee68ed5923543ed47b9737f1c6001b1
+  languageName: node
+  linkType: hard
+
 "@react-native-community/cli-config-apple@npm:20.2.0":
   version: 20.2.0
   resolution: "@react-native-community/cli-config-apple@npm:20.2.0"
@@ -3708,7 +3720,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@react-native-community/cli-platform-android@npm:20.2.0, @react-native-community/cli-platform-android@npm:~20.2.0":
+"@react-native-community/cli-platform-android@npm:20.2.0":
   version: 20.2.0
   resolution: "@react-native-community/cli-platform-android@npm:20.2.0"
   dependencies:
@@ -3718,6 +3730,19 @@ __metadata:
     logkitty: "npm:^0.7.1"
     picocolors: "npm:^1.1.1"
   checksum: 10c0/dd586892129b54ab6cd89fbfe9759ae00f93b89b802f50f178679186e50a99d2ad7642a6ea30c16df72a36452cf95b4abcaac473f97dc65a93d6b0cb1b3af247
+  languageName: node
+  linkType: hard
+
+"@react-native-community/cli-platform-android@npm:~21.0.0":
+  version: 21.0.0
+  resolution: "@react-native-community/cli-platform-android@npm:21.0.0"
+  dependencies:
+    "@react-native-community/cli-config-android": "npm:21.0.0"
+    "@react-native-community/cli-tools": "npm:21.0.0"
+    execa: "npm:^5.0.0"
+    logkitty: "npm:^0.7.1"
+    picocolors: "npm:^1.1.1"
+  checksum: 10c0/b86977a64943ab948b938d5ba4cdd0a2f7be20c757684a4b4db75dc2b2e00166d97bd0780e1a8251056c3e1e020eb7ebd10a647b602045b04b968513503b1ae4
   languageName: node
   linkType: hard
 
@@ -3776,6 +3801,24 @@ __metadata:
     prompts: "npm:^2.4.2"
     semver: "npm:^7.5.2"
   checksum: 10c0/3c5056b6d6a7a967e44b55715c13b2a8de57c58cd1034eaa0cffacf99dc68cb2a903417ed2fe00d36bc8c9c25daa87d5aa874104cc0f7766a41c155af3662296
+  languageName: node
+  linkType: hard
+
+"@react-native-community/cli-tools@npm:21.0.0":
+  version: 21.0.0
+  resolution: "@react-native-community/cli-tools@npm:21.0.0"
+  dependencies:
+    "@vscode/sudo-prompt": "npm:^9.0.0"
+    appdirsjs: "npm:^1.2.4"
+    execa: "npm:^5.0.0"
+    find-up: "npm:^5.0.0"
+    launch-editor: "npm:^2.9.1"
+    mime: "npm:^2.4.1"
+    ora: "npm:^5.4.1"
+    picocolors: "npm:^1.1.1"
+    prompts: "npm:^2.4.2"
+    semver: "npm:^7.5.2"
+  checksum: 10c0/15e025cdc6c611524b328e0409c5731eb1a34ceee03a6e6cc8017570b1691e885a517dba25bfa395cc73a12c5935a9e7844028efd4f8bac8ca858969a027dd0b
   languageName: node
   linkType: hard
 
@@ -11170,7 +11213,7 @@ __metadata:
     "@babel/preset-env": "npm:^7.29.7"
     "@babel/runtime": "npm:^7.29.10"
     "@react-native-community/cli": "npm:~20.2.0"
-    "@react-native-community/cli-platform-android": "npm:~20.2.0"
+    "@react-native-community/cli-platform-android": "npm:~21.0.0"
     "@react-native-community/cli-platform-ios": "npm:~20.2.0"
     "@react-native/babel-preset": "npm:0.88.0"
     "@react-native/jest-preset": "npm:0.88.0"
