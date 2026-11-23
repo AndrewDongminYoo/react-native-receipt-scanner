@@ -4,23 +4,6 @@
 # entry on or before its `ignoreUntil` date — remove the block once the
 # affected dependency has been bumped or pinned past the vulnerable range.
 
-# braces 3.0.3 — stack exhaustion through deeply nested patterns. Pulled in
-# only by dev tooling (micromatch via jest, metro-file-map, fast-glob, globby);
-# the library ships no runtime dependencies, and every pattern braces sees is a
-# glob written in this repo's own tool config, never untrusted input.
-[[IgnoredVulns]]
-id = "GHSA-vfj7-8cjw-p6xm"
-ignoreUntil = 2027-04-18
-reason = "braces@3.0.3 has no patched release as of 2026-10-18. Dev-only path (micromatch via jest/metro/fast-glob/globby); patterns are repo-authored globs. Approved on 2026-10-18. Re-evaluate when a patch is released."
-
-# sprintf-js 1.0.3 — unbounded precision specifiers. Pulled in only by
-# argparse 1.x via js-yaml 3 via @istanbuljs/load-nyc-config (Jest coverage);
-# format strings are argparse's own, never untrusted input.
-[[IgnoredVulns]]
-id = "GHSA-hp3w-g68c-fv3c"
-ignoreUntil = 2027-04-18
-reason = "sprintf-js@1.0.3 has no patched release as of 2026-10-18. Dev-only path (argparse 1 via js-yaml 3 via @istanbuljs/load-nyc-config); format strings are not user-controlled. Approved on 2026-10-18. Re-evaluate when a patch is released."
-
 [[IgnoredVulns]]
 id = "GHSA-3g3m-2fjr-6pw4"
 reason = "glob@13.0.6 via jest@30.5.2 (@jest/reporters, jest-config and jest-runtime) and react-native-builder-bob@0.43.2, and glob@10.5.0 via test-exclude@7.0.2 -> babel-plugin-istanbul@8.0.2 -> @jest/transform@30.5.2, have no compatible patch as of 2026-11-05: the advisory covers >= 9.0.0, <= 14.0.1 and the fix is glob 14.0.2. The newest releases of the parents (jest 30.5.2 and its @jest packages, react-native-builder-bob 0.44.1, test-exclude 8.0.0) still require glob@^13.0.6, and babel-plugin-istanbul 8.0.2 requires test-exclude@^7.0.1, which keeps glob 10. Medium severity, AbortSignal cancellation bypass that allows filesystem traversal after a timeout. No first-party source imports glob; every path in the lockfile ends at a devDependency (test runner and library build tooling), and the package declares no runtime dependencies. Approved on 2026-11-05. Re-evaluate when jest, react-native-builder-bob, test-exclude or babel-plugin-istanbul accepts glob 14."
